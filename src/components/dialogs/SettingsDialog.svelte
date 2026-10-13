@@ -5,6 +5,7 @@
   import RichText from '../RichText.svelte';
   import { app, closeModal, ask } from '../../lib/store.svelte.js';
   import { HELP } from '../../lib/help.js';
+  import { PENALTIES } from '../../lib/model.js';
 
   // Keep the category path in sync with the quiz name until the user edits it directly.
   let linked = $state(app.quiz.category === `$course$/top/${app.quiz.name}`);
@@ -61,13 +62,7 @@
     <div class="field">
       <FieldLabel for="def-penalty" text="Penalty per wrong try" info={HELP.penalty} />
       <select id="def-penalty" class="select select-sm" bind:value={app.quiz.defaults.penalty}>
-        <option value={1}>100%</option>
-        <option value={0.5}>50%</option>
-        <option value={0.3333333}>33.33%</option>
-        <option value={0.25}>25%</option>
-        <option value={0.2}>20%</option>
-        <option value={0.1}>10%</option>
-        <option value={0}>0%</option>
+        {#each PENALTIES as p}<option value={p.value}>{p.label}</option>{/each}
       </select>
     </div>
   </div>

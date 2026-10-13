@@ -273,6 +273,17 @@ export const FRACTIONS = [
   100, 90, 83.33333, 80, 75, 70, 66.66667, 60, 50, 40, 33.33333, 30, 25, 20, 16.66667, 14.28571, 12.5, 11.11111, 10, 5, 0,
 ];
 
+/** Penalty per wrong try, as a fraction of the mark. */
+export const PENALTIES = [
+  { value: 1, label: '100%' },
+  { value: 0.5, label: '50%' },
+  { value: 0.3333333, label: '33.33%' },
+  { value: 0.25, label: '25%' },
+  { value: 0.2, label: '20%' },
+  { value: 0.1, label: '10%' },
+  { value: 0, label: '0%' },
+];
+
 export function fractionLabel(f) {
   const n = Number(f);
   if (n === 0) return 'None';

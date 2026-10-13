@@ -1,6 +1,18 @@
 <script>
-  import { Plus, Search, GripVertical, Copy, Trash, TriangleAlert, X, Upload, EyeOff } from '@lucide/svelte';
-  import { app, select, openModal, duplicateQuestion, deleteQuestion, moveQuestion } from '../lib/store.svelte.js';
+  import { Plus, Search, GripVertical, Copy, Trash, TriangleAlert, X, Upload, EyeOff, SquarePen, ArrowUpToLine, ArrowDownToLine } from '@lucide/svelte';
+  import {
+    app,
+    select,
+    openModal,
+    duplicateQuestion,
+    deleteQuestion,
+    moveQuestion,
+    isChecked,
+    setChecked,
+    deleteChecked,
+    duplicateChecked,
+    moveChecked,
+  } from '../lib/store.svelte.js';
   import { questionTitle, validateQuestion, TYPE_MAP, QUESTION_TYPES, stripHtml } from '../lib/model.js';
   import { TYPE_ICONS } from '../lib/icons.js';
   import { createSortable } from '../lib/sortable.svelte.js';
@@ -26,8 +38,48 @@
     QUESTION_TYPES.map((t) => ({ ...t, count: app.quiz.questions.filter((q) => q.type === t.type).length })).filter((t) => t.count)
   );
 
+  // Keep the open question visible in the list when it changes from elsewhere (Next/Previous, jump menu, shortcuts).
+  let listEl = $state();
+  $effect(() => {
+    app.selectedId;
+    listEl?.querySelector('.row.selected')?.scrollIntoView({ block: 'nearest' });
+  });
+
+  // Ticking applies to the rows currently shown, so a search narrows what "select all" picks.
+  const visibleIds = $derived(rows.map((r) => r.q.id));
+  const checkedVisible = $derived(visibleIds.filter((id) => app.checked.includes(id)).length);
+  const allChecked = $derived(visibleIds.length > 0 && checkedVisible === visibleIds.length);
+  // Start of a Shift range: the last row ticked or unticked, or else the open question.
+  let anchor = $state(null);
+
+  function checkAll(on) {
+    if (on) app.checked = [...new Set([...app.checked, ...visibleIds])];
+    else app.checked = app.checked.filter((id) => !visibleIds.includes(id));
+  }
+
+  /** Ticks every visible row between the anchor and the given row. */
+  function checkRange(id) {
+    const from = visibleIds.indexOf(anchor ?? app.selectedId);
+    const to = visibleIds.indexOf(id);
+    if (from === -1) return setChecked(id, true);
+    const [a, b] = from < to ? [from, to] : [to, from];
+    app.checked = [...new Set([...app.checked, ...visibleIds.slice(a, b + 1)])];
+  }
+
+  function toggle(id, e) {
+    if (e?.shiftKey) checkRange(id);
+    else setChecked(id, !isChecked(id));
+    anchor = id;
+  }
+
+  function onrowclick(e, id) {
+    if (e.shiftKey || e.ctrlKey || e.metaKey) toggle(id, e);
+    else select(id);
+  }
+
   function onkeydown(e, i) {
     const list = app.quiz.questions;
+    const id = list[i].id;
     if (e.altKey && e.key === 'ArrowUp' && i > 0) {
       e.preventDefault();
       moveQuestion(i, i - 1);
@@ -39,11 +91,26 @@
       const pos = rows.findIndex((r) => r.i === i) + (e.key === 'ArrowDown' ? 1 : -1);
       const target = rows[pos];
       if (target) {
+        // Shift+arrow extends the ticked range, like selecting rows in a file manager.
+        if (e.shiftKey) {
+          if (!app.checked.length) setChecked(id, true);
+          setChecked(target.q.id, true);
+          anchor = target.q.id;
+        }
         select(target.q.id);
         e.currentTarget.parentElement.querySelectorAll('.row')[pos]?.focus();
       }
+    } else if (e.key === ' ') {
+      e.preventDefault();
+      toggle(id);
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+      e.preventDefault();
+      checkAll(true);
+    } else if (e.key === 'Escape' && app.checked.length) {
+      app.checked = [];
     } else if (e.key === 'Delete') {
-      deleteQuestion(list[i].id);
+      if (app.checked.length) deleteChecked();
+      else deleteQuestion(id);
     }
   }
 </script>
@@ -80,27 +147,64 @@
     {/if}
   </div>
 
-  <div class="list" role="listbox" aria-label="Questions">
+  {#if app.checked.length}
+    <div class="bulk" role="toolbar" aria-label="Actions for selected questions">
+      <div class="bulk-head">
+        <label class="bulk-all" title={allChecked ? 'Clear selection' : 'Select all shown questions (Ctrl+A)'}>
+          <input type="checkbox" checked={allChecked} indeterminate={checkedVisible > 0 && !allChecked} onchange={() => checkAll(!allChecked)} />
+          <strong>{app.checked.length}</strong> selected
+        </label>
+        <button class="btn btn-ghost btn-sm" title="Clear selection (Esc)" onclick={() => (app.checked = [])}>Clear</button>
+      </div>
+      <div class="bulk-actions">
+        <button class="btn btn-sm" title="Export the selected questions" onclick={() => openModal('export')}><Upload size={14} /> Export</button>
+        <button class="btn btn-sm" title="Change mark, penalty, tags, category or visibility" onclick={() => openModal('bulk')}><SquarePen size={14} /> Edit</button>
+        <span class="spacer"></span>
+        <button class="btn btn-ghost btn-icon btn-sm" title="Move to top" aria-label="Move to top" onclick={() => moveChecked('top')}><ArrowUpToLine size={15} /></button>
+        <button class="btn btn-ghost btn-icon btn-sm" title="Move to bottom" aria-label="Move to bottom" onclick={() => moveChecked('bottom')}><ArrowDownToLine size={15} /></button>
+        <button class="btn btn-ghost btn-icon btn-sm" title="Duplicate" aria-label="Duplicate selected" onclick={duplicateChecked}><Copy size={15} /></button>
+        <button class="btn btn-ghost btn-icon btn-sm danger" title="Delete (Del)" aria-label="Delete selected" onclick={deleteChecked}><Trash size={15} /></button>
+      </div>
+    </div>
+  {/if}
+
+  <div class="list" bind:this={listEl} class:selecting={app.checked.length > 0} role="listbox" aria-label="Questions" aria-multiselectable="true">
     {#each rows as { q, i, issues } (q.id)}
       {@const Icon = TYPE_ICONS[q.type]}
       {@const ind = sort.indicator(i)}
+      {@const ticked = app.checked.includes(q.id)}
       <div
         class="row"
         class:selected={q.id === app.selectedId}
+        class:ticked
         class:dragging={sort.dragging === i}
         class:drop-before={ind === 'before'}
         class:drop-after={ind === 'after'}
         role="option"
-        aria-selected={q.id === app.selectedId}
+        aria-selected={ticked}
+        aria-current={q.id === app.selectedId ? 'true' : undefined}
         tabindex={q.id === app.selectedId ? 0 : -1}
-        onclick={() => select(q.id)}
+        onclick={(e) => onrowclick(e, q.id)}
+        onmousedown={(e) => e.shiftKey && e.preventDefault()}
         onkeydown={(e) => onkeydown(e, i)}
         {...sort.item(i)}
       >
         {#if !query}
           <span class="drag-handle" title="Drag to reorder (or Alt+↑/↓)" {...sort.handle(i)}><GripVertical size={15} /></span>
         {/if}
-        <span class="num">{i + 1}</span>
+        <!-- The number turns into a checkbox on hover, or for every row once any question is ticked. -->
+        <span class="num-slot">
+          <span class="num">{i + 1}</span>
+          <input
+            class="tick"
+            type="checkbox"
+            tabindex="-1"
+            checked={ticked}
+            title="Select (Ctrl+click, Shift+click for a range)"
+            aria-label="Select question {i + 1}"
+            onclick={(e) => (e.stopPropagation(), toggle(q.id, e))}
+          />
+        </span>
         <span class="type-icon" title={TYPE_MAP[q.type].label}><Icon size={15} /></span>
         <span class="body">
           <span class="name">{questionTitle(q)}</span>
@@ -251,14 +355,67 @@
   .row.dragging {
     opacity: 0.4;
   }
-  .num {
+  .num-slot {
     flex: none;
     width: 22px;
-    text-align: right;
+    display: inline-flex;
+    justify-content: flex-end;
+  }
+  .num {
     font-size: 12px;
     font-variant-numeric: tabular-nums;
     color: var(--text-3);
     font-weight: 500;
+  }
+  .tick {
+    display: none;
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .row:hover .tick,
+  .selecting .tick {
+    display: block;
+  }
+  .row:hover .num,
+  .selecting .num {
+    display: none;
+  }
+  .row.ticked:not(.selected) {
+    background: color-mix(in srgb, var(--accent) 7%, transparent);
+  }
+  .bulk {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px 8px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--accent-soft);
+  }
+  .bulk-head,
+  .bulk-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .bulk-head {
+    justify-content: space-between;
+  }
+  .bulk-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .bulk-all input {
+    accent-color: var(--accent);
+    margin: 0;
+  }
+  .spacer {
+    flex: 1;
   }
   .type-icon {
     flex: none;

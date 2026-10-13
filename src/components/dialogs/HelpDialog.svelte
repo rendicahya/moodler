@@ -9,10 +9,17 @@
     [[mod, 'S'], 'Export'],
     [[mod, 'O'], 'Import'],
     [['Alt', 'N'], 'Add a question'],
-    [['Alt', 'P'], 'Show / hide the preview'],
+    [['Alt', 'P'], 'Switch layout: editor only, both, preview only'],
+    [['Alt', 'Page Up / Down'], 'Previous / next question (works anywhere)'],
+    [['Alt', 'Home / End'], 'First / last question'],
+    [['Alt', 'Q'], 'Preview the whole quiz'],
+    [[mod, 'V'], 'Import pasted questions (outside text fields)'],
     [['↑', '↓'], 'Select previous / next question (in the list)'],
     [['Alt', '↑ / ↓'], 'Move the selected question (in the list)'],
-    [['Delete'], 'Delete the selected question (in the list)'],
+    [['Space'], 'Tick / untick the question for bulk actions (in the list)'],
+    [[mod, 'click'], 'Tick / untick a question; Shift+click ticks a range'],
+    [[mod, 'A'], 'Tick all shown questions (in the list)'],
+    [['Delete'], 'Delete the ticked questions, or the selected one (in the list)'],
   ];
 </script>
 
@@ -25,7 +32,12 @@
       <li><strong>GIFT</strong> and <strong>Aiken</strong> are plain-text formats that only support some question types; unsupported questions are listed when exporting.</li>
       <li>Images pasted or inserted into the editor are embedded in Moodle XML exports.</li>
       <li>Drag the <span class="grip">⠿</span> handle to reorder questions, answers and items.</li>
-      <li>Use <strong>Project (JSON)</strong> to back up your work or move it to another browser.</li>
+      <li>Tick questions in the list (hover a number, or Ctrl+click) to export, edit, move, duplicate or delete several at once.</li>
+      <li>
+        Use <strong>Project (JSON)</strong> to back up your work or move it to another browser. The save status at the top right downloads a backup in one click and
+        reminds you when it's been a while.
+      </li>
+      <li>Moodler works offline once loaded, and can be installed as an app from your browser's menu.</li>
     </ul>
   </section>
   <section>

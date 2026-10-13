@@ -4,7 +4,7 @@
 
 <div class="seg {size}" role="radiogroup" aria-label={label}>
   {#each options as o}
-    <button type="button" role="radio" aria-checked={value === o.value} class:on={value === o.value} onclick={() => (value = o.value)}>
+    <button type="button" role="radio" aria-checked={value === o.value} class:on={value === o.value} title={o.title} onclick={() => (value = o.value)}>
       {#if o.icon}<o.icon size={15} />{/if}
       {o.label}
     </button>

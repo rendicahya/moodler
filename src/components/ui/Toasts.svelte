@@ -11,6 +11,9 @@
     <div class="toast {t.kind}" role="status">
       <Icon size={18} />
       <span>{t.message}</span>
+      {#if t.action}
+        <button class="btn btn-sm action" onclick={() => (t.action.run(), dismissToast(t.id))}>{t.action.label}</button>
+      {/if}
       <button class="btn btn-ghost btn-icon btn-sm" onclick={() => dismissToast(t.id)} aria-label="Dismiss"><X size={14} /></button>
     </div>
   {/each}
@@ -41,6 +44,9 @@
   }
   .toast span {
     flex: 1;
+  }
+  .action {
+    flex: none;
   }
   .toast :global(svg:first-child) {
     flex: none;

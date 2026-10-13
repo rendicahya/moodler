@@ -10,8 +10,11 @@
   import ExportDialog from './components/dialogs/ExportDialog.svelte';
   import SettingsDialog from './components/dialogs/SettingsDialog.svelte';
   import HelpDialog from './components/dialogs/HelpDialog.svelte';
-  import { app, initPersistence, undo, redo, openModal, selectedQuestion, selectedIndex, addQuestion, togglePreview } from './lib/store.svelte.js';
+  import BulkEditDialog from './components/dialogs/BulkEditDialog.svelte';
+  import QuizPreviewDialog from './components/dialogs/QuizPreviewDialog.svelte';
+  import { app, initPersistence, undo, redo, openModal, notify, selectedQuestion, selectedIndex, addQuestion, cycleView, goToQuestion } from './lib/store.svelte.js';
   import { QUESTION_TYPES } from './lib/model.js';
+  import { looksLikeQuestions } from './lib/formats/index.js';
   import { TYPE_ICONS } from './lib/icons.js';
 
   initPersistence();
@@ -41,6 +44,24 @@
     return t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName);
   }
 
+  // Pasting questions (or a question file) anywhere outside a text field opens the import dialog with them.
+  function onpaste(e) {
+    if (app.modal || app.confirm || isTyping(e)) return;
+    const file = e.clipboardData?.files?.[0];
+    if (file) {
+      e.preventDefault();
+      openModal('import', { file });
+      return;
+    }
+    const text = e.clipboardData?.getData('text/plain') ?? '';
+    if (!looksLikeQuestions(text)) {
+      if (text.trim()) notify('The pasted text doesn’t look like questions in a format Moodler can import.', 'info');
+      return;
+    }
+    e.preventDefault();
+    openModal('import', { text });
+  }
+
   function onkeydown(e) {
     const mod = e.ctrlKey || e.metaKey;
     const key = e.key.toLowerCase();
@@ -65,12 +86,19 @@
       openModal('add');
     } else if (e.altKey && key === 'p' && q) {
       e.preventDefault();
-      togglePreview();
+      cycleView();
+    } else if (e.altKey && (e.key === 'PageUp' || e.key === 'PageDown' || e.key === 'Home' || e.key === 'End') && q) {
+      // Step through questions from anywhere, including while typing.
+      e.preventDefault();
+      goToQuestion({ PageUp: -1, PageDown: 1, Home: -Infinity, End: Infinity }[e.key]);
+    } else if (e.altKey && key === 'q' && app.quiz.questions.length) {
+      e.preventDefault();
+      openModal('quiz-preview');
     }
   }
 </script>
 
-<svelte:window {onkeydown} />
+<svelte:window {onkeydown} {onpaste} />
 
 <div class="app">
   <Header />
@@ -125,6 +153,10 @@
   <SettingsDialog />
 {:else if app.modal === 'help'}
   <HelpDialog />
+{:else if app.modal === 'bulk'}
+  <BulkEditDialog />
+{:else if app.modal === 'quiz-preview'}
+  <QuizPreviewDialog />
 {/if}
 
 {#if app.confirm}

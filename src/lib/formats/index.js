@@ -58,6 +58,20 @@ export const FORMATS = [
 
 export const FORMAT_MAP = Object.fromEntries(FORMATS.map((f) => [f.id, f]));
 
+/**
+ * Decides whether clipboard text is worth offering as an import: it must parse into at least one real question.
+ * Any plain text parses as a GIFT description, so descriptions alone don't count.
+ */
+export function looksLikeQuestions(text) {
+  if (!text || !text.trim()) return false;
+  try {
+    const { questions } = FORMAT_MAP[detectFormat(text)].import(text);
+    return questions.some((q) => q.type !== 'description');
+  } catch {
+    return false;
+  }
+}
+
 /** Best-effort guess of the format of pasted or uploaded text. */
 export function detectFormat(text, filename = '') {
   const t = text.replace(/^﻿/, '').trimStart();

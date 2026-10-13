@@ -1,5 +1,6 @@
 <script>
-  import { ChevronUp, ChevronDown, Copy, Trash, Pencil, Eye, TriangleAlert, Plus, X, PanelRightOpen, PanelRightClose } from '@lucide/svelte';
+  import { tick } from 'svelte';
+  import { ArrowUp, ArrowDown, ChevronLeft, ChevronRight, ChevronDown, Copy, Trash, Pencil, Eye, Columns2, TriangleAlert, Plus, X } from '@lucide/svelte';
   import Section from './ui/Section.svelte';
   import Switch from './ui/Switch.svelte';
   import Segmented from './ui/Segmented.svelte';
@@ -16,8 +17,8 @@
   import ClozeEditor from './editors/ClozeEditor.svelte';
   import GapEditor from './editors/GapEditor.svelte';
   import OrderingEditor from './editors/OrderingEditor.svelte';
-  import { app, duplicateQuestion, deleteQuestion, moveQuestion, togglePreview, saveLayout } from '../lib/store.svelte.js';
-  import { TYPE_MAP, TEXT_FORMATS, validateQuestion, uid } from '../lib/model.js';
+  import { app, duplicateQuestion, deleteQuestion, moveQuestion, setView, goToQuestion, select, saveLayout } from '../lib/store.svelte.js';
+  import { TYPE_MAP, TEXT_FORMATS, PENALTIES, validateQuestion, questionTitle, uid } from '../lib/model.js';
   import { TYPE_ICONS } from '../lib/icons.js';
   import { HELP } from '../lib/help.js';
 
@@ -32,15 +33,6 @@
   const hasPenalty = $derived(!['essay', 'description'].includes(q.type));
   const hasMark = $derived(!['description', 'cloze'].includes(q.type));
 
-  const PENALTIES = [
-    { value: 1, label: '100%' },
-    { value: 0.5, label: '50%' },
-    { value: 0.3333333, label: '33.33%' },
-    { value: 0.25, label: '25%' },
-    { value: 0.2, label: '20%' },
-    { value: 0.1, label: '10%' },
-    { value: 0, label: '0%' },
-  ];
   const penaltyOptions = $derived(PENALTIES.some((p) => Math.abs(p.value - q.penalty) < 0.0001) ? PENALTIES : [...PENALTIES, { value: q.penalty, label: `${Math.round(q.penalty * 10000) / 100}%` }]);
   const penaltyValue = $derived(penaltyOptions.find((p) => Math.abs(p.value - q.penalty) < 0.0001)?.value);
 
@@ -51,9 +43,22 @@
   $effect(() => {
     if (width) app.wide = width >= SPLIT_MIN_WIDTH;
   });
-  const split = $derived(app.wide && app.showPreview);
-  const showEditor = $derived(app.wide || app.tab === 'edit');
-  const showPreview = $derived(app.wide ? app.showPreview : app.tab === 'preview');
+  const split = $derived(app.wide && app.view === 'split');
+  const showEditor = $derived(app.wide ? app.view !== 'preview' : app.tab === 'edit');
+  const showPreview = $derived(app.wide ? app.view !== 'edit' : app.tab === 'preview');
+
+  const total = $derived(app.quiz.questions.length);
+  const clip = (s, n = 70) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+
+  // The editor is re-created for each question, so put focus back on the button that was used to navigate.
+  async function go(step, e) {
+    const id = e?.currentTarget?.id;
+    goToQuestion(step);
+    if (id) {
+      await tick();
+      document.getElementById(id)?.focus();
+    }
+  }
 
   let dragging = $state(false);
   function startResize(e) {
@@ -85,12 +90,41 @@
   <div class="toolbar">
     <div class="ident">
       <span class="icon"><Icon size={18} /></span>
-      <div>
+      <div class="ident-text">
         <div class="type">{meta.label}</div>
-        <div class="pos">Question {index + 1} of {app.quiz.questions.length}</div>
+        <!-- The position doubles as a jump menu listing every question. -->
+        <label class="pos" title="Jump to another question">
+          Question {index + 1} of {total}
+          <ChevronDown size={13} />
+          <select class="jump" value={index} aria-label="Jump to question" onchange={(e) => select(app.quiz.questions[Number(e.currentTarget.value)].id)}>
+            {#each app.quiz.questions as item, i (item.id)}
+              <option value={i}>{i + 1}. {clip(questionTitle(item))}</option>
+            {/each}
+          </select>
+        </label>
       </div>
     </div>
-    {#if !app.wide}
+    <div class="nav">
+      <button id="nav-prev" class="btn btn-sm" title="Previous question (Alt+Page Up)" disabled={index === 0} onclick={(e) => go(-1, e)}>
+        <ChevronLeft size={16} /><span class="nav-text">Previous</span>
+      </button>
+      <button id="nav-next" class="btn btn-sm" title="Next question (Alt+Page Down)" disabled={index === total - 1} onclick={(e) => go(1, e)}>
+        <span class="nav-text">Next</span><ChevronRight size={16} />
+      </button>
+    </div>
+    <span class="grow"></span>
+    {#if app.wide}
+      <Segmented
+        bind:value={() => app.view, setView}
+        size="sm"
+        label="Layout"
+        options={[
+          { value: 'edit', label: 'Edit', icon: Pencil, title: 'Editor only (Alt+P cycles)' },
+          { value: 'split', label: 'Both', icon: Columns2, title: 'Editor and preview side by side (Alt+P cycles)' },
+          { value: 'preview', label: 'Preview', icon: Eye, title: 'Preview only (Alt+P cycles)' },
+        ]}
+      />
+    {:else}
       <Segmented
         bind:value={app.tab}
         size="sm"
@@ -102,26 +136,15 @@
       />
     {/if}
     <div class="acts">
-      {#if app.wide}
-        <button
-          class="btn btn-ghost btn-sm"
-          class:on={app.showPreview}
-          title="{app.showPreview ? 'Hide' : 'Show'} live preview (Alt+P)"
-          aria-pressed={app.showPreview}
-          onclick={togglePreview}
-          >{#if app.showPreview}<PanelRightClose size={16} />{:else}<PanelRightOpen size={16} />{/if} Preview</button
-        >
-        <span class="sep"></span>
-      {/if}
       <button class="btn btn-ghost btn-icon btn-sm" title="Move up (Alt+↑ in list)" aria-label="Move up" disabled={index === 0} onclick={() => moveQuestion(index, index - 1)}
-        ><ChevronUp size={16} /></button
+        ><ArrowUp size={16} /></button
       >
       <button
         class="btn btn-ghost btn-icon btn-sm"
         title="Move down (Alt+↓ in list)"
         aria-label="Move down"
-        disabled={index === app.quiz.questions.length - 1}
-        onclick={() => moveQuestion(index, index + 1)}><ChevronDown size={16} /></button
+        disabled={index === total - 1}
+        onclick={() => moveQuestion(index, index + 1)}><ArrowDown size={16} /></button
       >
       <button class="btn btn-ghost btn-icon btn-sm" title="Duplicate" aria-label="Duplicate" onclick={() => duplicateQuestion(q.id)}><Copy size={15} /></button>
       <button class="btn btn-ghost btn-icon btn-sm danger" title="Delete" aria-label="Delete" onclick={() => deleteQuestion(q.id)}><Trash size={15} /></button>
@@ -351,6 +374,7 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
+    container-type: inline-size;
   }
   .toolbar {
     flex: none;
@@ -385,24 +409,50 @@
     font-weight: 600;
     white-space: nowrap;
   }
+  .ident-text {
+    min-width: 0;
+  }
   .pos {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
     font-size: 12px;
     color: var(--text-3);
+    border-radius: 4px;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .pos:hover,
+  .pos:focus-within {
+    color: var(--accent-text);
+  }
+  .pos:focus-within {
+    box-shadow: var(--focus);
+  }
+  /* Invisible native select stretched over the label, so the full question list opens on click. */
+  .jump {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    opacity: 0;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .nav {
+    display: flex;
+    gap: 4px;
+  }
+  .nav .btn {
+    gap: 2px;
+  }
+  .grow {
+    flex: 1;
   }
   .acts {
     display: flex;
     align-items: center;
     gap: 2px;
-  }
-  .acts .on {
-    color: var(--accent-text);
-    background: var(--accent-soft);
-  }
-  .sep {
-    width: 1px;
-    height: 20px;
-    margin: 0 6px;
-    background: var(--border);
   }
   .body {
     flex: 1;
@@ -536,7 +586,15 @@
     .content {
       padding: 16px 12px 60px;
     }
-    .pos {
+  }
+  /* Sized by the editor's own width, which depends on whether the question list is open. */
+  @container (max-width: 1000px) {
+    .nav-text {
+      display: none;
+    }
+  }
+  @container (max-width: 640px) {
+    .type {
       display: none;
     }
   }

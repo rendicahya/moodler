@@ -6,13 +6,14 @@
   import { questionTitle, TYPE_MAP } from '../../lib/model.js';
   import { TYPE_ICONS } from '../../lib/icons.js';
   import { FORMATS, FORMAT_MAP } from '../../lib/formats/index.js';
-  import { app, closeModal, notify } from '../../lib/store.svelte.js';
+  import { app, closeModal, notify, markBackedUp } from '../../lib/store.svelte.js';
+  import { downloadText, slugify } from '../../lib/download.js';
 
   const exportable = FORMATS.filter((f) => f.export);
   let format = $state(localStorageGet('mqe.exportFormat') || 'xml');
-  let scope = $state('all');
-  // Starts with the question open in the editor, so "Selected questions" is useful straight away.
-  let picked = $state(app.selectedId ? [app.selectedId] : []);
+  // Questions ticked in the list are pre-selected; otherwise start with the question open in the editor.
+  let scope = $state(app.checked.length ? 'picked' : 'all');
+  let picked = $state(app.checked.length ? [...app.checked] : app.selectedId ? [app.selectedId] : []);
   let copied = $state(false);
 
   function localStorageGet(k) {
@@ -23,14 +24,7 @@
     }
   }
 
-  const slug = $derived(
-    (app.quiz.name || 'quiz')
-      .normalize('NFKD')
-      .replace(/[^\w\s-]/g, '')
-      .trim()
-      .replace(/\s+/g, '-')
-      .toLowerCase() || 'quiz'
-  );
+  const slug = $derived(slugify(app.quiz.name));
   let filename = $state('');
   const fmt = $derived(FORMAT_MAP[format]);
   const defaultName = $derived(`${slug}${format === 'gift' ? '-gift' : format === 'aiken' ? '-aiken' : ''}.${fmt.ext}`);
@@ -61,16 +55,11 @@
   }
 
   function download() {
-    const blob = new Blob([output.text], { type: `${fmt.mime};charset=utf-8` });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename.trim() || defaultName;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    notify(`Downloaded ${a.download}.`, 'success');
+    const name = filename.trim() || defaultName;
+    downloadText(output.text, name, fmt.mime);
+    // A full JSON or Moodle XML file can restore the whole quiz, so it counts as a backup.
+    if ((format === 'json' || format === 'xml') && questions.length === app.quiz.questions.length) markBackedUp();
+    notify(`Downloaded ${name}.`, 'success');
   }
 
   async function copy() {

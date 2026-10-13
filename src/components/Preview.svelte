@@ -4,8 +4,10 @@
   import { parseCloze, CLOZE_RE, isChoiceCloze, canonicalClozeType } from '../lib/formats/cloze.js';
   import { sanitizeHtml } from '../lib/sanitize.js';
 
-  let { q, index } = $props();
-  let reveal = $state(false);
+  // `showAnswers` lets a parent control the answer reveal (the whole-quiz preview); without it the pane has its own toggle.
+  let { q, index, showAnswers = null } = $props();
+  let ownReveal = $state(false);
+  const reveal = $derived(showAnswers ?? ownReveal);
 
   const toHtml = (text, format = 'html') => (format === 'html' ? sanitizeHtml(text || '') : escapeHtml(text || '').replace(/\n/g, '<br>'));
   const mark = $derived(q.type === 'cloze' ? parseCloze(q.questiontext).reduce((s, g) => s + g.weight, 0) : Number(q.defaultgrade));
@@ -73,14 +75,16 @@
 </script>
 
 <div class="wrap">
-  <div class="bar">
-    <span class="hint">Student view preview — options are shown in their original order.</span>
-    {#if q.type !== 'description' && q.type !== 'essay'}
-      <button class="btn btn-sm" class:active={reveal} onclick={() => (reveal = !reveal)}>
-        {#if reveal}<EyeOff size={15} /> Hide answers{:else}<Eye size={15} /> Show correct answers{/if}
-      </button>
-    {/if}
-  </div>
+  {#if showAnswers === null}
+    <div class="bar">
+      <span class="hint">Student view preview — options are shown in their original order.</span>
+      {#if q.type !== 'description' && q.type !== 'essay'}
+        <button class="btn btn-sm" class:active={ownReveal} onclick={() => (ownReveal = !ownReveal)}>
+          {#if ownReveal}<EyeOff size={15} /> Hide answers{:else}<Eye size={15} /> Show correct answers{/if}
+        </button>
+      {/if}
+    </div>
+  {/if}
 
   <div class="que">
     <div class="info">

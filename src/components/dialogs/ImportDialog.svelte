@@ -32,6 +32,14 @@
     text = await file.text();
   }
 
+  // Opened by pasting outside a text field: start with what was pasted.
+  if (app.modalProps.text) {
+    source = 'paste';
+    text = app.modalProps.text;
+  } else if (app.modalProps.file) {
+    readFile(app.modalProps.file);
+  }
+
   function ondrop(e) {
     e.preventDefault();
     dragging = false;
@@ -53,7 +61,12 @@
   });
 </script>
 
-<Modal title="Import questions" subtitle="Load questions from a file or paste them as text." width="760px" onclose={closeModal}>
+<Modal
+  title="Import questions"
+  subtitle="Load questions from a file or paste them as text. Tip: you can also paste questions anywhere in Moodler to import them."
+  width="760px"
+  onclose={closeModal}
+>
   <div class="row">
     <Segmented
       bind:value={source}

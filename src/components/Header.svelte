@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
-  import { Sun, Moon, Maximize, Minimize, Undo2, Redo2, Upload, Download, FilePlus, Settings, PanelLeft, CircleQuestionMark } from '@lucide/svelte';
-  import { app, history, undo, redo, toggleTheme, openModal, newQuiz } from '../lib/store.svelte.js';
+  import { Sun, Moon, Maximize, Minimize, Undo2, Redo2, Upload, Download, FilePlus, Settings, PanelLeft, CircleQuestionMark, Presentation } from '@lucide/svelte';
+  import { app, history, backup, REMIND_AFTER, undo, redo, toggleTheme, openModal, newQuiz, downloadBackup } from '../lib/store.svelte.js';
 
   let fullscreen = $state(false);
   const canFullscreen = typeof document !== 'undefined' && !!document.documentElement.requestFullscreen;
@@ -18,6 +18,25 @@
   }
 
   const total = $derived(app.quiz.questions.reduce((s, q) => s + (Number(q.defaultgrade) || 0), 0));
+
+  // Save status doubles as a one-click backup button.
+  const backupDue = $derived(app.quiz.questions.length > 0 && backup.edits >= REMIND_AFTER);
+  const status = $derived(history.saveFailed ? 'error' : history.pending ? 'saving' : backupDue ? 'due' : 'saved');
+  const STATUS_TEXT = { error: 'Not saved', saving: 'Saving…', due: 'Back up', saved: 'Saved' };
+  const when = (d) => d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  const statusTitle = $derived(
+    [
+      history.saveFailed
+        ? 'Could not save to browser storage.'
+        : history.savedAt
+          ? `Saved in this browser at ${history.savedAt.toLocaleTimeString(undefined, { timeStyle: 'short' })}.`
+          : 'Changes are saved automatically in this browser.',
+      backup.at
+        ? `Last backup: ${when(backup.at)} (${backup.edits} change${backup.edits === 1 ? '' : 's'} since).`
+        : 'Never backed up.',
+      'Click to download a backup file (.json).',
+    ].join('\n')
+  );
 </script>
 
 <header class="header">
@@ -42,6 +61,9 @@
   </div>
 
   <div class="right">
+    <button class="btn btn-ghost btn-sm status {status}" title={statusTitle} aria-label="{STATUS_TEXT[status]}. Download a backup" onclick={downloadBackup}>
+      <span class="dot"></span><span class="status-text">{STATUS_TEXT[status]}</span>
+    </button>
     <div class="group">
       <button class="btn btn-ghost btn-icon" title="Undo (Ctrl+Z)" aria-label="Undo" disabled={!history.canUndo} onclick={undo}><Undo2 size={17} /></button>
       <button class="btn btn-ghost btn-icon" title="Redo (Ctrl+Y)" aria-label="Redo" disabled={!history.canRedo} onclick={redo}><Redo2 size={17} /></button>
@@ -49,6 +71,9 @@
     <span class="divider"></span>
     <button class="btn btn-ghost hide-sm" title="New quiz" onclick={newQuiz}><FilePlus size={16} /><span class="btn-text">New</span></button>
     <button class="btn btn-ghost" title="Quiz settings" onclick={() => openModal('settings')}><Settings size={16} /><span class="btn-text">Settings</span></button>
+    <button class="btn btn-ghost" title="Preview the whole quiz (Alt+Q)" disabled={!app.quiz.questions.length} onclick={() => openModal('quiz-preview')}>
+      <Presentation size={16} /><span class="btn-text">Preview</span>
+    </button>
     <button class="btn" title="Import questions (Ctrl+O)" onclick={() => openModal('import')}><Download size={16} /><span class="btn-text">Import</span></button>
     <button class="btn btn-primary" title="Export questions (Ctrl+S)" onclick={() => openModal('export')}><Upload size={16} /><span class="btn-text">Export</span></button>
     <span class="divider"></span>
@@ -138,6 +163,33 @@
   .group {
     display: flex;
   }
+  .status {
+    gap: 6px;
+    color: var(--text-3);
+    font-weight: 500;
+  }
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--success);
+    flex: none;
+  }
+  .status.saving .dot {
+    background: var(--text-3);
+  }
+  .status.due {
+    color: var(--warning);
+  }
+  .status.due .dot {
+    background: var(--warning);
+  }
+  .status.error {
+    color: var(--danger);
+  }
+  .status.error .dot {
+    background: var(--danger);
+  }
   .divider {
     width: 1px;
     height: 22px;
@@ -146,6 +198,11 @@
   }
   @media (max-width: 1100px) {
     .meta {
+      display: none;
+    }
+  }
+  @media (max-width: 1240px) {
+    .status:not(.due):not(.error) .status-text {
       display: none;
     }
   }

@@ -1,9 +1,15 @@
 import { createQuiz, normalizeQuiz, normalizeQuestion, createQuestion, cloneQuestion, moveItem, questionTitle } from './model.js';
+import { FORMAT_MAP } from './formats/index.js';
+import { downloadText, slugify } from './download.js';
 
 const STORAGE_KEY = 'mqe.quiz.v1';
 const THEME_KEY = 'mqe.theme';
 const LAYOUT_KEY = 'mqe.layout';
+const BACKUP_KEY = 'mqe.backup';
 const HISTORY_LIMIT = 200;
+// Number of undo steps after which the user is first reminded to download a backup, and then again every REMIND_EVERY steps.
+export const REMIND_AFTER = 30;
+const REMIND_EVERY = 50;
 
 function loadQuiz() {
   try {
@@ -15,14 +21,31 @@ function loadQuiz() {
   return createQuiz();
 }
 
+/** Wide-screen layouts: editor only, editor and preview side by side, or preview only. */
+export const VIEWS = ['edit', 'split', 'preview'];
+
 function loadLayout() {
   try {
     const l = JSON.parse(localStorage.getItem(LAYOUT_KEY));
-    if (l) return { showPreview: l.showPreview !== false, splitRatio: Math.min(0.75, Math.max(0.25, Number(l.splitRatio) || 0.55)) };
+    if (l) {
+      // Older versions stored only whether the preview was shown.
+      const view = VIEWS.includes(l.view) ? l.view : l.showPreview === false ? 'edit' : 'split';
+      return { view, splitRatio: Math.min(0.75, Math.max(0.25, Number(l.splitRatio) || 0.55)) };
+    }
   } catch {
     /* fall through to defaults */
   }
-  return { showPreview: true, splitRatio: 0.55 };
+  return { view: 'split', splitRatio: 0.55 };
+}
+
+function loadBackup() {
+  try {
+    const b = JSON.parse(localStorage.getItem(BACKUP_KEY));
+    if (b) return { at: b.at ? new Date(b.at) : null, edits: Number(b.edits) || 0, remindAt: Number(b.remindAt) || REMIND_AFTER };
+  } catch {
+    /* fall through to defaults */
+  }
+  return { at: null, edits: 0, remindAt: REMIND_AFTER };
 }
 
 const layout = loadLayout();
@@ -30,10 +53,12 @@ const layout = loadLayout();
 export const app = $state({
   quiz: loadQuiz(),
   selectedId: null,
+  // Questions ticked in the list for bulk actions; independent of the question open in the editor.
+  checked: [],
   // Narrow screens switch between edit and preview; wide screens show both side by side.
   tab: 'edit',
   wide: true,
-  showPreview: layout.showPreview,
+  view: layout.view,
   splitRatio: layout.splitRatio,
   theme: document.documentElement.dataset.theme || 'light',
   search: '',
@@ -46,7 +71,18 @@ export const app = $state({
 
 if (app.quiz.questions.length) app.selectedId = app.quiz.questions[0].id;
 
-export const history = $state({ canUndo: false, canRedo: false, savedAt: null });
+export const history = $state({ canUndo: false, canRedo: false, savedAt: null, pending: false, saveFailed: false });
+
+/** When the quiz was last downloaded as a whole, and how many undo steps have been made since. */
+export const backup = $state(loadBackup());
+
+function saveBackupState() {
+  try {
+    localStorage.setItem(BACKUP_KEY, JSON.stringify(backup));
+  } catch {
+    /* ignore */
+  }
+}
 
 // ---------------------------------------------------------------- persistence & undo
 
@@ -59,9 +95,44 @@ function save(snapshot) {
   try {
     localStorage.setItem(STORAGE_KEY, snapshot);
     history.savedAt = new Date();
+    history.saveFailed = false;
   } catch {
-    notify('Could not save to browser storage (it may be full). Export your quiz to keep your work.', 'error');
+    history.saveFailed = true;
+    notify('Could not save to browser storage (it may be full). Download a backup to keep your work.', 'error', 0, backupAction);
   }
+}
+
+const backupAction = { label: 'Download backup', run: () => downloadBackup() };
+
+function countEdit() {
+  backup.edits++;
+  if (app.quiz.questions.length && backup.edits >= backup.remindAt) {
+    backup.remindAt = backup.edits + REMIND_EVERY;
+    notify(
+      `Your work is only saved in this browser${backup.at ? '' : ' and has never been backed up'}. Download a backup so it isn't lost if browser data is cleared.`,
+      'warning',
+      15000,
+      backupAction
+    );
+  }
+  saveBackupState();
+}
+
+/** Records that the whole quiz has just been downloaded in a format that can be imported again. */
+export function markBackedUp() {
+  backup.at = new Date();
+  backup.edits = 0;
+  backup.remindAt = REMIND_AFTER;
+  saveBackupState();
+}
+
+/** Downloads the whole quiz as a project (JSON) file. */
+export function downloadBackup() {
+  const { text } = FORMAT_MAP.json.export($state.snapshot(app.quiz));
+  const name = `${slugify(app.quiz.name)}-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  downloadText(text, name, FORMAT_MAP.json.mime);
+  markBackedUp();
+  notify(`Downloaded ${name}. Import it to restore your quiz.`, 'success');
 }
 
 function updateFlags() {
@@ -72,6 +143,7 @@ function updateFlags() {
 function commit(snapshot) {
   clearTimeout(timer);
   timer = null;
+  history.pending = false;
   if (snapshot === current) return;
   past.push(current);
   if (past.length > HISTORY_LIMIT) past.shift();
@@ -79,6 +151,7 @@ function commit(snapshot) {
   current = snapshot;
   save(snapshot);
   updateFlags();
+  countEdit();
 }
 
 /** Tracks every change to the quiz; changes are grouped into undo steps after a short pause. */
@@ -87,6 +160,7 @@ export function initPersistence() {
     $effect(() => {
       const snapshot = JSON.stringify(app.quiz);
       clearTimeout(timer);
+      if (snapshot !== current) history.pending = true;
       timer = setTimeout(() => commit(snapshot), 350);
     });
   });
@@ -97,6 +171,7 @@ function restore(snapshot) {
   current = snapshot;
   app.quiz = JSON.parse(snapshot);
   if (!app.quiz.questions.some((q) => q.id === app.selectedId)) app.selectedId = app.quiz.questions[0]?.id ?? null;
+  pruneChecked();
   save(snapshot);
   updateFlags();
 }
@@ -131,28 +206,30 @@ export const toggleTheme = () => setTheme(app.theme === 'dark' ? 'light' : 'dark
 
 export function saveLayout() {
   try {
-    localStorage.setItem(LAYOUT_KEY, JSON.stringify({ showPreview: app.showPreview, splitRatio: app.splitRatio }));
+    localStorage.setItem(LAYOUT_KEY, JSON.stringify({ view: app.view, splitRatio: app.splitRatio }));
   } catch {
     /* ignore */
   }
 }
 
-/** Shows or hides the preview pane on wide screens, or switches between edit and preview on narrow ones. */
-export function togglePreview() {
-  if (app.wide) {
-    app.showPreview = !app.showPreview;
-    saveLayout();
-  } else {
-    app.tab = app.tab === 'edit' ? 'preview' : 'edit';
-  }
+export function setView(view) {
+  app.view = view;
+  saveLayout();
+}
+
+/** Cycles editor → both → preview on wide screens, or switches between edit and preview on narrow ones. */
+export function cycleView() {
+  if (app.wide) setView(VIEWS[(VIEWS.indexOf(app.view) + 1) % VIEWS.length]);
+  else app.tab = app.tab === 'edit' ? 'preview' : 'edit';
 }
 
 // ---------------------------------------------------------------- notifications & dialogs
 
 let toastId = 0;
-export function notify(message, kind = 'info', timeout = 4000) {
+/** Shows a toast. `action` ({ label, run }) adds a button; a timeout of 0 keeps the toast until dismissed. */
+export function notify(message, kind = 'info', timeout = 4000, action = null) {
   const id = ++toastId;
-  app.toasts.push({ id, message, kind });
+  app.toasts.push({ id, message, kind, action });
   if (timeout) setTimeout(() => dismissToast(id), timeout);
 }
 
@@ -196,6 +273,13 @@ export function select(id) {
   app.selectedId = id;
 }
 
+/** Opens the previous (-1) or next (+1) question, or the first / last with -Infinity / Infinity. */
+export function goToQuestion(step) {
+  const list = app.quiz.questions;
+  if (!list.length) return;
+  app.selectedId = list[Math.min(list.length - 1, Math.max(0, selectedIndex() + step))].id;
+}
+
 export function addQuestion(type, at = selectedIndex() + 1 || app.quiz.questions.length) {
   const q = createQuestion(type, app.quiz.defaults);
   app.quiz.questions.splice(at, 0, q);
@@ -227,10 +311,71 @@ export async function deleteQuestion(id) {
   if (!ok) return;
   app.quiz.questions.splice(i, 1);
   if (app.selectedId === id) app.selectedId = app.quiz.questions[Math.min(i, app.quiz.questions.length - 1)]?.id ?? null;
+  pruneChecked();
 }
 
 export function moveQuestion(from, to) {
   moveItem(app.quiz.questions, from, to);
+}
+
+// ---------------------------------------------------------------- bulk operations on ticked questions
+
+function pruneChecked() {
+  const ids = new Set(app.quiz.questions.map((q) => q.id));
+  if (app.checked.some((id) => !ids.has(id))) app.checked = app.checked.filter((id) => ids.has(id));
+}
+
+export const isChecked = (id) => app.checked.includes(id);
+
+export function setChecked(id, on) {
+  if (on && !app.checked.includes(id)) app.checked.push(id);
+  else if (!on && app.checked.includes(id)) app.checked = app.checked.filter((c) => c !== id);
+}
+
+/** Ticked questions in quiz order. */
+export const checkedQuestions = () => app.quiz.questions.filter((q) => app.checked.includes(q.id));
+
+const plural = (n) => `${n} question${n === 1 ? '' : 's'}`;
+
+export async function deleteChecked() {
+  const ids = new Set(app.checked);
+  if (!ids.size) return;
+  const ok = await ask({
+    title: `Delete ${plural(ids.size)}?`,
+    message: `The ${ids.size === 1 ? 'selected question' : `${ids.size} selected questions`} will be removed. You can undo this with Ctrl+Z.`,
+    confirmLabel: 'Delete',
+    danger: true,
+  });
+  if (!ok) return;
+  const list = app.quiz.questions;
+  const firstIndex = list.findIndex((q) => ids.has(q.id));
+  app.quiz.questions = list.filter((q) => !ids.has(q.id));
+  if (ids.has(app.selectedId)) app.selectedId = app.quiz.questions[Math.min(firstIndex, app.quiz.questions.length - 1)]?.id ?? null;
+  app.checked = [];
+  notify(`Deleted ${plural(ids.size)}.`, 'success', 2500);
+}
+
+/** Inserts a copy after each ticked question and ticks the copies instead. */
+export function duplicateChecked() {
+  const ids = new Set(app.checked);
+  const copies = [];
+  app.quiz.questions = app.quiz.questions.flatMap((q) => {
+    if (!ids.has(q.id)) return [q];
+    const copy = cloneQuestion($state.snapshot(q));
+    if (copy.name) copy.name += ' (copy)';
+    copies.push(copy.id);
+    return [q, copy];
+  });
+  app.checked = copies;
+  notify(`Duplicated ${plural(copies.length)}.`, 'success', 2500);
+}
+
+/** Moves the ticked questions to the start or end of the quiz, keeping their relative order. */
+export function moveChecked(where) {
+  const ids = new Set(app.checked);
+  const picked = app.quiz.questions.filter((q) => ids.has(q.id));
+  const rest = app.quiz.questions.filter((q) => !ids.has(q.id));
+  app.quiz.questions = where === 'top' ? [...picked, ...rest] : [...rest, ...picked];
 }
 
 export async function newQuiz() {
@@ -245,6 +390,7 @@ export async function newQuiz() {
   }
   app.quiz = createQuiz();
   app.selectedId = null;
+  app.checked = [];
 }
 
 /** Merges an importer result into the quiz. */
@@ -254,6 +400,7 @@ export function applyImport(result, mode = 'append') {
     const base = createQuiz();
     app.quiz = normalizeQuiz({ ...base, ...result.quiz, questions: [] });
     app.quiz.questions = questions;
+    app.checked = [];
   } else {
     if (!app.quiz.questions.length && result.quiz?.category) {
       app.quiz.category = result.quiz.category;
