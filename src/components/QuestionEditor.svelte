@@ -6,7 +6,6 @@
   import Segmented from './ui/Segmented.svelte';
   import TagInput from './ui/TagInput.svelte';
   import FieldLabel from './ui/FieldLabel.svelte';
-  import Info from './ui/Info.svelte';
   import RichText from './RichText.svelte';
   import Preview from './Preview.svelte';
   import MultiChoiceEditor from './editors/MultiChoiceEditor.svelte';
@@ -146,8 +145,6 @@
           </div>
         </div>
       {/if}
-
-      <p class="legend"><span class="req">*</span> Required field. Hover or focus <Info text="Like this one. These explain Moodle terms that may be unfamiliar." label="Example tooltip" /> for an explanation.</p>
 
       <Section title="General">
         <div class="field">
@@ -439,8 +436,8 @@
   .pager {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+    justify-content: center;
+    gap: 10px;
   }
   .pager .btn {
     gap: 2px;
@@ -534,9 +531,6 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
     gap: 14px;
-  }
-  .content > .legend {
-    margin: -4px 0 -6px;
   }
   .issues {
     display: flex;
