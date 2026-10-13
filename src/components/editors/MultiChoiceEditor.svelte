@@ -1,5 +1,5 @@
 <script>
-  import { Plus, GripVertical, Trash, CircleCheck, Circle, SquareCheck, Square } from '@lucide/svelte';
+  import { Plus, GripVertical, Trash, CircleCheck, Circle, SquareCheck, Square, Shuffle } from '@lucide/svelte';
   import Section from '../ui/Section.svelte';
   import Switch from '../ui/Switch.svelte';
   import Segmented from '../ui/Segmented.svelte';
@@ -58,6 +58,19 @@
     }
   }
 
+  function shuffle() {
+    const a = q.answers;
+    const order = a.map((_, i) => i);
+    // Fisher–Yates, retried so the result always differs from the current order.
+    do {
+      for (let i = order.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [order[i], order[j]] = [order[j], order[i]];
+      }
+    } while (order.every((v, i) => v === i));
+    q.answers = order.map((i) => a[i]);
+  }
+
   function setMode(single) {
     q.single = single;
     if (single) {
@@ -114,6 +127,7 @@
     {#if !q.single}
       <span class="badge {Math.abs(positive - 100) < 0.5 ? 'success' : 'warning'}">{positive}%</span>
     {/if}
+    <button class="btn btn-sm" title="Put the answers in a random order" disabled={q.answers.length < 2} onmousedown={(e) => e.preventDefault()} onclick={shuffle}><Shuffle size={15} /> Shuffle</button>
   {/snippet}
   <div class="answers">
     {#each q.answers as a, i (a.id)}

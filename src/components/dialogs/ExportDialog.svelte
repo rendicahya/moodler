@@ -2,12 +2,17 @@
   import { Download, Copy, TriangleAlert, Check } from '@lucide/svelte';
   import Modal from '../ui/Modal.svelte';
   import Switch from '../ui/Switch.svelte';
+  import Segmented from '../ui/Segmented.svelte';
+  import { questionTitle, TYPE_MAP } from '../../lib/model.js';
+  import { TYPE_ICONS } from '../../lib/icons.js';
   import { FORMATS, FORMAT_MAP } from '../../lib/formats/index.js';
   import { app, closeModal, notify } from '../../lib/store.svelte.js';
 
   const exportable = FORMATS.filter((f) => f.export);
   let format = $state(localStorageGet('mqe.exportFormat') || 'xml');
-  let onlySelected = $state(false);
+  let scope = $state('all');
+  // Starts with the question open in the editor, so "Selected questions" is useful straight away.
+  let picked = $state(app.selectedId ? [app.selectedId] : []);
   let copied = $state(false);
 
   function localStorageGet(k) {
@@ -30,7 +35,12 @@
   const fmt = $derived(FORMAT_MAP[format]);
   const defaultName = $derived(`${slug}${format === 'gift' ? '-gift' : format === 'aiken' ? '-aiken' : ''}.${fmt.ext}`);
 
-  const questions = $derived(onlySelected ? app.quiz.questions.filter((q) => q.id === app.selectedId) : app.quiz.questions);
+  const questions = $derived(scope === 'picked' ? app.quiz.questions.filter((q) => picked.includes(q.id)) : app.quiz.questions);
+  const allPicked = $derived(app.quiz.questions.length > 0 && picked.length === app.quiz.questions.length);
+
+  function togglePick(id) {
+    picked = picked.includes(id) ? picked.filter((p) => p !== id) : [...picked, id];
+  }
   const output = $derived.by(() => {
     try {
       return fmt.export($state.snapshot(app.quiz), $state.snapshot(questions));
@@ -91,11 +101,52 @@
       <label for="export-name">File name</label>
       <input id="export-name" class="input input-sm mono" bind:value={filename} placeholder={defaultName} />
     </div>
-    <Switch bind:checked={onlySelected} label="Selected question only" disabled={!app.selectedId} />
+    <div class="field">
+      <span class="field-label">Questions</span>
+      <Segmented
+        options={[
+          { value: 'all', label: `All (${app.quiz.questions.length})` },
+          { value: 'picked', label: `Selected (${picked.length})` },
+        ]}
+        label="Questions to export"
+        size="sm"
+        bind:value={scope}
+      />
+    </div>
     {#if format !== 'aiken' && format !== 'json'}
       <Switch bind:checked={app.quiz.includeCategory} label="Include category" />
     {/if}
   </div>
+
+  {#if scope === 'picked'}
+    <div class="pick">
+      <div class="pick-head">
+        <label class="check">
+          <input
+            type="checkbox"
+            checked={allPicked}
+            indeterminate={picked.length > 0 && !allPicked}
+            onchange={() => (picked = allPicked ? [] : app.quiz.questions.map((q) => q.id))}
+          />
+          Select all
+        </label>
+        <span class="hint">{picked.length} of {app.quiz.questions.length} selected</span>
+      </div>
+      <ul class="pick-list" aria-label="Questions to export">
+        {#each app.quiz.questions as q, i (q.id)}
+          {@const Icon = TYPE_ICONS[q.type]}
+          <li>
+            <label class="check">
+              <input type="checkbox" checked={picked.includes(q.id)} onchange={() => togglePick(q.id)} />
+              <span class="pick-num">{i + 1}</span>
+              <span class="pick-icon" title={TYPE_MAP[q.type].label}><Icon size={14} /></span>
+              <span class="pick-name">{questionTitle(q)}</span>
+            </label>
+          </li>
+        {/each}
+      </ul>
+    </div>
+  {/if}
 
   {#if output.warnings.length}
     <div class="warn">
@@ -119,10 +170,10 @@
   </div>
 
   {#snippet footer()}
-    <button class="btn" onclick={copy} disabled={!output.text}>
+    <button class="btn" onclick={copy} disabled={!questions.length || !output.text}>
       {#if copied}<Check size={16} /> Copied{:else}<Copy size={16} /> Copy{/if}
     </button>
-    <button class="btn btn-primary" onclick={download} disabled={!output.text.trim()}><Download size={16} /> Download</button>
+    <button class="btn btn-primary" onclick={download} disabled={!questions.length || !output.text.trim()}><Download size={16} /> Download</button>
   {/snippet}
 </Modal>
 
@@ -176,6 +227,70 @@
   .grow {
     flex: 1;
     min-width: 220px;
+  }
+  .pick {
+    flex: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .pick-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 12px;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .hint {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-3);
+  }
+  .pick-list {
+    list-style: none;
+    margin: 0;
+    padding: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    cursor: pointer;
+  }
+  .pick-list .check {
+    padding: 5px 8px;
+    border-radius: 6px;
+    font-size: 13px;
+  }
+  .pick-list .check:hover {
+    background: var(--hover);
+  }
+  .check input {
+    accent-color: var(--accent);
+    flex: none;
+  }
+  .pick-num {
+    flex: none;
+    min-width: 18px;
+    text-align: right;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .pick-icon {
+    flex: none;
+    display: inline-flex;
+    color: var(--text-2);
+  }
+  .pick-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .warn {
     display: flex;

@@ -1,7 +1,7 @@
 <script>
   import { Plus, Search, GripVertical, Copy, Trash, TriangleAlert, X, Upload, EyeOff } from '@lucide/svelte';
   import { app, select, openModal, duplicateQuestion, deleteQuestion, moveQuestion } from '../lib/store.svelte.js';
-  import { questionTitle, validateQuestion, TYPE_MAP, stripHtml } from '../lib/model.js';
+  import { questionTitle, validateQuestion, TYPE_MAP, QUESTION_TYPES, stripHtml } from '../lib/model.js';
   import { TYPE_ICONS } from '../lib/icons.js';
   import { createSortable } from '../lib/sortable.svelte.js';
 
@@ -22,6 +22,9 @@
       })
   );
   const issueCount = $derived(rows.filter((r) => r.issues.length).length);
+  const typeCounts = $derived(
+    QUESTION_TYPES.map((t) => ({ ...t, count: app.quiz.questions.filter((q) => q.type === t.type).length })).filter((t) => t.count)
+  );
 
   function onkeydown(e, i) {
     const list = app.quiz.questions;
@@ -53,6 +56,18 @@
         <span class="badge warning" title="Questions with problems"><TriangleAlert size={12} /> {issueCount}</span>
       {/if}
     </div>
+    {#if typeCounts.length}
+      <ul class="types" aria-label="Questions by type">
+        {#each typeCounts as t (t.type)}
+          {@const Icon = TYPE_ICONS[t.type]}
+          <li class="type-count" title="{t.count} {t.label}">
+            <Icon size={13} />
+            <span class="type-short">{t.short}</span>
+            <span class="type-num">{t.count}</span>
+          </li>
+        {/each}
+      </ul>
+    {/if}
     <button class="btn btn-primary add" onclick={() => openModal('add')}><Plus size={16} /> Add question</button>
     {#if app.quiz.questions.length}
       <div class="search">
@@ -152,6 +167,35 @@
     background: var(--surface-3);
     color: var(--text-2);
     letter-spacing: 0;
+  }
+  .types {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: -2px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .type-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-2);
+    cursor: default;
+  }
+  .type-count :global(svg) {
+    color: var(--text-3);
+  }
+  .type-short {
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .type-num {
+    font-variant-numeric: tabular-nums;
   }
   .add {
     width: 100%;

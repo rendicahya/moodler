@@ -49,8 +49,8 @@
     <span class="divider"></span>
     <button class="btn btn-ghost hide-sm" title="New quiz" onclick={newQuiz}><FilePlus size={16} /><span class="btn-text">New</span></button>
     <button class="btn btn-ghost" title="Quiz settings" onclick={() => openModal('settings')}><Settings size={16} /><span class="btn-text">Settings</span></button>
-    <button class="btn" title="Import questions (Ctrl+O)" onclick={() => openModal('import')}><Upload size={16} /><span class="btn-text">Import</span></button>
-    <button class="btn btn-primary" title="Export questions (Ctrl+S)" onclick={() => openModal('export')}><Download size={16} /><span class="btn-text">Export</span></button>
+    <button class="btn" title="Import questions (Ctrl+O)" onclick={() => openModal('import')}><Download size={16} /><span class="btn-text">Import</span></button>
+    <button class="btn btn-primary" title="Export questions (Ctrl+S)" onclick={() => openModal('export')}><Upload size={16} /><span class="btn-text">Export</span></button>
     <span class="divider"></span>
     <button class="btn btn-ghost btn-icon" title="Help & shortcuts" aria-label="Help" onclick={() => openModal('help')}><CircleQuestionMark size={17} /></button>
     <button

@@ -8,13 +8,14 @@ Built with [Svelte 5](https://svelte.dev) and [Vite](https://vite.dev), and depl
 
 - **Question types:** multiple choice (single or multiple answers), true/false, short answer, numerical (with units), essay, matching, embedded answers (Cloze), select missing words, drag and drop into text, ordering, and description.
 - **Import:** Moodle XML, GIFT (including missing-word), Aiken, Embedded answers (Cloze), and the editor's own JSON project format. Upload a file or paste text. The format is detected automatically.
-- **Export:** Moodle XML (full fidelity, including embedded images, hints, tags and categories), GIFT, Aiken and JSON. Any questions a format can't represent are listed as warnings.
+- **Export:** Moodle XML (full fidelity, including embedded images, hints, tags and categories), GIFT, Aiken and JSON. Export the whole quiz or only the questions you tick. Any questions a format can't represent are listed as warnings.
 - **Editing:** a rich-text editor with image paste and drop, HTML source view and TeX insertion. You can edit per-answer grades and feedback, combined feedback, hints, tags, penalties, ID numbers and category overrides.
 - **Live preview:** the editor and a student-view preview sit side by side and update as you type. Drag the divider to resize, or hide the preview with Alt+P. On narrow screens they switch to tabs.
 - **Guidance:** required fields are marked with *, optional ones are labelled, and tooltips explain Moodle terms such as default mark, penalty per wrong try and question bank category.
-- **Reordering:** drag and drop questions, answers, matching pairs, choices and ordering items.
+- **Reordering:** drag and drop questions, answers, matching pairs, choices and ordering items, or shuffle multiple-choice answers with one click.
 - **Cloze builder:** insert or edit gaps through a form. You don't need to memorise the syntax.
 - **Preview:** a "show correct answers" toggle highlights the right responses.
+- **Overview:** the question list shows how many questions of each type the quiz has.
 - **Productivity:** undo/redo, validation warnings, search, keyboard shortcuts, and per-quiz defaults.
 - **UI:** light and dark themes, a fullscreen toggle and a responsive layout.
 
