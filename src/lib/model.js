@@ -276,7 +276,8 @@ export const FRACTIONS = [
 export function fractionLabel(f) {
   const n = Number(f);
   if (n === 0) return 'None';
-  return `${round(n, 5)}%`;
+  // Display only: the stored value keeps full precision for export.
+  return `${round(n, 2)}%`;
 }
 
 export function moveItem(arr, from, to) {

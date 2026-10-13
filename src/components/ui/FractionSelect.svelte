@@ -1,5 +1,5 @@
 <script>
-  import { FRACTIONS, round } from '../../lib/model.js';
+  import { FRACTIONS, fractionLabel } from '../../lib/model.js';
 
   let { value = $bindable(0), negative = false, label = 'Grade' } = $props();
 
@@ -14,7 +14,7 @@
 
 <select class="select select-sm" aria-label={label} value={match} onchange={(e) => (value = Number(e.currentTarget.value))}>
   {#each options as f}
-    <option value={f}>{f === 0 ? 'None' : `${round(f, 5)}%`}</option>
+    <option value={f}>{fractionLabel(f)}</option>
   {/each}
 </select>
 
