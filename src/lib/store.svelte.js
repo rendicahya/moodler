@@ -60,6 +60,8 @@ export const app = $state({
   wide: true,
   view: layout.view,
   splitRatio: layout.splitRatio,
+  // "Show correct answers" in the preview stays on while moving between questions.
+  revealAnswers: false,
   theme: document.documentElement.dataset.theme || 'light',
   search: '',
   modal: null,

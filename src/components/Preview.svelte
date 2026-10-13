@@ -3,11 +3,12 @@
   import { TYPE_MAP, escapeHtml, round, stripHtml } from '../lib/model.js';
   import { parseCloze, CLOZE_RE, isChoiceCloze, canonicalClozeType } from '../lib/formats/cloze.js';
   import { sanitizeHtml } from '../lib/sanitize.js';
+  import { app } from '../lib/store.svelte.js';
 
-  // `showAnswers` lets a parent control the answer reveal (the whole-quiz preview); without it the pane has its own toggle.
-  let { q, index, showAnswers = null } = $props();
-  let ownReveal = $state(false);
-  const reveal = $derived(showAnswers ?? ownReveal);
+  // `showAnswers` lets a parent control the answer reveal (the whole-quiz preview); without it the pane has its own toggle,
+  // which stays on when moving to another question. `nav` is rendered under the question info box.
+  let { q, index, showAnswers = null, nav = null } = $props();
+  const reveal = $derived(showAnswers ?? app.revealAnswers);
 
   const toHtml = (text, format = 'html') => (format === 'html' ? sanitizeHtml(text || '') : escapeHtml(text || '').replace(/\n/g, '<br>'));
   const mark = $derived(q.type === 'cloze' ? parseCloze(q.questiontext).reduce((s, g) => s + g.weight, 0) : Number(q.defaultgrade));
@@ -79,23 +80,26 @@
     <div class="bar">
       <span class="hint">Student view preview — options are shown in their original order.</span>
       {#if q.type !== 'description' && q.type !== 'essay'}
-        <button class="btn btn-sm" class:active={ownReveal} onclick={() => (ownReveal = !ownReveal)}>
-          {#if ownReveal}<EyeOff size={15} /> Hide answers{:else}<Eye size={15} /> Show correct answers{/if}
+        <button class="btn btn-sm" class:active={app.revealAnswers} onclick={() => (app.revealAnswers = !app.revealAnswers)}>
+          {#if app.revealAnswers}<EyeOff size={15} /> Hide answers{:else}<Eye size={15} /> Show correct answers{/if}
         </button>
       {/if}
     </div>
   {/if}
 
   <div class="que">
-    <div class="info">
-      {#if q.type === 'description'}
-        <span class="qno">Information</span>
-      {:else}
-        <span class="qno">Question <strong>{index + 1}</strong></span>
-        <span class="small">Not yet answered</span>
-        <span class="small">Marked out of {round(mark, 2).toFixed(2)}</span>
-        <span class="small flag"><Flag size={12} /> Flag question</span>
-      {/if}
+    <div class="side">
+      <div class="info">
+        {#if q.type === 'description'}
+          <span class="qno">Information</span>
+        {:else}
+          <span class="qno">Question <strong>{index + 1}</strong></span>
+          <span class="small">Not yet answered</span>
+          <span class="small">Marked out of {round(mark, 2).toFixed(2)}</span>
+          <span class="small flag"><Flag size={12} /> Flag question</span>
+        {/if}
+      </div>
+      {@render nav?.()}
     </div>
 
     <div class="formulation">
@@ -218,9 +222,14 @@
     align-items: flex-start;
     flex-wrap: wrap;
   }
-  .info {
+  .side {
     width: 130px;
     flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .info {
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -415,8 +424,10 @@
     .formulation {
       min-width: 0;
     }
-    .info {
+    .side {
       width: 100%;
+    }
+    .info {
       flex-direction: row;
       flex-wrap: wrap;
       gap: 10px;
