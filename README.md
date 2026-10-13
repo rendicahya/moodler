@@ -1,8 +1,8 @@
-# Moodle Quiz Editor
+# Moodler
 
 A frontend-only web app for creating and editing Moodle quiz questions. It runs entirely in the browser: nothing is uploaded, and your work is saved automatically to local storage.
 
-Built with [Svelte 5](https://svelte.dev) and [Vite](https://vite.dev), and deployed to GitHub Pages at **https://rendicahya.github.io/moodle-quiz-editor/**.
+Built with [Svelte 5](https://svelte.dev) and [Vite](https://vite.dev), and deployed to GitHub Pages at **https://rendicahya.github.io/moodler/**.
 
 ## Features
 

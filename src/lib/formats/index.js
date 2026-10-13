@@ -52,7 +52,7 @@ export const FORMATS = [
       const { questions, ...quiz } = data;
       return { quiz, questions, warnings: [] };
     },
-    export: (quiz) => ({ text: JSON.stringify({ app: 'moodle-quiz-editor', version: 1, ...quiz }, null, 2), warnings: [] }),
+    export: (quiz) => ({ text: JSON.stringify({ app: 'moodler', version: 1, ...quiz }, null, 2), warnings: [] }),
   },
 ];
 

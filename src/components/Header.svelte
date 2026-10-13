@@ -32,7 +32,7 @@
         <circle cx="23" cy="11.5" r="2" fill="var(--on-accent)" />
       </svg>
       <div class="titles">
-        <span class="app-name">Moodle Quiz Editor</span>
+        <span class="app-name">Moodler</span>
         <button class="quiz-name" title="Quiz settings" onclick={() => openModal('settings')}>
           {app.quiz.name || 'Untitled quiz'}
           <span class="meta">· {app.quiz.questions.length} question{app.quiz.questions.length === 1 ? '' : 's'} · {Math.round(total * 100) / 100} marks</span>
