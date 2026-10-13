@@ -320,6 +320,7 @@
           <span class="hint">Leave empty to use the quiz category. Only used by Moodle XML and GIFT export.</span>
         </div>
       </Section>
+      {#if !showPreview}{@render pager()}{/if}
     </div></div>{/if}
 
     {#if split}
@@ -343,11 +344,15 @@
         <div class="content">
           {#if split}<div class="pane-title"><span class="live"></span> Live preview</div>{/if}
           <Preview {q} {index} />
+          {@render pager()}
         </div>
       </div>
     {/if}
   </div>
+</div>
 
+<!-- Previous/Next sit under the question in the preview, or at the end of the form when the preview is hidden. -->
+{#snippet pager()}
   <nav class="pager" aria-label="Question navigation">
     <button id="nav-prev" class="btn btn-sm" title="Previous question (Alt+Page Up)" disabled={index === 0} onclick={(e) => go(-1, e)}>
       <ChevronLeft size={16} />Previous
@@ -357,7 +362,7 @@
       Next<ChevronRight size={16} />
     </button>
   </nav>
-</div>
+{/snippet}
 
 <style>
   .editor {
@@ -432,14 +437,10 @@
     font-size: 13px;
   }
   .pager {
-    flex: none;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 8px 24px;
-    background: var(--surface);
-    border-top: 1px solid var(--border);
   }
   .pager .btn {
     gap: 2px;
@@ -585,9 +586,6 @@
     .toolbar {
       padding: 8px 12px;
       flex-wrap: wrap;
-    }
-    .pager {
-      padding: 6px 12px;
     }
     .content {
       padding: 16px 12px 60px;

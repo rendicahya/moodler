@@ -11,7 +11,7 @@ Built with [Svelte 5](https://svelte.dev) and [Vite](https://vite.dev), and depl
 - **Export:** Moodle XML (full fidelity, including embedded images, hints, tags and categories), GIFT, Aiken and JSON. Export the whole quiz or only the questions you tick. Any questions a format can't represent are listed as warnings.
 - **Editing:** a rich-text editor with image paste and drop, HTML source view and TeX insertion. You can edit per-answer grades and feedback, combined feedback, hints, tags, penalties, ID numbers and category overrides.
 - **Live preview:** show the editor only, the student-view preview only, or both side by side, updating as you type (switch with Alt+P). Drag the divider to resize. On narrow screens they switch to tabs.
-- **Navigation:** step through questions with the Previous / Next buttons at the bottom or Alt+Page Up / Page Down, or jump to any question from the "Question N of M" menu, without going back to the list.
+- **Navigation:** step through questions with the Previous / Next buttons below the preview or Alt+Page Up / Page Down, or jump to any question from the "Question N of M" menu, without going back to the list.
 - **Guidance:** required fields are marked with *, optional ones are labelled, and tooltips explain Moodle terms such as default mark, penalty per wrong try and question bank category.
 - **Reordering:** drag and drop questions, answers, matching pairs, choices and ordering items, or shuffle multiple-choice answers with one click.
 - **Cloze builder:** insert or edit gaps through a form. You don't need to memorise the syntax.
