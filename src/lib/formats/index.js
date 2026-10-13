@@ -1,0 +1,70 @@
+import { importMoodleXml, exportMoodleXml } from './moodlexml.js';
+import { importGift, exportGift } from './gift.js';
+import { importAiken, exportAiken } from './aiken.js';
+import { importClozeText } from './cloze.js';
+
+export const FORMATS = [
+  {
+    id: 'xml',
+    label: 'Moodle XML',
+    ext: 'xml',
+    mime: 'application/xml',
+    description: 'Full fidelity. Supports every question type, images, hints, tags and categories.',
+    import: importMoodleXml,
+    export: exportMoodleXml,
+  },
+  {
+    id: 'gift',
+    label: 'GIFT',
+    ext: 'txt',
+    mime: 'text/plain',
+    description: 'Text format for multiple choice, true/false, short answer, numerical, matching, essay and description.',
+    import: importGift,
+    export: exportGift,
+  },
+  {
+    id: 'aiken',
+    label: 'Aiken',
+    ext: 'txt',
+    mime: 'text/plain',
+    description: 'Simple text format for single-answer multiple choice questions only.',
+    import: importAiken,
+    export: exportAiken,
+  },
+  {
+    id: 'cloze',
+    label: 'Embedded answers (Cloze)',
+    ext: 'txt',
+    mime: 'text/plain',
+    description: 'Imports the whole text as one Cloze question.',
+    import: importClozeText,
+    export: null,
+  },
+  {
+    id: 'json',
+    label: 'Project (JSON)',
+    ext: 'json',
+    mime: 'application/json',
+    description: 'This editor’s own format. Saves the whole quiz exactly as it is.',
+    import: (src) => {
+      const data = JSON.parse(src);
+      if (!data || !Array.isArray(data.questions)) throw new Error('Not a quiz project file.');
+      const { questions, ...quiz } = data;
+      return { quiz, questions, warnings: [] };
+    },
+    export: (quiz) => ({ text: JSON.stringify({ app: 'moodle-quiz-editor', version: 1, ...quiz }, null, 2), warnings: [] }),
+  },
+];
+
+export const FORMAT_MAP = Object.fromEntries(FORMATS.map((f) => [f.id, f]));
+
+/** Best-effort guess of the format of pasted or uploaded text. */
+export function detectFormat(text, filename = '') {
+  const t = text.replace(/^﻿/, '').trimStart();
+  const ext = filename.split('.').pop().toLowerCase();
+  if (ext === 'xml' || t.startsWith('<?xml') || /^<quiz[\s>]/.test(t)) return 'xml';
+  if (ext === 'json' || t.startsWith('{"') || /^\{\s*"/.test(t)) return 'json';
+  if (/^\s*ANSWER\s*:\s*[A-Z]\s*$/im.test(t) && /^\s*[A-Z][.)]\s+/m.test(t)) return 'aiken';
+  if (/\{\d*:(SHORTANSWER|SA|MW|NUMERICAL|NM|MULTICHOICE|MC|MULTIRESPONSE|MR)[A-Z_]*:/.test(t) && !/^::/m.test(t)) return 'cloze';
+  return 'gift';
+}
