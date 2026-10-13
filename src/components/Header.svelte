@@ -19,9 +19,10 @@
 
   const total = $derived(app.quiz.questions.reduce((s, q) => s + (Number(q.defaultgrade) || 0), 0));
 
-  // Save status doubles as a one-click backup button.
+  // The save status is plain text, except when a backup is due or saving failed: then it becomes a backup button.
   const backupDue = $derived(app.quiz.questions.length > 0 && backup.edits >= REMIND_AFTER);
   const status = $derived(history.saveFailed ? 'error' : history.pending ? 'saving' : backupDue ? 'due' : 'saved');
+  const actionable = $derived(status === 'error' || status === 'due');
   const STATUS_TEXT = { error: 'Not saved', saving: 'Saving…', due: 'Back up', saved: 'Saved' };
   const when = (d) => d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   const statusTitle = $derived(
@@ -34,8 +35,10 @@
       backup.at
         ? `Last backup: ${when(backup.at)} (${backup.edits} change${backup.edits === 1 ? '' : 's'} since).`
         : 'Never backed up.',
-      'Click to download a backup file (.json).',
-    ].join('\n')
+      actionable && 'Click to download a backup file (.json).',
+    ]
+      .filter(Boolean)
+      .join('\n')
   );
 </script>
 
@@ -61,9 +64,15 @@
   </div>
 
   <div class="right">
-    <button class="btn btn-ghost btn-sm status {status}" title={statusTitle} aria-label="{STATUS_TEXT[status]}. Download a backup" onclick={downloadBackup}>
-      <span class="dot"></span><span class="status-text">{STATUS_TEXT[status]}</span>
-    </button>
+    {#if actionable}
+      <button class="btn btn-ghost btn-sm status {status}" title={statusTitle} aria-label="{STATUS_TEXT[status]}. Download a backup" onclick={downloadBackup}>
+        <span class="dot"></span><span class="status-text">{STATUS_TEXT[status]}</span>
+      </button>
+    {:else}
+      <span class="btn btn-sm status static {status}" title={statusTitle} role="status">
+        <span class="dot"></span><span class="status-text">{STATUS_TEXT[status]}</span>
+      </span>
+    {/if}
     <div class="group">
       <button class="btn btn-ghost btn-icon" title="Undo (Ctrl+Z)" aria-label="Undo" disabled={!history.canUndo} onclick={undo}><Undo2 size={17} /></button>
       <button class="btn btn-ghost btn-icon" title="Redo (Ctrl+Y)" aria-label="Redo" disabled={!history.canRedo} onclick={redo}><Redo2 size={17} /></button>
@@ -167,6 +176,12 @@
     gap: 6px;
     color: var(--text-3);
     font-weight: 500;
+  }
+  .status.static {
+    cursor: default;
+    border-color: transparent;
+    background: none;
+    box-shadow: none;
   }
   .dot {
     width: 7px;

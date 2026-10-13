@@ -34,8 +34,8 @@
       <li>Drag the <span class="grip">⠿</span> handle to reorder questions, answers and items.</li>
       <li>Tick questions in the list (hover a number, or Ctrl+click) to export, edit, move, duplicate or delete several at once.</li>
       <li>
-        Use <strong>Project (JSON)</strong> to back up your work or move it to another browser. The save status at the top right downloads a backup in one click and
-        reminds you when it's been a while.
+        Use <strong>Project (JSON)</strong> to back up your work or move it to another browser. When it's been a while, the save status at the top right turns into a
+        <strong>Back up</strong> button that downloads a backup in one click.
       </li>
       <li>Moodler works offline once loaded, and can be installed as an app from your browser's menu.</li>
     </ul>

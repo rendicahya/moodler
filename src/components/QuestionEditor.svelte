@@ -1,6 +1,6 @@
 <script>
   import { tick } from 'svelte';
-  import { ArrowUp, ArrowDown, ChevronLeft, ChevronRight, ChevronDown, Copy, Trash, Pencil, Eye, Columns2, TriangleAlert, Plus, X } from '@lucide/svelte';
+  import { ChevronLeft, ChevronRight, ChevronDown, Copy, Trash, Pencil, Eye, Columns2, TriangleAlert, Plus, X } from '@lucide/svelte';
   import Section from './ui/Section.svelte';
   import Switch from './ui/Switch.svelte';
   import Segmented from './ui/Segmented.svelte';
@@ -17,7 +17,7 @@
   import ClozeEditor from './editors/ClozeEditor.svelte';
   import GapEditor from './editors/GapEditor.svelte';
   import OrderingEditor from './editors/OrderingEditor.svelte';
-  import { app, duplicateQuestion, deleteQuestion, moveQuestion, setView, goToQuestion, select, saveLayout } from '../lib/store.svelte.js';
+  import { app, duplicateQuestion, deleteQuestion, setView, goToQuestion, select, saveLayout } from '../lib/store.svelte.js';
   import { TYPE_MAP, TEXT_FORMATS, PENALTIES, validateQuestion, questionTitle, uid } from '../lib/model.js';
   import { TYPE_ICONS } from '../lib/icons.js';
   import { HELP } from '../lib/help.js';
@@ -104,14 +104,6 @@
         </label>
       </div>
     </div>
-    <div class="nav">
-      <button id="nav-prev" class="btn btn-sm" title="Previous question (Alt+Page Up)" disabled={index === 0} onclick={(e) => go(-1, e)}>
-        <ChevronLeft size={16} /><span class="nav-text">Previous</span>
-      </button>
-      <button id="nav-next" class="btn btn-sm" title="Next question (Alt+Page Down)" disabled={index === total - 1} onclick={(e) => go(1, e)}>
-        <span class="nav-text">Next</span><ChevronRight size={16} />
-      </button>
-    </div>
     <span class="grow"></span>
     {#if app.wide}
       <Segmented
@@ -136,16 +128,6 @@
       />
     {/if}
     <div class="acts">
-      <button class="btn btn-ghost btn-icon btn-sm" title="Move up (Alt+↑ in list)" aria-label="Move up" disabled={index === 0} onclick={() => moveQuestion(index, index - 1)}
-        ><ArrowUp size={16} /></button
-      >
-      <button
-        class="btn btn-ghost btn-icon btn-sm"
-        title="Move down (Alt+↓ in list)"
-        aria-label="Move down"
-        disabled={index === total - 1}
-        onclick={() => moveQuestion(index, index + 1)}><ArrowDown size={16} /></button
-      >
       <button class="btn btn-ghost btn-icon btn-sm" title="Duplicate" aria-label="Duplicate" onclick={() => duplicateQuestion(q.id)}><Copy size={15} /></button>
       <button class="btn btn-ghost btn-icon btn-sm danger" title="Delete" aria-label="Delete" onclick={() => deleteQuestion(q.id)}><Trash size={15} /></button>
     </div>
@@ -365,6 +347,16 @@
       </div>
     {/if}
   </div>
+
+  <nav class="pager" aria-label="Question navigation">
+    <button id="nav-prev" class="btn btn-sm" title="Previous question (Alt+Page Up)" disabled={index === 0} onclick={(e) => go(-1, e)}>
+      <ChevronLeft size={16} />Previous
+    </button>
+    <span class="pager-pos">{index + 1} / {total}</span>
+    <button id="nav-next" class="btn btn-sm" title="Next question (Alt+Page Down)" disabled={index === total - 1} onclick={(e) => go(1, e)}>
+      Next<ChevronRight size={16} />
+    </button>
+  </nav>
 </div>
 
 <style>
@@ -439,12 +431,23 @@
     cursor: pointer;
     font-size: 13px;
   }
-  .nav {
+  .pager {
+    flex: none;
     display: flex;
-    gap: 4px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 24px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
   }
-  .nav .btn {
+  .pager .btn {
     gap: 2px;
+  }
+  .pager-pos {
+    font-size: 12px;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
   }
   .grow {
     flex: 1;
@@ -583,16 +586,14 @@
       padding: 8px 12px;
       flex-wrap: wrap;
     }
+    .pager {
+      padding: 6px 12px;
+    }
     .content {
       padding: 16px 12px 60px;
     }
   }
   /* Sized by the editor's own width, which depends on whether the question list is open. */
-  @container (max-width: 1000px) {
-    .nav-text {
-      display: none;
-    }
-  }
   @container (max-width: 640px) {
     .type {
       display: none;
