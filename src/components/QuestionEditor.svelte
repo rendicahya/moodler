@@ -103,37 +103,39 @@
         </label>
       </div>
     </div>
-    <span class="grow"></span>
-    <nav class="pager" aria-label="Question navigation">
-      <button id="nav-prev" class="btn btn-sm" title="Previous question (Alt+Page Up)" aria-label="Previous question" disabled={index === 0} onclick={(e) => go(-1, e)}>
-        <ChevronLeft size={16} /><span class="nav-text">Previous</span>
-      </button>
-      <button id="nav-next" class="btn btn-sm" title="Next question (Alt+Page Down)" aria-label="Next question" disabled={index === total - 1} onclick={(e) => go(1, e)}>
-        <span class="nav-text">Next</span><ChevronRight size={16} />
-      </button>
-    </nav>
-    {#if app.wide}
-      <Segmented
-        bind:value={() => app.view, setView}
-        size="sm"
-        label="Layout"
-        options={[
-          { value: 'edit', label: 'Edit', icon: Pencil, title: 'Editor only (Alt+P cycles)' },
-          { value: 'split', label: 'Both', icon: Columns2, title: 'Editor and preview side by side (Alt+P cycles)' },
-          { value: 'preview', label: 'Preview', icon: Eye, title: 'Preview only (Alt+P cycles)' },
-        ]}
-      />
-    {:else}
-      <Segmented
-        bind:value={app.tab}
-        size="sm"
-        label="View"
-        options={[
-          { value: 'edit', label: 'Edit', icon: Pencil },
-          { value: 'preview', label: 'Preview', icon: Eye },
-        ]}
-      />
-    {/if}
+    <!-- Navigation and layout switch are centred; identity on the left, actions on the right. -->
+    <div class="center">
+      <nav class="pager" aria-label="Question navigation">
+        <button id="nav-prev" class="btn btn-sm" title="Previous question (Alt+Page Up)" aria-label="Previous question" disabled={index === 0} onclick={(e) => go(-1, e)}>
+          <ChevronLeft size={16} /><span class="nav-text">Previous</span>
+        </button>
+        <button id="nav-next" class="btn btn-sm" title="Next question (Alt+Page Down)" aria-label="Next question" disabled={index === total - 1} onclick={(e) => go(1, e)}>
+          <span class="nav-text">Next</span><ChevronRight size={16} />
+        </button>
+      </nav>
+      {#if app.wide}
+        <Segmented
+          bind:value={() => app.view, setView}
+          size="sm"
+          label="Layout"
+          options={[
+            { value: 'edit', label: 'Edit', icon: Pencil, title: 'Editor only (Alt+P cycles)' },
+            { value: 'split', label: 'Both', icon: Columns2, title: 'Editor and preview side by side (Alt+P cycles)' },
+            { value: 'preview', label: 'Preview', icon: Eye, title: 'Preview only (Alt+P cycles)' },
+          ]}
+        />
+      {:else}
+        <Segmented
+          bind:value={app.tab}
+          size="sm"
+          label="View"
+          options={[
+            { value: 'edit', label: 'Edit', icon: Pencil },
+            { value: 'preview', label: 'Preview', icon: Eye },
+          ]}
+        />
+      {/if}
+    </div>
     <div class="acts">
       <button class="btn btn-ghost btn-icon btn-sm" title="Duplicate" aria-label="Duplicate" onclick={() => duplicateQuestion(q.id)}><Copy size={15} /></button>
       <button class="btn btn-ghost btn-icon btn-sm danger" title="Delete" aria-label="Delete" onclick={() => deleteQuestion(q.id)}><Trash size={15} /></button>
@@ -220,18 +222,21 @@
               </select>
             </div>
           {/if}
-          <div class="field">
-            <FieldLabel
-              for="idn-{q.id}"
-              text="ID number"
-              optional
-              info="Your own identifier for the question, e.g. CH2-Q05. It must be unique within its category. Students never see it."
-            />
-            <input id="idn-{q.id}" class="input input-sm" bind:value={q.idnumber} />
-          </div>
-          <div class="field">
-            <FieldLabel text="Visibility" info="Hidden questions stay in the question bank but can’t be added to new quizzes." />
-            <Switch bind:checked={() => !q.hidden, (v) => (q.hidden = !v)} label="Shown in bank" />
+          <!-- ID number and visibility always share a row. -->
+          <div class="pair">
+            <div class="field">
+              <FieldLabel
+                for="idn-{q.id}"
+                text="ID number"
+                optional
+                info="Your own identifier for the question, e.g. CH2-Q05. It must be unique within its category. Students never see it."
+              />
+              <input id="idn-{q.id}" class="input input-sm" bind:value={q.idnumber} />
+            </div>
+            <div class="field">
+              <FieldLabel text="Visibility" info="Hidden questions stay in the question bank but can’t be added to new quizzes." />
+              <Switch bind:checked={() => !q.hidden, (v) => (q.hidden = !v)} label="Shown in bank" />
+            </div>
           </div>
         </div>
       </Section>
@@ -368,9 +373,9 @@
   .toolbar {
     flex: none;
     z-index: 5;
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    justify-content: space-between;
     gap: 12px;
     padding: 10px 24px;
     background: color-mix(in srgb, var(--bg) 88%, transparent);
@@ -397,6 +402,8 @@
   .type {
     font-weight: 600;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .ident-text {
     min-width: 0;
@@ -435,10 +442,13 @@
   .pager .btn {
     gap: 2px;
   }
-  .grow {
-    flex: 1;
+  .center {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
   .acts {
+    justify-self: end;
     display: flex;
     align-items: center;
     gap: 2px;
@@ -516,9 +526,25 @@
   }
   /* Wraps by available width, so it also fits the narrower editor pane in split view. */
   .meta {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+    display: flex;
+    flex-wrap: wrap;
     gap: 14px;
+  }
+  .meta > .field {
+    flex: 1 1 175px;
+    min-width: 0;
+  }
+  .pair {
+    flex: 2 1 340px;
+    display: flex;
+    gap: 14px;
+  }
+  .pair > .field:first-child {
+    flex: 1;
+    min-width: 0;
+  }
+  .pair > .field:last-child {
+    flex: none;
   }
   .issues {
     display: flex;
@@ -565,9 +591,16 @@
     flex: 1;
   }
   @media (max-width: 700px) {
+    /* Identity and actions on the first row, navigation and layout centred below. */
     .toolbar {
       padding: 8px 12px;
-      flex-wrap: wrap;
+      grid-template-columns: 1fr auto;
+      row-gap: 8px;
+    }
+    .center {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      justify-content: center;
     }
     .content {
       padding: 16px 12px 60px;
