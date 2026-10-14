@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { Sun, Moon, Maximize, Minimize, Undo2, Redo2, Upload, Download, FilePlus, Settings, PanelLeft, CircleQuestionMark, Presentation } from '@lucide/svelte';
+  import { Sun, Moon, Maximize, Minimize, Undo2, Redo2, Upload, Download, FilePlus, Settings, CircleQuestionMark, Presentation } from '@lucide/svelte';
   import { app, history, backup, REMIND_AFTER, undo, redo, toggleTheme, openModal, newQuiz, downloadBackup } from '../lib/store.svelte.js';
 
   let fullscreen = $state(false);
@@ -44,9 +44,6 @@
 
 <header class="header">
   <div class="left">
-    <button class="btn btn-ghost btn-icon sidebar-toggle" title="Toggle question list" aria-label="Toggle question list" onclick={() => (app.sidebarOpen = !app.sidebarOpen)}>
-      <PanelLeft size={18} />
-    </button>
     <div class="brand">
       <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
         <rect width="32" height="32" rx="8" fill="var(--accent)" />

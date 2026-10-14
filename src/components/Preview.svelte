@@ -6,8 +6,8 @@
   import { app } from '../lib/store.svelte.js';
 
   // `showAnswers` lets a parent control the answer reveal (the whole-quiz preview); without it the pane has its own toggle,
-  // which stays on when moving to another question. `nav` is rendered under the question info box.
-  let { q, index, showAnswers = null, nav = null } = $props();
+  // which stays on when moving to another question.
+  let { q, index, showAnswers = null } = $props();
   const reveal = $derived(showAnswers ?? app.revealAnswers);
 
   const toHtml = (text, format = 'html') => (format === 'html' ? sanitizeHtml(text || '') : escapeHtml(text || '').replace(/\n/g, '<br>'));
@@ -99,7 +99,6 @@
           <span class="small flag"><Flag size={12} /> Flag question</span>
         {/if}
       </div>
-      {@render nav?.()}
     </div>
 
     <div class="formulation">

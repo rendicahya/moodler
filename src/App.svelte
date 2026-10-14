@@ -1,5 +1,5 @@
 <script>
-  import { Plus, Upload } from '@lucide/svelte';
+  import { Plus, Upload, ChevronLeft, ChevronRight } from '@lucide/svelte';
   import Header from './components/Header.svelte';
   import Sidebar from './components/Sidebar.svelte';
   import QuestionEditor from './components/QuestionEditor.svelte';
@@ -12,7 +12,7 @@
   import HelpDialog from './components/dialogs/HelpDialog.svelte';
   import BulkEditDialog from './components/dialogs/BulkEditDialog.svelte';
   import QuizPreviewDialog from './components/dialogs/QuizPreviewDialog.svelte';
-  import { app, initPersistence, undo, redo, openModal, notify, selectedQuestion, selectedIndex, addQuestion, cycleView, goToQuestion } from './lib/store.svelte.js';
+  import { app, initPersistence, undo, redo, openModal, notify, selectedQuestion, selectedIndex, addQuestion, cycleView, goToQuestion, setSidebarWidth, saveLayout, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT } from './lib/store.svelte.js';
   import { QUESTION_TYPES } from './lib/model.js';
   import { looksLikeQuestions } from './lib/formats/index.js';
   import { TYPE_ICONS } from './lib/icons.js';
@@ -38,6 +38,30 @@
     app.selectedId;
     if (narrow) app.sidebarOpen = false;
   });
+
+  let resizing = $state(false);
+  function startResize(e) {
+    e.preventDefault();
+    resizing = true;
+    const startX = e.clientX;
+    const startW = app.sidebarWidth;
+    const move = (ev) => setSidebarWidth(startW + ev.clientX - startX);
+    const up = () => {
+      resizing = false;
+      saveLayout();
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+  function resizeKey(e) {
+    const step = e.key === 'ArrowLeft' ? -20 : e.key === 'ArrowRight' ? 20 : 0;
+    if (!step) return;
+    e.preventDefault();
+    setSidebarWidth(app.sidebarWidth + step);
+    saveLayout();
+  }
 
   function isTyping(e) {
     const t = e.target;
@@ -107,9 +131,29 @@
       {#if narrow}
         <button class="scrim" aria-label="Close question list" onclick={() => (app.sidebarOpen = false)}></button>
       {/if}
-      <div class="side" class:overlay={narrow}>
+      <div class="side" class:overlay={narrow} class:resizing style:--sidebar-w="{app.sidebarWidth}px">
         <Sidebar />
+        {#if !narrow}
+          <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+          <div
+            class="resizer"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize question list"
+            aria-valuenow={app.sidebarWidth}
+            aria-valuemin={SIDEBAR_MIN}
+            aria-valuemax={SIDEBAR_MAX}
+            tabindex="0"
+            title="Drag to resize, double-click to reset"
+            onpointerdown={startResize}
+            onkeydown={resizeKey}
+            ondblclick={() => (setSidebarWidth(SIDEBAR_DEFAULT), saveLayout())}
+          ></div>
+        {/if}
+        {@render edgeToggle()}
       </div>
+    {:else}
+      {@render edgeToggle()}
     {/if}
 
     {#if q}
@@ -165,6 +209,20 @@
 
 <Toasts />
 
+<!-- Small tab on the list's right edge (or the window's left edge when hidden) that shows or hides the question list. -->
+{#snippet edgeToggle()}
+  <button
+    class="edge-toggle"
+    class:closed={!app.sidebarOpen}
+    title={app.sidebarOpen ? 'Hide question list' : 'Show question list'}
+    aria-label={app.sidebarOpen ? 'Hide question list' : 'Show question list'}
+    aria-expanded={app.sidebarOpen}
+    onclick={() => (app.sidebarOpen = !app.sidebarOpen)}
+  >
+    {#if app.sidebarOpen}<ChevronLeft size={14} />{:else}<ChevronRight size={14} />{/if}
+  </button>
+{/snippet}
+
 <style>
   .app {
     height: 100%;
@@ -180,6 +238,68 @@
   .side {
     display: flex;
     min-height: 0;
+    position: relative;
+    z-index: 6;
+  }
+  .side.resizing {
+    cursor: col-resize;
+    user-select: none;
+  }
+  .resizer {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: -4px;
+    width: 8px;
+    cursor: col-resize;
+    outline: none;
+  }
+  .resizer::after {
+    content: '';
+    position: absolute;
+    inset: 0 3px;
+    transition: background 0.12s;
+  }
+  .resizer:hover::after,
+  .resizer:focus-visible::after,
+  .resizing .resizer::after {
+    background: var(--accent);
+  }
+  .edge-toggle {
+    position: absolute;
+    top: 50%;
+    right: -12px;
+    z-index: 2;
+    width: 22px;
+    height: 44px;
+    margin-top: -22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-3);
+    box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.08));
+    cursor: pointer;
+    transition: color 0.12s, border-color 0.12s;
+  }
+  .edge-toggle:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .edge-toggle:focus-visible {
+    box-shadow: var(--focus);
+  }
+  /* With the list hidden, the tab hugs the window's left edge. */
+  .edge-toggle.closed {
+    right: auto;
+    left: 0;
+    width: 16px;
+    border-left: none;
+    border-radius: 0 999px 999px 0;
+    z-index: 6;
   }
   .side.overlay {
     position: absolute;

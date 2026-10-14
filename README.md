@@ -11,7 +11,7 @@ Built with [Svelte 5](https://svelte.dev) and [Vite](https://vite.dev), and depl
 - **Export:** Moodle XML (full fidelity, including embedded images, hints, tags and categories), GIFT, Aiken and JSON. Export the whole quiz or only the questions you tick. Any questions a format can't represent are listed as warnings.
 - **Editing:** a rich-text editor with image paste and drop, HTML source view and TeX insertion. You can edit per-answer grades and feedback, combined feedback, hints, tags, penalties, ID numbers and category overrides.
 - **Live preview:** show the editor only, the student-view preview only, or both side by side, updating as you type (switch with Alt+P). Drag the divider to resize. On narrow screens they switch to tabs.
-- **Navigation:** step through questions with the Previous / Next buttons below the preview or Alt+Page Up / Page Down, or jump to any question from the "Question N of M" menu, without going back to the list.
+- **Navigation:** step through questions with the Previous / Next buttons in the question toolbar or Alt+Page Up / Page Down, or jump to any question from the "Question N of M" menu, without going back to the list.
 - **Guidance:** required fields are marked with *, optional ones are labelled, and tooltips explain Moodle terms such as default mark, penalty per wrong try and question bank category.
 - **Reordering:** drag and drop questions, answers, matching pairs, choices and ordering items, or shuffle multiple-choice answers with one click.
 - **Cloze builder:** insert or edit gaps through a form. You don't need to memorise the syntax.
@@ -21,7 +21,7 @@ Built with [Svelte 5](https://svelte.dev) and [Vite](https://vite.dev), and depl
 - **Backups:** after many changes Moodler reminds you to back up, and the save status in the header turns into a "Back up" button that downloads a JSON backup in one click.
 - **Offline:** after the first visit the app works without a connection and can be installed from the browser's menu.
 - **Productivity:** undo/redo, validation warnings, search, keyboard shortcuts, and per-quiz defaults.
-- **UI:** light and dark themes, a fullscreen toggle and a responsive layout.
+- **UI:** light and dark themes, a fullscreen toggle and a responsive layout. Hide or show the question list with the small tab on its edge, and drag its edge to resize it.
 
 ## Development
 

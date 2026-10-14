@@ -104,6 +104,14 @@
       </div>
     </div>
     <span class="grow"></span>
+    <nav class="pager" aria-label="Question navigation">
+      <button id="nav-prev" class="btn btn-sm" title="Previous question (Alt+Page Up)" aria-label="Previous question" disabled={index === 0} onclick={(e) => go(-1, e)}>
+        <ChevronLeft size={16} /><span class="nav-text">Previous</span>
+      </button>
+      <button id="nav-next" class="btn btn-sm" title="Next question (Alt+Page Down)" aria-label="Next question" disabled={index === total - 1} onclick={(e) => go(1, e)}>
+        <span class="nav-text">Next</span><ChevronRight size={16} />
+      </button>
+    </nav>
     {#if app.wide}
       <Segmented
         bind:value={() => app.view, setView}
@@ -317,7 +325,6 @@
           <span class="hint">Leave empty to use the quiz category. Only used by Moodle XML and GIFT export.</span>
         </div>
       </Section>
-      {#if !showPreview}{@render pager()}{/if}
     </div></div>{/if}
 
     {#if split}
@@ -340,27 +347,14 @@
       <div class="pane preview-pane" class:side={split}>
         <div class="content">
           {#if split}<div class="pane-title"><span class="live"></span> Live preview</div>{/if}
-          <Preview {q} {index} nav={compactPager} />
+          <Preview {q} {index} />
         </div>
       </div>
     {/if}
   </div>
 </div>
 
-<!-- Previous/Next sit under the question info box in the preview, or at the end of the form when the preview is hidden. -->
-{#snippet pager(compact = false)}
-  <nav class="pager" class:compact aria-label="Question navigation">
-    <button id="nav-prev" class="btn btn-sm" title="Previous question (Alt+Page Up)" aria-label="Previous question" disabled={index === 0} onclick={(e) => go(-1, e)}>
-      <ChevronLeft size={16} />{compact ? 'Prev' : 'Previous'}
-    </button>
-    {#if !compact}<span class="pager-pos">{index + 1} / {total}</span>{/if}
-    <button id="nav-next" class="btn btn-sm" title="Next question (Alt+Page Down)" aria-label="Next question" disabled={index === total - 1} onclick={(e) => go(1, e)}>
-      Next<ChevronRight size={16} />
-    </button>
-  </nav>
-{/snippet}
 
-{#snippet compactPager()}{@render pager(true)}{/snippet}
 
 <style>
   .editor {
@@ -436,27 +430,10 @@
   }
   .pager {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
+    gap: 4px;
   }
   .pager .btn {
     gap: 2px;
-  }
-  .pager.compact {
-    justify-content: flex-start;
-    gap: 6px;
-  }
-  .pager.compact .btn {
-    padding: 0 8px 0 4px;
-  }
-  .pager.compact .btn:last-child {
-    padding: 0 4px 0 8px;
-  }
-  .pager-pos {
-    font-size: 12px;
-    color: var(--text-3);
-    font-variant-numeric: tabular-nums;
   }
   .grow {
     flex: 1;
@@ -597,6 +574,11 @@
     }
   }
   /* Sized by the editor's own width, which depends on whether the question list is open. */
+  @container (max-width: 1000px) {
+    .nav-text {
+      display: none;
+    }
+  }
   @container (max-width: 640px) {
     .type {
       display: none;

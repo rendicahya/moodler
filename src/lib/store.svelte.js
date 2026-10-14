@@ -23,6 +23,10 @@ function loadQuiz() {
 
 /** Wide-screen layouts: editor only, editor and preview side by side, or preview only. */
 export const VIEWS = ['edit', 'split', 'preview'];
+export const SIDEBAR_MIN = 240;
+export const SIDEBAR_MAX = 600;
+export const SIDEBAR_DEFAULT = 340;
+const clampSidebar = (w) => (Number.isFinite(Number(w)) && w !== null && w !== '' ? Math.round(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, Number(w)))) : SIDEBAR_DEFAULT);
 
 function loadLayout() {
   try {
@@ -30,12 +34,12 @@ function loadLayout() {
     if (l) {
       // Older versions stored only whether the preview was shown.
       const view = VIEWS.includes(l.view) ? l.view : l.showPreview === false ? 'edit' : 'split';
-      return { view, splitRatio: Math.min(0.75, Math.max(0.25, Number(l.splitRatio) || 0.55)) };
+      return { view, splitRatio: Math.min(0.75, Math.max(0.25, Number(l.splitRatio) || 0.55)), sidebarWidth: clampSidebar(l.sidebarWidth) };
     }
   } catch {
     /* fall through to defaults */
   }
-  return { view: 'split', splitRatio: 0.55 };
+  return { view: 'split', splitRatio: 0.55, sidebarWidth: SIDEBAR_DEFAULT };
 }
 
 function loadBackup() {
@@ -60,6 +64,7 @@ export const app = $state({
   wide: true,
   view: layout.view,
   splitRatio: layout.splitRatio,
+  sidebarWidth: layout.sidebarWidth,
   // "Show correct answers" in the preview stays on while moving between questions.
   revealAnswers: false,
   theme: document.documentElement.dataset.theme || 'light',
@@ -206,9 +211,13 @@ export function setTheme(theme) {
 
 export const toggleTheme = () => setTheme(app.theme === 'dark' ? 'light' : 'dark');
 
+export function setSidebarWidth(w) {
+  app.sidebarWidth = clampSidebar(w);
+}
+
 export function saveLayout() {
   try {
-    localStorage.setItem(LAYOUT_KEY, JSON.stringify({ view: app.view, splitRatio: app.splitRatio }));
+    localStorage.setItem(LAYOUT_KEY, JSON.stringify({ view: app.view, splitRatio: app.splitRatio, sidebarWidth: app.sidebarWidth }));
   } catch {
     /* ignore */
   }
