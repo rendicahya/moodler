@@ -1,11 +1,11 @@
 <script>
-  import { SquarePen } from '@lucide/svelte';
+  import { SquarePen, Printer } from '@lucide/svelte';
   import Modal from '../ui/Modal.svelte';
   import Switch from '../ui/Switch.svelte';
   import Preview from '../Preview.svelte';
   import { parseCloze } from '../../lib/formats/cloze.js';
   import { round } from '../../lib/model.js';
-  import { app, closeModal, select } from '../../lib/store.svelte.js';
+  import { app, closeModal, openModal, select } from '../../lib/store.svelte.js';
 
   let showAnswers = $state(false);
 
@@ -41,6 +41,7 @@
   </ol>
 
   {#snippet footer()}
+    <button class="btn" onclick={() => openModal('print')}><Printer size={16} /> Print…</button>
     <button class="btn btn-primary" onclick={closeModal}>Close</button>
   {/snippet}
 </Modal>

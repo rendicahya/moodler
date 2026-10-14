@@ -1,6 +1,7 @@
 import { createQuiz, normalizeQuiz, normalizeQuestion, createQuestion, cloneQuestion, moveItem, questionTitle } from './model.js';
 import { FORMAT_MAP } from './formats/index.js';
 import { downloadText, slugify } from './download.js';
+import { dbGet, dbSet } from './db.js';
 
 const STORAGE_KEY = 'mqe.quiz.v1';
 const THEME_KEY = 'mqe.theme';
@@ -11,14 +12,52 @@ const HISTORY_LIMIT = 200;
 export const REMIND_AFTER = 30;
 const REMIND_EVERY = 50;
 
-function loadQuiz() {
+// The quiz is kept in IndexedDB, which has room for embedded images. localStorage is only a fallback for when
+// IndexedDB fails; a copy there is therefore newer than the one in IndexedDB. Older versions kept the quiz only there.
+function readLocal() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return normalizeQuiz(JSON.parse(raw));
+    return localStorage.getItem(STORAGE_KEY);
   } catch {
-    /* corrupted or unavailable storage: start fresh */
+    return null;
   }
-  return createQuiz();
+}
+
+function removeLocal() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Loads the saved quiz into the app. Call once, before the app is mounted. */
+export async function loadSavedQuiz() {
+  let raw = readLocal();
+  if (raw) {
+    // Move it into IndexedDB so localStorage is freed for the next time.
+    try {
+      await dbSet(STORAGE_KEY, raw);
+      removeLocal();
+    } catch {
+      /* keep it in localStorage */
+    }
+  } else {
+    try {
+      raw = await dbGet(STORAGE_KEY);
+    } catch {
+      /* unavailable: start fresh */
+    }
+  }
+  let quiz = null;
+  try {
+    if (raw) quiz = normalizeQuiz(JSON.parse(raw));
+  } catch {
+    /* corrupted: start fresh */
+  }
+  if (!quiz) return;
+  app.quiz = quiz;
+  app.selectedId = quiz.questions[0]?.id ?? null;
+  current = JSON.stringify(app.quiz);
 }
 
 /** Wide-screen layouts: editor only, editor and preview side by side, or preview only. */
@@ -55,7 +94,7 @@ function loadBackup() {
 const layout = loadLayout();
 
 export const app = $state({
-  quiz: loadQuiz(),
+  quiz: createQuiz(),
   selectedId: null,
   // Questions ticked in the list for bulk actions; independent of the question open in the editor.
   checked: [],
@@ -75,8 +114,6 @@ export const app = $state({
   confirm: null,
   sidebarOpen: true,
 });
-
-if (app.quiz.questions.length) app.selectedId = app.quiz.questions[0].id;
 
 export const history = $state({ canUndo: false, canRedo: false, savedAt: null, pending: false, saveFailed: false });
 
@@ -98,15 +135,26 @@ let future = [];
 let current = JSON.stringify(app.quiz);
 let timer = null;
 
+// Writes run one after another so that an older snapshot can never overwrite a newer one.
+let writing = Promise.resolve();
+
 function save(snapshot) {
-  try {
-    localStorage.setItem(STORAGE_KEY, snapshot);
+  writing = writing.then(async () => {
+    try {
+      await dbSet(STORAGE_KEY, snapshot);
+      removeLocal();
+    } catch {
+      try {
+        localStorage.setItem(STORAGE_KEY, snapshot);
+      } catch {
+        if (!history.saveFailed) notify('Could not save in this browser (storage may be full). Download a backup to keep your work.', 'error', 0, backupAction);
+        history.saveFailed = true;
+        return;
+      }
+    }
     history.savedAt = new Date();
     history.saveFailed = false;
-  } catch {
-    history.saveFailed = true;
-    notify('Could not save to browser storage (it may be full). Download a backup to keep your work.', 'error', 0, backupAction);
-  }
+  });
 }
 
 const backupAction = { label: 'Download backup', run: () => downloadBackup() };

@@ -8,6 +8,8 @@
     [[mod, 'Shift', 'Z'], 'Redo (also ' + mod + '+Y)'],
     [[mod, 'S'], 'Export'],
     [[mod, 'O'], 'Import'],
+    [[mod, 'P'], 'Print or save as PDF'],
+    [[mod, 'H'], 'Find and replace'],
     [['Alt', 'N'], 'Add a question'],
     [['Alt', 'P'], 'Switch layout: editor only, both, preview only'],
     [['Alt', 'Page Up / Down'], 'Previous / next question (works anywhere)'],
@@ -27,7 +29,7 @@
   <section>
     <h3>How it works</h3>
     <ul>
-      <li>Everything runs in your browser. Your quiz is saved automatically to this browser’s local storage — nothing is uploaded.</li>
+      <li>Everything runs in your browser. Your quiz is saved automatically in this browser’s storage — nothing is uploaded.</li>
       <li>Export to <strong>Moodle XML</strong> for full fidelity. In Moodle, go to <em>Question bank → Import</em>, choose the same format and upload the file.</li>
       <li><strong>GIFT</strong> and <strong>Aiken</strong> are plain-text formats that only support some question types; unsupported questions are listed when exporting.</li>
       <li>Images pasted or inserted into the editor are embedded in Moodle XML exports.</li>

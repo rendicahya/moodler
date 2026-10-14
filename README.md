@@ -1,6 +1,6 @@
 # Moodler
 
-A frontend-only web app for creating and editing Moodle quiz questions. It runs entirely in the browser: nothing is uploaded, and your work is saved automatically to local storage.
+A frontend-only web app for creating and editing Moodle quiz questions. It runs entirely in the browser: nothing is uploaded, and your work is saved automatically in the browser (IndexedDB, so quizzes with many images fit).
 
 Built with [Svelte 5](https://svelte.dev) and [Vite](https://vite.dev), and deployed to GitHub Pages at **https://rendicahya.github.io/moodler/**.
 
@@ -20,6 +20,8 @@ Built with [Svelte 5](https://svelte.dev) and [Vite](https://vite.dev), and depl
 - **Bulk actions:** tick several questions in the list (hover a number, Ctrl+click or Shift+click) to export, move, duplicate or delete them, or to change their mark, penalty, tags, category or visibility in one go.
 - **Backups:** after many changes Moodler reminds you to back up, and the save status in the header turns into a "Back up" button that downloads a JSON backup in one click.
 - **Offline:** after the first visit the app works without a connection and can be installed from the browser's menu.
+- **Print / PDF:** print a paper version of the quiz (Ctrl+P) with answer circles, blank lines and name/ID fields. Correct answers can be hidden, marked in place, or listed in an answer key at the end. Use "Save as PDF" in the print dialog to get a PDF.
+- **Find and replace:** search and replace text in every question at once (Ctrl+H), with match-case and whole-word options. Only the visible text is changed, never images, links or HTML tags.
 - **Productivity:** undo/redo, validation warnings, search, keyboard shortcuts, and per-quiz defaults.
 - **UI:** light and dark themes, a fullscreen toggle and a responsive layout. Hide or show the question list with the small tab on its edge, and drag its edge to resize it.
 

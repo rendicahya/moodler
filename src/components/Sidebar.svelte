@@ -1,5 +1,5 @@
 <script>
-  import { Plus, Search, GripVertical, Copy, Trash, TriangleAlert, X, Upload, EyeOff, SquarePen, ArrowUpToLine, ArrowDownToLine } from '@lucide/svelte';
+  import { Plus, Search, GripVertical, Copy, Trash, TriangleAlert, X, Upload, EyeOff, SquarePen, ArrowUpToLine, ArrowDownToLine, Replace } from '@lucide/svelte';
   import {
     app,
     select,
@@ -137,12 +137,15 @@
     {/if}
     <button class="btn btn-primary add" onclick={() => openModal('add')}><Plus size={16} /> Add question</button>
     {#if app.quiz.questions.length}
-      <div class="search">
-        <Search size={15} />
-        <input class="input input-sm" placeholder="Search questions…" bind:value={app.search} aria-label="Search questions" />
-        {#if app.search}
-          <button class="btn btn-ghost btn-icon btn-sm clear" aria-label="Clear search" onclick={() => (app.search = '')}><X size={14} /></button>
-        {/if}
+      <div class="search-row">
+        <div class="search">
+          <Search size={15} />
+          <input class="input input-sm" placeholder="Search questions…" bind:value={app.search} aria-label="Search questions" />
+          {#if app.search}
+            <button class="btn btn-ghost btn-icon btn-sm clear" aria-label="Clear search" onclick={() => (app.search = '')}><X size={14} /></button>
+          {/if}
+        </div>
+        <button class="btn btn-icon btn-sm" title="Find and replace (Ctrl+H)" aria-label="Find and replace" onclick={() => openModal('find')}><Replace size={15} /></button>
       </div>
     {/if}
   </div>
@@ -304,7 +307,13 @@
   .add {
     width: 100%;
   }
+  .search-row {
+    display: flex;
+    gap: 6px;
+  }
   .search {
+    flex: 1;
+    min-width: 0;
     position: relative;
     display: flex;
     align-items: center;

@@ -12,6 +12,8 @@
   import HelpDialog from './components/dialogs/HelpDialog.svelte';
   import BulkEditDialog from './components/dialogs/BulkEditDialog.svelte';
   import QuizPreviewDialog from './components/dialogs/QuizPreviewDialog.svelte';
+  import PrintDialog from './components/dialogs/PrintDialog.svelte';
+  import FindReplaceDialog from './components/dialogs/FindReplaceDialog.svelte';
   import { app, initPersistence, undo, redo, openModal, notify, selectedQuestion, selectedIndex, addQuestion, cycleView, goToQuestion, setSidebarWidth, saveLayout, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT } from './lib/store.svelte.js';
   import { QUESTION_TYPES } from './lib/model.js';
   import { looksLikeQuestions } from './lib/formats/index.js';
@@ -105,6 +107,13 @@
     } else if (mod && key === 'o') {
       e.preventDefault();
       openModal('import');
+    } else if (mod && key === 'p' && app.quiz.questions.length) {
+      // Printing the editor itself is never useful; print the quiz instead.
+      e.preventDefault();
+      openModal('print');
+    } else if (mod && key === 'h' && app.quiz.questions.length) {
+      e.preventDefault();
+      openModal('find');
     } else if (e.altKey && key === 'n') {
       e.preventDefault();
       openModal('add');
@@ -201,6 +210,10 @@
   <BulkEditDialog />
 {:else if app.modal === 'quiz-preview'}
   <QuizPreviewDialog />
+{:else if app.modal === 'print'}
+  <PrintDialog />
+{:else if app.modal === 'find'}
+  <FindReplaceDialog />
 {/if}
 
 {#if app.confirm}
