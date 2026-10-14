@@ -222,21 +222,18 @@
               </select>
             </div>
           {/if}
-          <!-- ID number and visibility always share a row. -->
-          <div class="pair">
-            <div class="field">
-              <FieldLabel
-                for="idn-{q.id}"
-                text="ID number"
-                optional
-                info="Your own identifier for the question, e.g. CH2-Q05. It must be unique within its category. Students never see it."
-              />
-              <input id="idn-{q.id}" class="input input-sm" bind:value={q.idnumber} />
-            </div>
-            <div class="field">
-              <FieldLabel text="Visibility" info="Hidden questions stay in the question bank but can’t be added to new quizzes." />
-              <Switch bind:checked={() => !q.hidden, (v) => (q.hidden = !v)} label="Shown in bank" />
-            </div>
+          <div class="field">
+            <FieldLabel
+              for="idn-{q.id}"
+              text="ID number"
+              optional
+              info="Your own identifier for the question, e.g. CH2-Q05. It must be unique within its category. Students never see it."
+            />
+            <input id="idn-{q.id}" class="input input-sm" bind:value={q.idnumber} />
+          </div>
+          <div class="field">
+            <FieldLabel text="Visibility" info="Hidden questions stay in the question bank but can’t be added to new quizzes." />
+            <Switch bind:checked={() => !q.hidden, (v) => (q.hidden = !v)} label="Shown in bank" />
           </div>
         </div>
       </Section>
@@ -516,6 +513,7 @@
     box-shadow: 0 0 0 3px var(--success-soft);
   }
   .content {
+    container-type: inline-size;
     width: 100%;
     max-width: 920px;
     margin: 0 auto;
@@ -525,26 +523,20 @@
     gap: 16px;
   }
   /* Wraps by available width, so it also fits the narrower editor pane in split view. */
+  /* Mark, penalty, ID number and visibility in one row; inputs line up even when a label wraps. */
   .meta {
     display: flex;
-    flex-wrap: wrap;
+    align-items: flex-end;
     gap: 14px;
   }
   .meta > .field {
-    flex: 1 1 175px;
+    flex: 1 1 0;
     min-width: 0;
   }
-  .pair {
-    flex: 2 1 340px;
-    display: flex;
-    gap: 14px;
-  }
-  .pair > .field:first-child {
-    flex: 1;
-    min-width: 0;
-  }
-  .pair > .field:last-child {
+  /* The visibility switch keeps its natural width so its label stays on one line. */
+  .meta > .field:last-child {
     flex: none;
+    white-space: nowrap;
   }
   .issues {
     display: flex;
@@ -607,6 +599,16 @@
     }
   }
   /* Sized by the editor's own width, which depends on whether the question list is open. */
+  /* Too narrow for four columns (phones, or a squeezed editor pane): two by two. */
+  @container (max-width: 520px) {
+    .meta {
+      flex-wrap: wrap;
+    }
+    .meta > .field,
+    .meta > .field:last-child {
+      flex: 1 1 40%;
+    }
+  }
   @container (max-width: 1000px) {
     .nav-text {
       display: none;
