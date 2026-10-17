@@ -88,6 +88,40 @@
     openModal('import', { text });
   }
 
+  // Dropping a question file anywhere on the window opens the import dialog with it.
+  let fileDrag = $state(false);
+  let dragDepth = 0;
+  const hasFiles = (e) => [...(e.dataTransfer?.types ?? [])].includes('Files');
+  const canDrop = () => !app.modal && !app.confirm;
+
+  function ondragenter(e) {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth++;
+    if (canDrop()) fileDrag = true;
+  }
+  function ondragleave(e) {
+    if (!hasFiles(e)) return;
+    if (--dragDepth <= 0) {
+      dragDepth = 0;
+      fileDrag = false;
+    }
+  }
+  function ondragover(e) {
+    if (!hasFiles(e)) return;
+    // Always cancel so a stray drop never makes the browser navigate away to the file.
+    e.preventDefault();
+    if (!canDrop()) e.dataTransfer.dropEffect = 'none';
+  }
+  function ondrop(e) {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth = 0;
+    fileDrag = false;
+    const file = e.dataTransfer.files[0];
+    if (file && canDrop()) openModal('import', { file });
+  }
+
   function onkeydown(e) {
     const mod = e.ctrlKey || e.metaKey;
     const key = e.key.toLowerCase();
@@ -131,7 +165,17 @@
   }
 </script>
 
-<svelte:window {onkeydown} {onpaste} />
+<svelte:window {onkeydown} {onpaste} {ondragenter} {ondragleave} {ondragover} {ondrop} />
+
+{#if fileDrag}
+  <div class="drop-overlay" aria-hidden="true">
+    <div class="drop-card">
+      <Upload size={32} />
+      <strong>Drop to open the file</strong>
+      <span>Moodle XML (.xml), GIFT / Aiken (.txt, .gift) or project (.json)</span>
+    </div>
+  </div>
+{/if}
 
 <div class="app">
   <Header />
@@ -173,7 +217,7 @@
       <div class="welcome">
         <div class="hero">
           <h1>Build Moodle questions, right in your browser</h1>
-          <p>Create, edit and reorder questions, then export them to Moodle XML, GIFT or Aiken. Import existing files to keep working on them.</p>
+          <p>Create, edit and reorder questions, then export them to Moodle XML, GIFT or Aiken. Import existing files — or drop one onto this window — to keep working on them.</p>
           <div class="cta">
             <button class="btn btn-primary" onclick={() => openModal('add')}><Plus size={16} /> Add a question</button>
             <button class="btn" onclick={() => openModal('import')}><Upload size={16} /> Import questions</button>
@@ -327,6 +371,41 @@
     z-index: 19;
     border: none;
     background: rgba(10, 14, 22, 0.4);
+  }
+  .drop-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(10, 14, 22, 0.45);
+    pointer-events: none;
+  }
+  .drop-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: min(520px, 100%);
+    padding: 40px 24px;
+    border: 2px dashed var(--accent);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    color: var(--text-2);
+    text-align: center;
+    box-shadow: var(--shadow-lg);
+  }
+  .drop-card :global(svg) {
+    color: var(--accent);
+  }
+  .drop-card strong {
+    font-size: 16px;
+    color: var(--text);
+  }
+  .drop-card span {
+    font-size: 13px;
   }
   .welcome {
     flex: 1;

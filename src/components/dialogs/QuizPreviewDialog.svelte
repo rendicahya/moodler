@@ -47,7 +47,15 @@
 </Modal>
 
 <style>
+  /* Stays pinned to the top of the scrolling dialog body so the switch is always in reach. */
   .bar {
+    position: sticky;
+    top: -18px;
+    z-index: 3;
+    margin: -18px -20px 0;
+    padding: 12px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
     justify-content: space-between;
