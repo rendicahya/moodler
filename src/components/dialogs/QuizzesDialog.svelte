@@ -77,7 +77,7 @@
           <button class="main" onclick={() => open(q.id)} title={active ? 'This quiz is open' : 'Open this quiz'} data-autofocus={active ? '' : undefined}>
             <span class="name">{active ? app.quiz.name || 'Untitled quiz' : q.name}</span>
             <span class="meta">
-              {count} question{count === 1 ? '' : 's'} · changed {ago(q.updated)}
+              {count} question{count === 1 ? '' : 's'} · changed {ago(q.updated)}{q.closed ? ' · tab closed' : ''}
             </span>
           </button>
           {#if active}<span class="badge open"><Check size={12} /> Open</span>{/if}

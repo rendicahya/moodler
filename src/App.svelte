@@ -16,7 +16,8 @@
   import FindReplaceDialog from './components/dialogs/FindReplaceDialog.svelte';
   import QuizzesDialog from './components/dialogs/QuizzesDialog.svelte';
   import CopyToQuizDialog from './components/dialogs/CopyToQuizDialog.svelte';
-  import { app, library, byRecent, switchQuiz, initPersistence, undo, redo, openModal, notify, selectedQuestion, selectedIndex, addQuestion, deleteQuestion, newQuiz, cycleView, goToQuestion, setSidebarWidth, saveLayout, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT } from './lib/store.svelte.js';
+  import QuizTabs from './components/QuizTabs.svelte';
+  import { app, library, byRecent, switchQuiz, switchToTab, closeTab, initPersistence, undo, redo, openModal, notify, selectedQuestion, selectedIndex, addQuestion, deleteQuestion, newQuiz, cycleView, goToQuestion, setSidebarWidth, saveLayout, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT } from './lib/store.svelte.js';
   import { QUESTION_TYPES } from './lib/model.js';
   import { looksLikeQuestions } from './lib/formats/index.js';
   import { TYPE_ICONS } from './lib/icons.js';
@@ -163,6 +164,13 @@
     } else if (e.altKey && key === 'o') {
       e.preventDefault();
       openModal('quizzes');
+    } else if (e.altKey && !mod && /^[1-9]$/.test(e.key)) {
+      // Like a browser: Alt+1–8 open that tab, Alt+9 the last one.
+      e.preventDefault();
+      switchToTab(e.key === '9' ? -1 : Number(e.key) - 1);
+    } else if (e.altKey && key === 'w') {
+      e.preventDefault();
+      closeTab(library.activeId);
     } else if (e.altKey && e.shiftKey && key === 'n') {
       e.preventDefault();
       newQuiz();
@@ -201,6 +209,7 @@
 
 <div class="app">
   <Header />
+  <QuizTabs />
   <div class="main">
     {#if app.sidebarOpen}
       {#if narrow}

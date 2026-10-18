@@ -6,7 +6,7 @@ Built with [Svelte 5](https://svelte.dev) and [Vite](https://vite.dev), and depl
 
 ## Features
 
-- **Multiple quizzes:** keep as many quizzes as you like in the browser. Click the quiz name in the header (or press Alt+O) to switch, create, rename, duplicate or delete quizzes. Each quiz keeps its own undo history. Imported files open as a new quiz by default, and ticked questions can be copied or moved to another quiz.
+- **Multiple quizzes:** keep as many quizzes as you like in the browser. Each one has a tab under the header showing its question count: click to switch (or Alt+1–9), double-click to rename, drag to reorder, and close tabs you don't need (Alt+W) without deleting the quiz. "All quizzes" (Alt+O) shows every quiz, including closed ones, and lets you duplicate or delete them. Each quiz keeps its own undo history. Imported files open as a new quiz by default, and ticked questions can be copied or moved to another quiz.
 - **Question types:** multiple choice (single or multiple answers), true/false, short answer, numerical (with units), essay, matching, embedded answers (Cloze), select missing words, drag and drop into text, ordering, and description.
 - **Import:** Moodle XML, GIFT (including missing-word), Aiken, Embedded answers (Cloze), and the editor's own JSON project format. Upload a file or paste text. The format is detected automatically. Pasting questions anywhere outside a text field opens the import dialog with them.
 - **Export:** Moodle XML (full fidelity, including embedded images, hints, tags and categories), GIFT, Aiken and JSON. Export the whole quiz or only the questions you tick. Any questions a format can't represent are listed as warnings.

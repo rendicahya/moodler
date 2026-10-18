@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { Sun, Moon, Maximize, Minimize, Undo2, Redo2, Upload, Download, FilePlus, Settings, CircleQuestionMark, Presentation, Printer, ChevronsUpDown } from '@lucide/svelte';
-  import { app, library, history, backup, REMIND_AFTER, undo, redo, toggleTheme, openModal, newQuiz, downloadBackup } from '../lib/store.svelte.js';
+  import { app, history, backup, REMIND_AFTER, undo, redo, toggleTheme, openModal, newQuiz, downloadBackup } from '../lib/store.svelte.js';
 
   let fullscreen = $state(false);
   const canFullscreen = typeof document !== 'undefined' && !!document.documentElement.requestFullscreen;
@@ -56,7 +56,6 @@
           <span class="quiz-title">{app.quiz.name || 'Untitled quiz'}</span>
           <span class="meta">· {app.quiz.questions.length} question{app.quiz.questions.length === 1 ? '' : 's'} · {Math.round(total * 100) / 100} marks</span>
           <ChevronsUpDown size={14} />
-          {#if library.quizzes.length > 1}<span class="quiz-count" title="{library.quizzes.length} quizzes saved in this browser">{library.quizzes.length}</span>{/if}
         </button>
       </div>
     </div>
@@ -174,15 +173,6 @@
   .quiz-name:hover,
   .quiz-name:hover :global(svg) {
     color: var(--accent);
-  }
-  .quiz-count {
-    flex: none;
-    font-size: 11px;
-    font-weight: 500;
-    padding: 0 6px;
-    border-radius: 999px;
-    background: var(--surface-3);
-    color: var(--text-2);
   }
   .meta {
     font-weight: 400;

@@ -99,6 +99,7 @@ export async function loadSavedQuiz() {
   if (saved?.quizzes?.length) {
     library.quizzes = saved.quizzes;
     library.activeId = saved.quizzes.some((q) => q.id === saved.activeId) ? saved.activeId : saved.quizzes[0].id;
+    delete library.quizzes.find((q) => q.id === library.activeId).closed;
     const quiz = parseQuiz(await readStored(quizKey(library.activeId)));
     if (quiz) app.quiz = quiz;
     else {
@@ -531,6 +532,8 @@ function activate(id, quiz) {
   stacks.set(library.activeId, { past, future });
   ({ past, future } = stacks.get(id) ?? { past: [], future: [] });
   library.activeId = id;
+  const entry = library.quizzes.find((q) => q.id === id);
+  if (entry) delete entry.closed;
   app.quiz = quiz;
   current = JSON.stringify(quiz);
   app.selectedId = quiz.questions[0]?.id ?? null;
@@ -570,10 +573,47 @@ export function createNewQuiz(quiz = createQuiz()) {
 
 export function newQuiz() {
   createNewQuiz();
-  if (library.quizzes.length > 1) notify('Started a new quiz. Your other quizzes are in the quiz list (Alt+O).', 'success', 4000, { label: 'Show quizzes', run: () => openModal('quizzes') });
 }
 
-/** Saves a quiz that isn't open as a new entry in the list. */
+/** Quizzes shown as tabs, in tab order. Closed tabs stay in the quiz list. */
+export const openTabs = () => library.quizzes.filter((q) => !q.closed);
+
+/** The tab to show when `id` goes away: the one to its right, else to its left, else the most recent closed quiz. */
+function neighbourOf(id) {
+  const tabs = openTabs();
+  const i = tabs.findIndex((q) => q.id === id);
+  return tabs[i + 1] ?? tabs[i - 1] ?? library.quizzes.filter((q) => q.id !== id).sort(byRecent)[0];
+}
+
+/** Hides a quiz's tab without deleting it; it can be reopened from the quiz list. The last tab can't be closed. */
+export async function closeTab(id) {
+  const entry = library.quizzes.find((q) => q.id === id);
+  if (!entry || openTabs().length < 2) return;
+  if (id === library.activeId && !(await switchQuiz(neighbourOf(id).id))) return;
+  entry.closed = true;
+  saveLibrary();
+}
+
+/** Opens the n-th tab (0-based); a negative n counts from the end. */
+export function switchToTab(n) {
+  const tabs = openTabs();
+  const tab = tabs[n < 0 ? tabs.length + n : n];
+  if (tab) switchQuiz(tab.id);
+}
+
+/** Moves a tab to another position among the open tabs. */
+export function moveTab(id, toIndex) {
+  const tabs = openTabs();
+  const from = library.quizzes.findIndex((q) => q.id === id);
+  const target = tabs[toIndex];
+  if (from < 0 || !target || target.id === id) return;
+  const [entry] = library.quizzes.splice(from, 1);
+  const to = library.quizzes.findIndex((q) => q.id === target.id);
+  library.quizzes.splice(toIndex > tabs.findIndex((q) => q.id === id) ? to + 1 : to, 0, entry);
+  saveLibrary();
+}
+
+/** Saves a quiz as a new tab without opening it. */
 function addClosedQuiz(quiz) {
   const id = uid();
   library.quizzes.push(entryFor(id, quiz));
@@ -614,8 +654,8 @@ export async function deleteQuiz(id) {
   if (!ok) return;
   const saved = await loadQuiz(id);
   if (id === library.activeId) {
-    // Open the most recently changed of the others, or a fresh quiz when this was the last one.
-    const next = library.quizzes.filter((q) => q.id !== id).sort(byRecent)[0];
+    // Open the neighbouring tab, or a fresh quiz when this was the last one.
+    const next = neighbourOf(id);
     if (!next || !(await switchQuiz(next.id))) createNewQuiz();
   }
   library.quizzes = library.quizzes.filter((q) => q.id !== id);
