@@ -36,3 +36,4 @@ function run(mode, fn) {
 
 export const dbGet = (key) => run('readonly', (s) => s.get(key));
 export const dbSet = (key, value) => run('readwrite', (s) => s.put(value, key));
+export const dbDelete = (key) => run('readwrite', (s) => s.delete(key));

@@ -45,9 +45,14 @@ export const FORMATS = [
     label: 'Project (JSON)',
     ext: 'json',
     mime: 'application/json',
-    description: 'This editor’s own format. Saves the whole quiz exactly as it is.',
+    description: 'This editor’s own format. Saves the whole quiz exactly as it is. Full backups of all quizzes use it too.',
     import: (src) => {
       const data = JSON.parse(src);
+      // A full backup holds several quizzes; each is restored as its own quiz.
+      if (Array.isArray(data?.quizzes)) {
+        const quizzes = data.quizzes.filter((q) => Array.isArray(q?.questions));
+        return { quiz: {}, quizzes, questions: quizzes.flatMap((q) => q.questions), warnings: [] };
+      }
       if (!data || !Array.isArray(data.questions)) throw new Error('Not a quiz project file.');
       const { questions, ...quiz } = data;
       return { quiz, questions, warnings: [] };

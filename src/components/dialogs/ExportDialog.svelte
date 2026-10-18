@@ -6,7 +6,7 @@
   import { questionTitle, TYPE_MAP } from '../../lib/model.js';
   import { TYPE_ICONS } from '../../lib/icons.js';
   import { FORMATS, FORMAT_MAP } from '../../lib/formats/index.js';
-  import { app, closeModal, notify, markBackedUp } from '../../lib/store.svelte.js';
+  import { app, library, closeModal, notify, markBackedUp } from '../../lib/store.svelte.js';
   import { downloadText, slugify } from '../../lib/download.js';
 
   const exportable = FORMATS.filter((f) => f.export);
@@ -57,8 +57,8 @@
   function download() {
     const name = filename.trim() || defaultName;
     downloadText(output.text, name, fmt.mime);
-    // A full JSON or Moodle XML file can restore the whole quiz, so it counts as a backup.
-    if ((format === 'json' || format === 'xml') && questions.length === app.quiz.questions.length) markBackedUp();
+    // A full JSON or Moodle XML file can restore the whole quiz, so it counts as a backup when it is the only quiz.
+    if ((format === 'json' || format === 'xml') && questions.length === app.quiz.questions.length && library.quizzes.length < 2) markBackedUp();
     notify(`Downloaded ${name}.`, 'success');
   }
 

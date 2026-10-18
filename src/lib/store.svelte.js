@@ -1,9 +1,13 @@
-import { createQuiz, normalizeQuiz, normalizeQuestion, createQuestion, cloneQuestion, moveItem, questionTitle } from './model.js';
+import { createQuiz, normalizeQuiz, normalizeQuestion, createQuestion, cloneQuestion, moveItem, questionTitle, uid } from './model.js';
 import { FORMAT_MAP } from './formats/index.js';
 import { downloadText, slugify } from './download.js';
-import { dbGet, dbSet } from './db.js';
+import { dbGet, dbSet, dbDelete } from './db.js';
 
-const STORAGE_KEY = 'mqe.quiz.v1';
+// Older versions kept a single quiz under this key; it is moved into the library on first load.
+const LEGACY_KEY = 'mqe.quiz.v1';
+// The list of quizzes; each quiz itself is stored under its own key.
+const LIBRARY_KEY = 'mqe.library.v1';
+const quizKey = (id) => `mqe.quiz.${id}`;
 const THEME_KEY = 'mqe.theme';
 const LAYOUT_KEY = 'mqe.layout';
 const BACKUP_KEY = 'mqe.backup';
@@ -12,51 +16,107 @@ const HISTORY_LIMIT = 200;
 export const REMIND_AFTER = 30;
 const REMIND_EVERY = 50;
 
-// The quiz is kept in IndexedDB, which has room for embedded images. localStorage is only a fallback for when
+// Quizzes are kept in IndexedDB, which has room for embedded images. localStorage is only a fallback for when
 // IndexedDB fails; a copy there is therefore newer than the one in IndexedDB. Older versions kept the quiz only there.
-function readLocal() {
+function readLocal(key) {
   try {
-    return localStorage.getItem(STORAGE_KEY);
+    return localStorage.getItem(key);
   } catch {
     return null;
   }
 }
 
-function removeLocal() {
+function removeLocal(key) {
   try {
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(key);
   } catch {
     /* ignore */
   }
 }
 
-/** Loads the saved quiz into the app. Call once, before the app is mounted. */
-export async function loadSavedQuiz() {
-  let raw = readLocal();
-  if (raw) {
+async function readStored(key) {
+  const local = readLocal(key);
+  if (local != null) {
     // Move it into IndexedDB so localStorage is freed for the next time.
     try {
-      await dbSet(STORAGE_KEY, raw);
-      removeLocal();
+      await dbSet(key, local);
+      removeLocal(key);
     } catch {
       /* keep it in localStorage */
     }
-  } else {
+    return local;
+  }
+  try {
+    return (await dbGet(key)) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Resolves to false when neither IndexedDB nor localStorage could take the value. */
+async function writeStored(key, value) {
+  try {
+    await dbSet(key, value);
+    removeLocal(key);
+    return true;
+  } catch {
     try {
-      raw = await dbGet(STORAGE_KEY);
+      localStorage.setItem(key, value);
+      return true;
     } catch {
-      /* unavailable: start fresh */
+      return false;
     }
   }
-  let quiz = null;
+}
+
+async function removeStored(key) {
+  removeLocal(key);
   try {
-    if (raw) quiz = normalizeQuiz(JSON.parse(raw));
+    await dbDelete(key);
   } catch {
-    /* corrupted: start fresh */
+    /* ignore */
   }
-  if (!quiz) return;
-  app.quiz = quiz;
-  app.selectedId = quiz.questions[0]?.id ?? null;
+}
+
+function parseQuiz(raw) {
+  try {
+    return raw ? normalizeQuiz(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+}
+
+const entryFor = (id, quiz) => ({ id, name: quiz.name || 'Untitled quiz', count: quiz.questions.length, updated: Date.now() });
+
+/** Loads the quiz list and the open quiz into the app. Call once, before the app is mounted. */
+export async function loadSavedQuiz() {
+  let saved = null;
+  try {
+    saved = JSON.parse(await readStored(LIBRARY_KEY));
+  } catch {
+    /* missing or corrupted: start a new list */
+  }
+  if (saved?.quizzes?.length) {
+    library.quizzes = saved.quizzes;
+    library.activeId = saved.quizzes.some((q) => q.id === saved.activeId) ? saved.activeId : saved.quizzes[0].id;
+    const quiz = parseQuiz(await readStored(quizKey(library.activeId)));
+    if (quiz) app.quiz = quiz;
+    else {
+      // Never reuse the key of a quiz that couldn't be read, so edits can't overwrite whatever is still stored there.
+      const id = uid();
+      library.quizzes.push(entryFor(id, app.quiz));
+      library.activeId = id;
+      notify('Your last quiz could not be opened. A new quiz was started; your other quizzes are in the quiz list.', 'warning', 8000);
+    }
+  } else {
+    const id = uid();
+    const legacy = parseQuiz(await readStored(LEGACY_KEY));
+    if (legacy) app.quiz = legacy;
+    library.quizzes = [entryFor(id, app.quiz)];
+    library.activeId = id;
+    if (legacy && (await writeStored(quizKey(id), JSON.stringify(legacy))) && (await writeStored(LIBRARY_KEY, libraryJson()))) await removeStored(LEGACY_KEY);
+  }
+  app.selectedId = app.quiz.questions[0]?.id ?? null;
   current = JSON.stringify(app.quiz);
 }
 
@@ -115,6 +175,11 @@ export const app = $state({
   sidebarOpen: true,
 });
 
+/** Every quiz saved in this browser ({ id, name, count, updated }), and which one is open. */
+export const library = $state({ quizzes: [], activeId: null });
+const libraryJson = () => JSON.stringify({ activeId: library.activeId, quizzes: library.quizzes });
+export const byRecent = (a, b) => b.updated - a.updated;
+
 export const history = $state({ canUndo: false, canRedo: false, savedAt: null, pending: false, saveFailed: false });
 
 /** When the quiz was last downloaded as a whole, and how many undo steps have been made since. */
@@ -130,31 +195,36 @@ function saveBackupState() {
 
 // ---------------------------------------------------------------- persistence & undo
 
+// Undo history of the open quiz; the other quizzes' histories are parked in `stacks` while they are closed.
 let past = [];
 let future = [];
+const stacks = new Map();
 let current = JSON.stringify(app.quiz);
 let timer = null;
 
 // Writes run one after another so that an older snapshot can never overwrite a newer one.
 let writing = Promise.resolve();
+const enqueue = (fn) => (writing = writing.then(fn));
 
-function save(snapshot) {
-  writing = writing.then(async () => {
-    try {
-      await dbSet(STORAGE_KEY, snapshot);
-      removeLocal();
-    } catch {
-      try {
-        localStorage.setItem(STORAGE_KEY, snapshot);
-      } catch {
-        if (!history.saveFailed) notify('Could not save in this browser (storage may be full). Download a backup to keep your work.', 'error', 0, backupAction);
-        history.saveFailed = true;
-        return;
-      }
+/** Saves a quiz (the open one unless `id` is given) together with the quiz list. */
+function save(snapshot, id = library.activeId) {
+  enqueue(async () => {
+    if (!(await writeStored(quizKey(id), snapshot)) || !(await writeStored(LIBRARY_KEY, libraryJson()))) {
+      if (!history.saveFailed) notify('Could not save in this browser (storage may be full). Download a backup to keep your work.', 'error', 0, backupAction);
+      history.saveFailed = true;
+      return;
     }
     history.savedAt = new Date();
     history.saveFailed = false;
   });
+}
+
+const saveLibrary = () => enqueue(() => writeStored(LIBRARY_KEY, libraryJson()));
+
+/** Refreshes the open quiz's entry in the list after a change. */
+function touchEntry() {
+  const entry = library.quizzes.find((q) => q.id === library.activeId);
+  if (entry) Object.assign(entry, entryFor(entry.id, app.quiz));
 }
 
 const backupAction = { label: 'Download backup', run: () => downloadBackup() };
@@ -181,13 +251,25 @@ export function markBackedUp() {
   saveBackupState();
 }
 
-/** Downloads the whole quiz as a project (JSON) file. */
-export function downloadBackup() {
-  const { text } = FORMAT_MAP.json.export($state.snapshot(app.quiz));
-  const name = `${slugify(app.quiz.name)}-backup-${new Date().toISOString().slice(0, 10)}.json`;
+/** Downloads every quiz as a project (JSON) file: a plain quiz file when there is only one. */
+export async function downloadBackup() {
+  const date = new Date().toISOString().slice(0, 10);
+  let text, name;
+  if (library.quizzes.length < 2) {
+    ({ text } = FORMAT_MAP.json.export($state.snapshot(app.quiz)));
+    name = `${slugify(app.quiz.name)}-backup-${date}.json`;
+  } else {
+    const quizzes = [];
+    for (const entry of [...library.quizzes].sort(byRecent)) {
+      const quiz = entry.id === library.activeId ? $state.snapshot(app.quiz) : parseQuiz(await readStored(quizKey(entry.id)));
+      if (quiz) quizzes.push(quiz);
+    }
+    text = JSON.stringify({ app: 'moodler', version: 1, quizzes }, null, 2);
+    name = `moodler-backup-${date}.json`;
+  }
   downloadText(text, name, FORMAT_MAP.json.mime);
   markBackedUp();
-  notify(`Downloaded ${name}. Import it to restore your quiz.`, 'success');
+  notify(`Downloaded ${name}. Import it to restore your ${library.quizzes.length < 2 ? 'quiz' : 'quizzes'}.`, 'success');
 }
 
 function updateFlags() {
@@ -204,6 +286,7 @@ function commit(snapshot) {
   if (past.length > HISTORY_LIMIT) past.shift();
   future = [];
   current = snapshot;
+  touchEntry();
   save(snapshot);
   updateFlags();
   countEdit();
@@ -227,6 +310,7 @@ function restore(snapshot) {
   app.quiz = JSON.parse(snapshot);
   if (!app.quiz.questions.some((q) => q.id === app.selectedId)) app.selectedId = app.quiz.questions[0]?.id ?? null;
   pruneChecked();
+  touchEntry();
   save(snapshot);
   updateFlags();
 }
@@ -437,27 +521,170 @@ export function moveChecked(where) {
   app.quiz.questions = where === 'top' ? [...picked, ...rest] : [...rest, ...picked];
 }
 
-export async function newQuiz() {
-  if (app.quiz.questions.length) {
-    const ok = await ask({
-      title: 'Start a new quiz?',
-      message: 'All current questions will be cleared. Export first if you want to keep them. You can undo this with Ctrl+Z.',
-      confirmLabel: 'Start new quiz',
-      danger: true,
-    });
-    if (!ok) return;
-  }
-  app.quiz = createQuiz();
-  app.selectedId = null;
+// ---------------------------------------------------------------- quiz library
+
+/** Makes `quiz` the open quiz, keeping the previous quiz's undo history for when it is reopened. */
+function activate(id, quiz) {
+  commit(JSON.stringify($state.snapshot(app.quiz)));
+  // A quiz that was never changed hasn't been written yet; store it so its entry in the list can be opened again.
+  save(current);
+  stacks.set(library.activeId, { past, future });
+  ({ past, future } = stacks.get(id) ?? { past: [], future: [] });
+  library.activeId = id;
+  app.quiz = quiz;
+  current = JSON.stringify(quiz);
+  app.selectedId = quiz.questions[0]?.id ?? null;
   app.checked = [];
+  app.search = '';
+  app.tab = 'edit';
+  updateFlags();
+  saveLibrary();
 }
 
-/** Merges an importer result into the quiz. */
-export function applyImport(result, mode = 'append') {
-  const questions = result.questions.map((q) => normalizeQuestion(q, app.quiz.defaults));
-  if (mode === 'replace') {
-    const base = createQuiz();
-    app.quiz = normalizeQuiz({ ...base, ...result.quiz, questions: [] });
+/** Reads a quiz from storage, or the live copy when it is the open one. */
+async function loadQuiz(id) {
+  return id === library.activeId ? $state.snapshot(app.quiz) : parseQuiz(await readStored(quizKey(id)));
+}
+
+/** Opens another saved quiz. Resolves to false when it couldn't be read. */
+export async function switchQuiz(id) {
+  if (id === library.activeId) return true;
+  if (!library.quizzes.some((q) => q.id === id)) return false;
+  const quiz = await loadQuiz(id);
+  if (!quiz) {
+    notify('Could not open that quiz: its saved data is missing or damaged.', 'error');
+    return false;
+  }
+  activate(id, quiz);
+  return true;
+}
+
+/** Adds a quiz to the list and opens it. Other quizzes are kept. */
+export function createNewQuiz(quiz = createQuiz()) {
+  const id = uid();
+  library.quizzes.push(entryFor(id, quiz));
+  activate(id, quiz);
+  save(current, id);
+  return id;
+}
+
+export function newQuiz() {
+  createNewQuiz();
+  if (library.quizzes.length > 1) notify('Started a new quiz. Your other quizzes are in the quiz list (Alt+O).', 'success', 4000, { label: 'Show quizzes', run: () => openModal('quizzes') });
+}
+
+/** Saves a quiz that isn't open as a new entry in the list. */
+function addClosedQuiz(quiz) {
+  const id = uid();
+  library.quizzes.push(entryFor(id, quiz));
+  save(JSON.stringify(quiz), id);
+  return id;
+}
+
+export async function duplicateQuiz(id) {
+  const quiz = await loadQuiz(id);
+  if (!quiz) return notify('Could not copy that quiz: its saved data is missing or damaged.', 'error');
+  quiz.name = `${quiz.name || 'Untitled quiz'} (copy)`;
+  const copy = addClosedQuiz(quiz);
+  notify(`Created “${quiz.name}”.`, 'success', 4000, { label: 'Open', run: () => switchQuiz(copy) });
+}
+
+export async function renameQuiz(id, name) {
+  name = name.trim() || 'Untitled quiz';
+  if (id === library.activeId) {
+    app.quiz.name = name;
+    return;
+  }
+  const entry = library.quizzes.find((q) => q.id === id);
+  const quiz = await loadQuiz(id);
+  if (!entry || !quiz) return;
+  quiz.name = entry.name = name;
+  save(JSON.stringify(quiz), id);
+}
+
+export async function deleteQuiz(id) {
+  const entry = library.quizzes.find((q) => q.id === id);
+  if (!entry) return;
+  const ok = await ask({
+    title: 'Delete quiz?',
+    message: `“${entry.name}” and its ${plural(entry.count)} will be removed from this browser.`,
+    confirmLabel: 'Delete quiz',
+    danger: true,
+  });
+  if (!ok) return;
+  const saved = await loadQuiz(id);
+  if (id === library.activeId) {
+    // Open the most recently changed of the others, or a fresh quiz when this was the last one.
+    const next = library.quizzes.filter((q) => q.id !== id).sort(byRecent)[0];
+    if (!next || !(await switchQuiz(next.id))) createNewQuiz();
+  }
+  library.quizzes = library.quizzes.filter((q) => q.id !== id);
+  stacks.delete(id);
+  saveLibrary();
+  enqueue(() => removeStored(quizKey(id)));
+  const restore = saved && {
+    label: 'Undo',
+    run: () => {
+      library.quizzes.push(entry);
+      save(JSON.stringify(saved), id);
+    },
+  };
+  notify(`Deleted “${entry.name}”.`, 'success', 8000, restore);
+}
+
+/** Copies (or moves) questions of the open quiz to another quiz, or to a new one when `targetId` is null. */
+export async function copyQuestionsTo(targetId, ids, move = false) {
+  const picked = app.quiz.questions.filter((q) => ids.includes(q.id));
+  if (!picked.length) return;
+  const copies = picked.map((q) => cloneQuestion($state.snapshot(q)));
+  let quiz;
+  if (targetId) {
+    quiz = await loadQuiz(targetId);
+    if (!quiz) return notify('Could not open that quiz: its saved data is missing or damaged.', 'error');
+    quiz.questions.push(...copies);
+    const entry = library.quizzes.find((q) => q.id === targetId);
+    if (entry) Object.assign(entry, entryFor(targetId, quiz));
+    save(JSON.stringify(quiz), targetId);
+  } else {
+    quiz = { ...createQuiz(), questions: copies };
+    targetId = addClosedQuiz(quiz);
+  }
+  if (move) {
+    const gone = new Set(picked.map((q) => q.id));
+    const first = app.quiz.questions.findIndex((q) => gone.has(q.id));
+    app.quiz.questions = app.quiz.questions.filter((q) => !gone.has(q.id));
+    if (gone.has(app.selectedId)) app.selectedId = app.quiz.questions[Math.min(first, app.quiz.questions.length - 1)]?.id ?? null;
+    pruneChecked();
+  }
+  notify(`${move ? 'Moved' : 'Copied'} ${plural(copies.length)} to “${quiz.name}”.`, 'success', 5000, { label: 'Open quiz', run: () => switchQuiz(targetId) });
+}
+
+/** Adds every quiz from a full backup as separate quizzes, without opening them. */
+function importQuizzes(quizzes) {
+  let n = 0;
+  for (const raw of quizzes) {
+    const quiz = normalizeQuiz(raw);
+    addClosedQuiz(quiz);
+    n += quiz.questions.length;
+  }
+  notify(`Added ${quizzes.length} quiz${quizzes.length === 1 ? '' : 'zes'} to your quiz list.`, 'success', 5000, { label: 'Show quizzes', run: () => openModal('quizzes') });
+  return n;
+}
+
+/**
+ * Applies an importer result: adds the questions to the open quiz ('append'), replaces its contents ('replace')
+ * or opens them as a new quiz ('new'), named after the file when the import has no name of its own.
+ */
+export function applyImport(result, mode = 'append', fileName = '') {
+  if (result.quizzes) return importQuizzes(result.quizzes);
+  const fresh = mode !== 'append' && normalizeQuiz({ ...createQuiz(), ...result.quiz, questions: [] });
+  const questions = result.questions.map((q) => normalizeQuestion(q, (fresh || app.quiz).defaults));
+  if (mode === 'new') {
+    fresh.questions = questions;
+    if (fileName && !result.quiz?.name) fresh.name = fileName.replace(/\.[^.]+$/, '');
+    createNewQuiz(fresh);
+  } else if (mode === 'replace') {
+    app.quiz = fresh;
     app.quiz.questions = questions;
     app.checked = [];
   } else {

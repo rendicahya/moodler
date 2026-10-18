@@ -10,7 +10,8 @@
   let text = $state('');
   let filename = $state('');
   let format = $state('auto');
-  let mode = $state(app.quiz.questions.length ? 'append' : 'replace');
+  // A file usually holds a quiz of its own, so it opens as a new quiz unless the open one is still empty.
+  let mode = $state(app.quiz.questions.length ? 'new' : 'replace');
   let dragging = $state(false);
   let fileInput = $state();
 
@@ -48,9 +49,9 @@
 
   function doImport() {
     if (!parsed?.result) return;
-    const n = applyImport(parsed.result, mode);
+    const n = applyImport(parsed.result, mode, filename);
     closeModal();
-    notify(`Imported ${n} question${n === 1 ? '' : 's'} from ${FORMAT_MAP[effective].label}.`, 'success');
+    if (!parsed.result.quizzes) notify(`Imported ${n} question${n === 1 ? '' : 's'} from ${FORMAT_MAP[effective].label}${mode === 'new' ? ' as a new quiz' : ''}.`, 'success');
     if (parsed.result.warnings.length) notify(`${parsed.result.warnings.length} warning(s) during import — see the import dialog for details.`, 'warning', 6000);
   }
 
@@ -127,6 +128,9 @@
           <span>
             Found <strong>{r.questions.length}</strong> question{r.questions.length === 1 ? '' : 's'} ({FORMAT_MAP[effective].label}){counts.length ? ':' : '.'}
             {#each counts as [type, n], i}{i ? ', ' : ' '}{n} {TYPE_MAP[type]?.label.toLowerCase() ?? type}{/each}
+            {#if r.quizzes}
+              <br />This is a backup of {r.quizzes.length} quiz{r.quizzes.length === 1 ? '' : 'zes'}. Each will be added to your quiz list; your current quizzes are kept.
+            {/if}
           </span>
         </div>
         {#if r.warnings.length}
@@ -151,15 +155,16 @@
   {/if}
 
   {#snippet footer()}
-    {#if app.quiz.questions.length}
+    {#if app.quiz.questions.length && !parsed?.result?.quizzes}
       <div class="mode">
         <Segmented
           bind:value={mode}
           size="sm"
           label="Import mode"
           options={[
-            { value: 'append', label: 'Add to quiz' },
-            { value: 'replace', label: 'Replace quiz' },
+            { value: 'new', label: 'New quiz', title: 'Open the questions as a separate quiz; the current one is kept' },
+            { value: 'append', label: 'Add to this quiz', title: 'Add the questions after the current ones' },
+            { value: 'replace', label: 'Replace', title: 'Replace the questions of the current quiz (undo with Ctrl+Z)' },
           ]}
         />
       </div>

@@ -1,5 +1,5 @@
 <script>
-  import { Plus, Search, GripVertical, Copy, Trash, TriangleAlert, X, Upload, EyeOff, SquarePen, ArrowUpToLine, ArrowDownToLine, Replace } from '@lucide/svelte';
+  import { Plus, Search, GripVertical, Copy, Trash, TriangleAlert, X, Upload, EyeOff, SquarePen, ArrowUpToLine, ArrowDownToLine, Replace, FolderInput } from '@lucide/svelte';
   import {
     app,
     select,
@@ -162,6 +162,7 @@
       <div class="bulk-actions">
         <button class="btn btn-sm" title="Export the selected questions" onclick={() => openModal('export')}><Upload size={14} /> Export</button>
         <button class="btn btn-sm" title="Change mark, penalty, tags, category or visibility" onclick={() => openModal('bulk')}><SquarePen size={14} /> Edit</button>
+        <button class="btn btn-ghost btn-icon btn-sm" title="Copy or move to another quiz" aria-label="Copy or move to another quiz" onclick={() => openModal('copy-to')}><FolderInput size={15} /></button>
         <span class="spacer"></span>
         <button class="btn btn-ghost btn-icon btn-sm" title="Move to top" aria-label="Move to top" onclick={() => moveChecked('top')}><ArrowUpToLine size={15} /></button>
         <button class="btn btn-ghost btn-icon btn-sm" title="Move to bottom" aria-label="Move to bottom" onclick={() => moveChecked('bottom')}><ArrowDownToLine size={15} /></button>

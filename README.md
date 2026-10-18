@@ -6,6 +6,7 @@ Built with [Svelte 5](https://svelte.dev) and [Vite](https://vite.dev), and depl
 
 ## Features
 
+- **Multiple quizzes:** keep as many quizzes as you like in the browser. Click the quiz name in the header (or press Alt+O) to switch, create, rename, duplicate or delete quizzes. Each quiz keeps its own undo history. Imported files open as a new quiz by default, and ticked questions can be copied or moved to another quiz.
 - **Question types:** multiple choice (single or multiple answers), true/false, short answer, numerical (with units), essay, matching, embedded answers (Cloze), select missing words, drag and drop into text, ordering, and description.
 - **Import:** Moodle XML, GIFT (including missing-word), Aiken, Embedded answers (Cloze), and the editor's own JSON project format. Upload a file or paste text. The format is detected automatically. Pasting questions anywhere outside a text field opens the import dialog with them.
 - **Export:** Moodle XML (full fidelity, including embedded images, hints, tags and categories), GIFT, Aiken and JSON. Export the whole quiz or only the questions you tick. Any questions a format can't represent are listed as warnings.
@@ -18,7 +19,7 @@ Built with [Svelte 5](https://svelte.dev) and [Vite](https://vite.dev), and depl
 - **Preview:** a "show correct answers" toggle highlights the right responses. Preview the whole quiz in order with Alt+Q.
 - **Overview:** the question list shows how many questions of each type the quiz has.
 - **Bulk actions:** tick several questions in the list (hover a number, Ctrl+click or Shift+click) to export, move, duplicate or delete them, or to change their mark, penalty, tags, category or visibility in one go.
-- **Backups:** after many changes Moodler reminds you to back up, and the save status in the header turns into a "Back up" button that downloads a JSON backup in one click.
+- **Backups:** after many changes Moodler reminds you to back up, and the save status in the header turns into a "Back up" button that downloads a JSON backup of all your quizzes in one click. Import that file to restore them.
 - **Offline:** after the first visit the app works without a connection and can be installed from the browser's menu.
 - **Print / PDF:** print a paper version of the quiz (Ctrl+P) with answer circles, blank lines and name/ID fields. Correct answers can be hidden, marked in place, or listed in an answer key at the end. Use "Save as PDF" in the print dialog to get a PDF.
 - **Find and replace:** search and replace text in every question at once (Ctrl+H), with match-case and whole-word options. Only the visible text is changed, never images, links or HTML tags.
