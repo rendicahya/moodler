@@ -14,7 +14,7 @@
   import QuizPreviewDialog from './components/dialogs/QuizPreviewDialog.svelte';
   import PrintDialog from './components/dialogs/PrintDialog.svelte';
   import FindReplaceDialog from './components/dialogs/FindReplaceDialog.svelte';
-  import { app, initPersistence, undo, redo, openModal, notify, selectedQuestion, selectedIndex, addQuestion, cycleView, goToQuestion, setSidebarWidth, saveLayout, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT } from './lib/store.svelte.js';
+  import { app, initPersistence, undo, redo, openModal, notify, selectedQuestion, selectedIndex, addQuestion, deleteQuestion, newQuiz, cycleView, goToQuestion, setSidebarWidth, saveLayout, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT } from './lib/store.svelte.js';
   import { QUESTION_TYPES } from './lib/model.js';
   import { looksLikeQuestions } from './lib/formats/index.js';
   import { TYPE_ICONS } from './lib/icons.js';
@@ -125,6 +125,12 @@
   function onkeydown(e) {
     const mod = e.ctrlKey || e.metaKey;
     const key = e.key.toLowerCase();
+    // Also works inside the whole-quiz preview, which shares the same switch.
+    if (e.altKey && !mod && key === 'a' && !app.confirm && (!app.modal || app.modal === 'quiz-preview')) {
+      e.preventDefault();
+      app.revealAnswers = !app.revealAnswers;
+      return;
+    }
     if (app.modal || app.confirm) return;
     if (mod && key === 'z' && !e.shiftKey) {
       // Let native undo work inside text fields that have their own history.
@@ -148,6 +154,16 @@
     } else if (mod && key === 'h' && app.quiz.questions.length) {
       e.preventDefault();
       openModal('find');
+    } else if (mod && e.key === ',') {
+      e.preventDefault();
+      openModal('settings');
+    } else if (e.altKey && e.shiftKey && key === 'n') {
+      e.preventDefault();
+      newQuiz();
+    } else if (e.altKey && e.key === 'Delete' && q) {
+      // Works anywhere, including while typing, unlike plain Delete in the list.
+      e.preventDefault();
+      deleteQuestion(q.id);
     } else if (e.altKey && key === 'n') {
       e.preventDefault();
       openModal('add');

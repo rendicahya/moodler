@@ -7,8 +7,6 @@
   import { round } from '../../lib/model.js';
   import { app, closeModal, openModal, select } from '../../lib/store.svelte.js';
 
-  let showAnswers = $state(false);
-
   // Moodle numbers questions but not descriptions, so number them the same way.
   const items = $derived.by(() => {
     let n = 0;
@@ -28,13 +26,13 @@
 <Modal title={app.quiz.name || 'Untitled quiz'} subtitle="Whole-quiz preview · {count} question{count === 1 ? '' : 's'} · {total} mark{total === 1 ? '' : 's'}" width="980px" onclose={closeModal}>
   <div class="bar">
     <span class="hint">How students see the questions, in order. Options are shown unshuffled.</span>
-    <Switch bind:checked={showAnswers} label="Show correct answers" />
+    <span title="Alt+A"><Switch bind:checked={app.revealAnswers} label="Show correct answers" /></span>
   </div>
 
   <ol class="questions">
     {#each items as { q, number } (q.id)}
       <li class="item">
-        <Preview {q} index={number - 1} {showAnswers} />
+        <Preview {q} index={number - 1} showAnswers={app.revealAnswers} />
         <button class="btn btn-ghost btn-sm edit" title="Edit this question" onclick={() => edit(q.id)}><SquarePen size={14} /> Edit</button>
       </li>
     {/each}

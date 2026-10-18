@@ -75,8 +75,8 @@
       <button class="btn btn-ghost btn-icon" title="Redo (Ctrl+Y)" aria-label="Redo" disabled={!history.canRedo} onclick={redo}><Redo2 size={17} /></button>
     </div>
     <span class="divider"></span>
-    <button class="btn btn-ghost hide-sm" title="New quiz" onclick={newQuiz}><FilePlus size={16} /><span class="btn-text">New</span></button>
-    <button class="btn btn-ghost" title="Quiz settings" onclick={() => openModal('settings')}><Settings size={16} /><span class="btn-text">Settings</span></button>
+    <button class="btn btn-ghost hide-sm" title="New quiz (Alt+Shift+N)" onclick={newQuiz}><FilePlus size={16} /><span class="btn-text">New</span></button>
+    <button class="btn btn-ghost" title="Quiz settings (Ctrl+,)" onclick={() => openModal('settings')}><Settings size={16} /><span class="btn-text">Settings</span></button>
     <button class="btn btn-ghost" title="Preview the whole quiz (Alt+Q)" disabled={!app.quiz.questions.length} onclick={() => openModal('quiz-preview')}>
       <Presentation size={16} /><span class="btn-text">Preview</span>
     </button>

@@ -80,7 +80,7 @@
     <div class="bar">
       <span class="hint">Student view preview — options are shown in their original order.</span>
       {#if q.type !== 'description' && q.type !== 'essay'}
-        <button class="btn btn-sm" class:active={app.revealAnswers} onclick={() => (app.revealAnswers = !app.revealAnswers)}>
+        <button class="btn btn-sm" class:active={app.revealAnswers} title="Alt+A" onclick={() => (app.revealAnswers = !app.revealAnswers)}>
           {#if app.revealAnswers}<EyeOff size={15} /> Hide answers{:else}<Eye size={15} /> Show correct answers{/if}
         </button>
       {/if}
