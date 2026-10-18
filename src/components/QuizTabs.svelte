@@ -1,21 +1,21 @@
 <script>
-  import { Plus, X, LayoutList } from '@lucide/svelte';
-  import { app, library, openTabs, switchQuiz, closeTab, moveTab, renameQuiz, newQuiz, openModal } from '../lib/store.svelte.js';
-
-  const tabs = $derived(openTabs());
-  const hidden = $derived(library.quizzes.length - tabs.length);
+  import { Plus, X, Pencil, Copy, Download } from '@lucide/svelte';
+  import { app, library, switchQuiz, closeTab, moveTab, renameQuiz, duplicateQuiz, newQuiz, downloadBackup } from '../lib/store.svelte.js';
 
   let editing = $state(null);
   let draft = $state('');
   let dragId = $state(null);
   let dropAt = $state(null);
+  let menu = $state(null);
   let strip;
 
   // The open quiz's name and count change as you type, before its list entry is refreshed.
   const nameOf = (t) => (t.id === library.activeId ? app.quiz.name || 'Untitled quiz' : t.name);
   const countOf = (t) => (t.id === library.activeId ? app.quiz.questions.length : t.count);
+  // An empty quiz that is the only tab has nothing to close.
+  const closable = (t) => library.quizzes.length > 1 || countOf(t) > 0;
 
-  // Keep the open tab in view when switching with the keyboard or the quiz list.
+  // Keep the open tab in view when switching with the keyboard.
   $effect(() => {
     library.activeId;
     queueMicrotask(() => strip?.querySelector('.tab.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
@@ -41,6 +41,16 @@
     }
   }
 
+  function oncontextmenu(e, t) {
+    e.preventDefault();
+    menu = { tab: t, x: Math.min(e.clientX, window.innerWidth - 220), y: e.clientY };
+  }
+  function run(fn) {
+    const t = menu.tab;
+    menu = null;
+    fn(t);
+  }
+
   function ondragstart(e, t) {
     dragId = t.id;
     e.dataTransfer.effectAllowed = 'move';
@@ -49,13 +59,11 @@
   function ondragover(e, i) {
     if (!dragId) return;
     e.preventDefault();
-    e.stopPropagation();
     dropAt = i;
   }
   function ondrop(e, i) {
     if (!dragId) return;
     e.preventDefault();
-    e.stopPropagation();
     moveTab(dragId, i);
     dragId = dropAt = null;
   }
@@ -69,9 +77,15 @@
   }
 </script>
 
-<nav class="tabbar" aria-label="Open quizzes">
+<svelte:window
+  onpointerdown={(e) => menu && !e.target.closest?.('.menu') && (menu = null)}
+  onkeydown={(e) => menu && e.key === 'Escape' && (e.stopPropagation(), (menu = null))}
+  onblur={() => (menu = null)}
+/>
+
+<nav class="tabbar" aria-label="Quizzes">
   <div class="strip" role="tablist" bind:this={strip} {onwheel}>
-    {#each tabs as t, i (t.id)}
+    {#each library.quizzes as t, i (t.id)}
       {@const active = t.id === library.activeId}
       {@const count = countOf(t)}
       <div
@@ -86,6 +100,7 @@
         ondrop={(e) => ondrop(e, i)}
         ondragend={() => (dragId = dropAt = null)}
         onauxclick={(e) => onauxclick(e, t)}
+        oncontextmenu={(e) => oncontextmenu(e, t)}
       >
         {#if editing === t.id}
           <form onsubmit={(e) => (e.preventDefault(), finishRename(true))}>
@@ -103,7 +118,7 @@
             class="label"
             role="tab"
             aria-selected={active}
-            title="{nameOf(t)} · {count} question{count === 1 ? '' : 's'}{i < 9 ? ` (Alt+${i + 1})` : ''}{'\n'}Double-click to rename, drag to reorder"
+            title="{nameOf(t)} · {count} question{count === 1 ? '' : 's'}{i < 9 ? ` (Alt+${i + 1})` : ''}{'\n'}Double-click to rename, right-click for more"
             onclick={() => switchQuiz(t.id)}
             ondblclick={() => startRename(t)}
           >
@@ -111,8 +126,8 @@
             <span class="count">{count}</span>
           </button>
         {/if}
-        {#if tabs.length > 1}
-          <button class="close" title="Close tab (Alt+W). The quiz stays in your quiz list." aria-label="Close {nameOf(t)}" onclick={() => closeTab(t.id)}>
+        {#if closable(t)}
+          <button class="close" title="Close tab and remove this quiz (Alt+W)" aria-label="Close {nameOf(t)}" onclick={() => closeTab(t.id)}>
             <X size={13} />
           </button>
         {/if}
@@ -120,19 +135,25 @@
     {/each}
     <button class="add" title="New quiz (Alt+Shift+N)" aria-label="New quiz" onclick={newQuiz}><Plus size={16} /></button>
   </div>
-  <button class="all" title="All quizzes saved in this browser (Alt+O){hidden ? `\n${hidden} not shown as tabs` : ''}" onclick={() => openModal('quizzes')}>
-    <LayoutList size={15} />
-    <span class="all-text">All quizzes</span>
-    <span class="total">{library.quizzes.length}</span>
-  </button>
 </nav>
+
+{#if menu}
+  <div class="menu" role="menu" style:left="{menu.x}px" style:top="{menu.y}px">
+    <button role="menuitem" onclick={() => run(startRename)}><Pencil size={14} /> Rename</button>
+    <button role="menuitem" onclick={() => run((t) => duplicateQuiz(t.id))}><Copy size={14} /> Duplicate</button>
+    <button role="menuitem" onclick={() => run(() => downloadBackup())}><Download size={14} /> Back up all quizzes</button>
+    {#if closable(menu.tab)}
+      <hr />
+      <button role="menuitem" class="danger" onclick={() => run((t) => closeTab(t.id))}><X size={14} /> Close and remove</button>
+    {/if}
+  </div>
+{/if}
 
 <style>
   .tabbar {
     flex: none;
     display: flex;
     align-items: flex-end;
-    gap: 6px;
     height: 36px;
     padding: 0 8px 0 6px;
     background: var(--surface-2);
@@ -199,7 +220,7 @@
     align-items: center;
     gap: 6px;
     height: 100%;
-    padding: 0 4px 0 12px;
+    padding: 0 10px 0 12px;
     border: none;
     background: none;
     color: inherit;
@@ -208,13 +229,15 @@
     cursor: pointer;
     text-align: left;
   }
+  .tab:has(.close) .label {
+    padding-right: 4px;
+  }
   .tab.active .label {
     font-weight: 600;
   }
   .label:focus-visible,
   .close:focus-visible,
-  .add:focus-visible,
-  .all:focus-visible {
+  .add:focus-visible {
     outline: none;
     box-shadow: var(--focus);
   }
@@ -290,33 +313,43 @@
     border-radius: 6px;
     align-self: center;
   }
-  .all {
-    flex: none;
-    align-self: center;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    height: 26px;
-    padding: 0 8px;
+  .menu {
+    position: fixed;
+    z-index: 50;
+    min-width: 200px;
+    padding: 4px;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius);
     background: var(--surface);
-    color: var(--text-2);
+    box-shadow: var(--shadow-lg, 0 8px 24px rgb(0 0 0 / 0.15));
+  }
+  .menu button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 10px;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    color: var(--text);
     font: inherit;
-    font-size: 12.5px;
+    font-size: 13px;
+    text-align: left;
     cursor: pointer;
   }
-  .all:hover {
-    border-color: var(--border-strong);
-    color: var(--text);
+  .menu button:hover,
+  .menu button:focus-visible {
+    background: var(--hover);
+    outline: none;
   }
-  .total {
-    font-size: 11px;
-    font-weight: 600;
-    padding: 0 6px;
-    border-radius: 999px;
-    background: var(--surface-3);
-    font-variant-numeric: tabular-nums;
+  .menu .danger {
+    color: var(--danger);
+  }
+  .menu hr {
+    margin: 4px 0;
+    border: none;
+    border-top: 1px solid var(--border);
   }
   @media (hover: none) {
     .close {
@@ -324,9 +357,6 @@
     }
   }
   @media (max-width: 560px) {
-    .all-text {
-      display: none;
-    }
     .tab {
       min-width: 80px;
     }

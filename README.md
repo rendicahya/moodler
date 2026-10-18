@@ -6,13 +6,13 @@ Built with [Svelte 5](https://svelte.dev) and [Vite](https://vite.dev), and depl
 
 ## Features
 
-- **Multiple quizzes:** keep as many quizzes as you like in the browser. Each one has a tab under the header showing its question count: click to switch (or Alt+1–9), double-click to rename, drag to reorder, and close tabs you don't need (Alt+W) without deleting the quiz. "All quizzes" (Alt+O) shows every quiz, including closed ones, and lets you duplicate or delete them. Each quiz keeps its own undo history. Imported files open as a new quiz by default, and ticked questions can be copied or moved to another quiz.
+- **Multiple quizzes:** keep as many quizzes as you like in the browser. Every quiz has a tab under the header showing its question count: click to switch (or Alt+1–9), double-click to rename, drag to reorder, and right-click to duplicate. Closing a tab (Alt+W) removes that quiz, after asking if it has questions, with an Undo. Each quiz keeps its own undo history. Imported files open as a new quiz by default, and ticked questions can be copied or moved to another quiz.
 - **Question types:** multiple choice (single or multiple answers), true/false, short answer, numerical (with units), essay, matching, embedded answers (Cloze), select missing words, drag and drop into text, ordering, and description.
 - **Import:** Moodle XML, GIFT (including missing-word), Aiken, Embedded answers (Cloze), and the editor's own JSON project format. Upload a file or paste text. The format is detected automatically. Pasting questions anywhere outside a text field opens the import dialog with them.
 - **Export:** Moodle XML (full fidelity, including embedded images, hints, tags and categories), GIFT, Aiken and JSON. Export the whole quiz or only the questions you tick. Any questions a format can't represent are listed as warnings.
 - **Editing:** a rich-text editor with image paste and drop, HTML source view and TeX insertion. You can edit per-answer grades and feedback, combined feedback, hints, tags, penalties, ID numbers and category overrides.
 - **Live preview:** show the editor only, the student-view preview only, or both side by side, updating as you type (switch with Alt+P). Drag the divider to resize. On narrow screens they switch to tabs.
-- **Navigation:** step through questions with the Previous / Next buttons in the question toolbar or Alt+Page Up / Page Down, or jump to any question from the "Question N of M" menu, without going back to the list.
+- **Navigation:** step through questions with the Previous / Next buttons in the question toolbar or Alt+Page Up / Page Down (Alt+Home / End for the first / last), without going back to the list.
 - **Guidance:** required fields are marked with *, optional ones are labelled, and tooltips explain Moodle terms such as default mark, penalty per wrong try and question bank category.
 - **Reordering:** drag and drop questions, answers, matching pairs, choices and ordering items, or shuffle multiple-choice answers with one click.
 - **Cloze builder:** insert or edit gaps through a form. You don't need to memorise the syntax.

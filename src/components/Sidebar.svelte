@@ -117,23 +117,22 @@
 
 <aside class="sidebar">
   <div class="top">
-    <div class="title-row">
-      <h2>Questions <span class="count">{app.quiz.questions.length}</span></h2>
-      {#if issueCount}
-        <span class="badge warning" title="Questions with problems"><TriangleAlert size={12} /> {issueCount}</span>
-      {/if}
-    </div>
-    {#if typeCounts.length}
-      <ul class="types" aria-label="Questions by type">
-        {#each typeCounts as t (t.type)}
-          {@const Icon = TYPE_ICONS[t.type]}
-          <li class="type-count" title="{t.count} {t.label}">
-            <Icon size={13} />
-            <span class="type-short">{t.short}</span>
-            <span class="type-num">{t.count}</span>
-          </li>
-        {/each}
-      </ul>
+    {#if typeCounts.length || issueCount}
+      <div class="summary">
+        <ul class="types" aria-label="Questions by type">
+          {#each typeCounts as t (t.type)}
+            {@const Icon = TYPE_ICONS[t.type]}
+            <li class="type-count" title="{t.count} {t.label}">
+              <Icon size={13} />
+              <span class="type-short">{t.short}</span>
+              <span class="type-num">{t.count}</span>
+            </li>
+          {/each}
+        </ul>
+        {#if issueCount}
+          <span class="badge warning" title="Questions with problems"><TriangleAlert size={12} /> {issueCount}</span>
+        {/if}
+      </div>
     {/if}
     <button class="btn btn-primary add" onclick={() => openModal('add')}><Plus size={16} /> Add question</button>
     {#if app.quiz.questions.length}
@@ -254,33 +253,20 @@
     gap: 10px;
     border-bottom: 1px solid var(--border);
   }
-  .title-row {
+  .summary {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
+    gap: 6px;
   }
-  h2 {
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-2);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .count {
-    font-size: 11px;
-    padding: 1px 7px;
-    border-radius: 999px;
-    background: var(--surface-3);
-    color: var(--text-2);
-    letter-spacing: 0;
+  .summary .badge {
+    flex: none;
   }
   .types {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
-    margin: -2px 0 0;
+    margin: 0;
     padding: 0;
     list-style: none;
   }

@@ -1,5 +1,5 @@
 <script>
-  import { Plus, Upload, ChevronLeft, ChevronRight, FileText } from '@lucide/svelte';
+  import { Plus, Upload, ChevronLeft, ChevronRight } from '@lucide/svelte';
   import Header from './components/Header.svelte';
   import Sidebar from './components/Sidebar.svelte';
   import QuestionEditor from './components/QuestionEditor.svelte';
@@ -14,10 +14,9 @@
   import QuizPreviewDialog from './components/dialogs/QuizPreviewDialog.svelte';
   import PrintDialog from './components/dialogs/PrintDialog.svelte';
   import FindReplaceDialog from './components/dialogs/FindReplaceDialog.svelte';
-  import QuizzesDialog from './components/dialogs/QuizzesDialog.svelte';
   import CopyToQuizDialog from './components/dialogs/CopyToQuizDialog.svelte';
   import QuizTabs from './components/QuizTabs.svelte';
-  import { app, library, byRecent, switchQuiz, switchToTab, closeTab, initPersistence, undo, redo, openModal, notify, selectedQuestion, selectedIndex, addQuestion, deleteQuestion, newQuiz, cycleView, goToQuestion, setSidebarWidth, saveLayout, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT } from './lib/store.svelte.js';
+  import { app, library, switchToTab, closeTab, initPersistence, undo, redo, openModal, notify, selectedQuestion, selectedIndex, addQuestion, deleteQuestion, newQuiz, cycleView, goToQuestion, setSidebarWidth, saveLayout, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT } from './lib/store.svelte.js';
   import { QUESTION_TYPES } from './lib/model.js';
   import { looksLikeQuestions } from './lib/formats/index.js';
   import { TYPE_ICONS } from './lib/icons.js';
@@ -26,7 +25,6 @@
 
   const q = $derived(selectedQuestion());
   const index = $derived(selectedIndex());
-  const otherQuizzes = $derived(library.quizzes.filter((other) => other.id !== library.activeId && other.count).sort(byRecent));
 
   // On narrow screens the sidebar is an overlay; close it after picking a question.
   let narrow = $state(window.matchMedia('(max-width: 800px)').matches);
@@ -161,9 +159,6 @@
     } else if (mod && e.key === ',') {
       e.preventDefault();
       openModal('settings');
-    } else if (e.altKey && key === 'o') {
-      e.preventDefault();
-      openModal('quizzes');
     } else if (e.altKey && !mod && /^[1-9]$/.test(e.key)) {
       // Like a browser: Alt+1–8 open that tab, Alt+9 the last one.
       e.preventDefault();
@@ -254,25 +249,6 @@
             <button class="btn" onclick={() => openModal('import')}><Upload size={16} /> Import questions</button>
           </div>
         </div>
-        {#if otherQuizzes.length}
-          <div class="quick">
-            <h2>Or continue another quiz</h2>
-            <div class="grid">
-              {#each otherQuizzes.slice(0, 6) as other (other.id)}
-                <button class="tile" onclick={() => switchQuiz(other.id)}>
-                  <span class="icon"><FileText size={18} /></span>
-                  <span class="tile-text">
-                    <span class="tile-name">{other.name}</span>
-                    <span class="tile-meta">{other.count} question{other.count === 1 ? '' : 's'}</span>
-                  </span>
-                </button>
-              {/each}
-            </div>
-            {#if otherQuizzes.length > 6}
-              <button class="btn btn-ghost btn-sm more" onclick={() => openModal('quizzes')}>All quizzes ({library.quizzes.length})…</button>
-            {/if}
-          </div>
-        {/if}
         <div class="quick">
           <h2>Quick start</h2>
           <div class="grid">
@@ -308,8 +284,6 @@
   <PrintDialog />
 {:else if app.modal === 'find'}
   <FindReplaceDialog />
-{:else if app.modal === 'quizzes'}
-  <QuizzesDialog />
 {:else if app.modal === 'copy-to'}
   <CopyToQuizDialog />
 {/if}
@@ -531,25 +505,6 @@
   .tile:hover {
     border-color: var(--accent);
     background: var(--accent-soft);
-  }
-  .tile-text {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-  }
-  .tile-name {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .tile-meta {
-    font-size: 12px;
-    font-weight: 400;
-    color: var(--text-3);
-  }
-  .more {
-    display: flex;
-    margin: 10px auto 0;
   }
   .icon {
     flex: none;

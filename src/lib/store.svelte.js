@@ -99,7 +99,8 @@ export async function loadSavedQuiz() {
   if (saved?.quizzes?.length) {
     library.quizzes = saved.quizzes;
     library.activeId = saved.quizzes.some((q) => q.id === saved.activeId) ? saved.activeId : saved.quizzes[0].id;
-    delete library.quizzes.find((q) => q.id === library.activeId).closed;
+    // Earlier versions could hide a quiz by closing its tab; every quiz has a tab now.
+    for (const q of library.quizzes) delete q.closed;
     const quiz = parseQuiz(await readStored(quizKey(library.activeId)));
     if (quiz) app.quiz = quiz;
     else {
@@ -532,8 +533,6 @@ function activate(id, quiz) {
   stacks.set(library.activeId, { past, future });
   ({ past, future } = stacks.get(id) ?? { past: [], future: [] });
   library.activeId = id;
-  const entry = library.quizzes.find((q) => q.id === id);
-  if (entry) delete entry.closed;
   app.quiz = quiz;
   current = JSON.stringify(quiz);
   app.selectedId = quiz.questions[0]?.id ?? null;
@@ -575,41 +574,21 @@ export function newQuiz() {
   createNewQuiz();
 }
 
-/** Quizzes shown as tabs, in tab order. Closed tabs stay in the quiz list. */
-export const openTabs = () => library.quizzes.filter((q) => !q.closed);
-
-/** The tab to show when `id` goes away: the one to its right, else to its left, else the most recent closed quiz. */
-function neighbourOf(id) {
-  const tabs = openTabs();
-  const i = tabs.findIndex((q) => q.id === id);
-  return tabs[i + 1] ?? tabs[i - 1] ?? library.quizzes.filter((q) => q.id !== id).sort(byRecent)[0];
-}
-
-/** Hides a quiz's tab without deleting it; it can be reopened from the quiz list. The last tab can't be closed. */
-export async function closeTab(id) {
-  const entry = library.quizzes.find((q) => q.id === id);
-  if (!entry || openTabs().length < 2) return;
-  if (id === library.activeId && !(await switchQuiz(neighbourOf(id).id))) return;
-  entry.closed = true;
-  saveLibrary();
-}
+/** Number of questions in a quiz, using the live copy for the open one. */
+const countOf = (entry) => (entry.id === library.activeId ? app.quiz.questions.length : entry.count);
 
 /** Opens the n-th tab (0-based); a negative n counts from the end. */
 export function switchToTab(n) {
-  const tabs = openTabs();
-  const tab = tabs[n < 0 ? tabs.length + n : n];
+  const tab = library.quizzes.at(n);
   if (tab) switchQuiz(tab.id);
 }
 
-/** Moves a tab to another position among the open tabs. */
-export function moveTab(id, toIndex) {
-  const tabs = openTabs();
+/** Moves a tab to another position. */
+export function moveTab(id, to) {
   const from = library.quizzes.findIndex((q) => q.id === id);
-  const target = tabs[toIndex];
-  if (from < 0 || !target || target.id === id) return;
+  if (from < 0 || from === to || !library.quizzes[to]) return;
   const [entry] = library.quizzes.splice(from, 1);
-  const to = library.quizzes.findIndex((q) => q.id === target.id);
-  library.quizzes.splice(toIndex > tabs.findIndex((q) => q.id === id) ? to + 1 : to, 0, entry);
+  library.quizzes.splice(to, 0, entry);
   saveLibrary();
 }
 
@@ -626,6 +605,7 @@ export async function duplicateQuiz(id) {
   if (!quiz) return notify('Could not copy that quiz: its saved data is missing or damaged.', 'error');
   quiz.name = `${quiz.name || 'Untitled quiz'} (copy)`;
   const copy = addClosedQuiz(quiz);
+  moveTab(copy, library.quizzes.findIndex((q) => q.id === id) + 1);
   notify(`Created “${quiz.name}”.`, 'success', 4000, { label: 'Open', run: () => switchQuiz(copy) });
 }
 
@@ -642,34 +622,56 @@ export async function renameQuiz(id, name) {
   save(JSON.stringify(quiz), id);
 }
 
-export async function deleteQuiz(id) {
-  const entry = library.quizzes.find((q) => q.id === id);
+/**
+ * Closes a quiz's tab, which removes the quiz from the app: every quiz in the app has a tab.
+ * Empty quizzes go straight away; others are confirmed first and can be brought back from the notification.
+ */
+export async function closeTab(id) {
+  const index = library.quizzes.findIndex((q) => q.id === id);
+  const entry = library.quizzes[index];
   if (!entry) return;
-  const ok = await ask({
-    title: 'Delete quiz?',
-    message: `“${entry.name}” and its ${plural(entry.count)} will be removed from this browser.`,
-    confirmLabel: 'Delete quiz',
-    danger: true,
-  });
-  if (!ok) return;
-  const saved = await loadQuiz(id);
+  const count = countOf(entry);
+  // Closing the only tab would just replace an empty quiz with another empty one.
+  if (!count && library.quizzes.length < 2) return;
+  if (count) {
+    const name = id === library.activeId ? app.quiz.name || 'Untitled quiz' : entry.name;
+    const ok = await ask({
+      title: `Close “${name}”?`,
+      message: `Its ${plural(count)} will be removed from this browser. Export or back up the quiz first if you may need it again.`,
+      confirmLabel: 'Close and remove',
+      danger: true,
+    });
+    if (!ok) return;
+  }
+  const saved = count && (await loadQuiz(id));
+  let fresh = null;
   if (id === library.activeId) {
-    // Open the neighbouring tab, or a fresh quiz when this was the last one.
-    const next = neighbourOf(id);
-    if (!next || !(await switchQuiz(next.id))) createNewQuiz();
+    // Open the tab to the right, else the one to the left, else a fresh quiz when this was the last one.
+    const next = library.quizzes[index + 1] ?? library.quizzes[index - 1];
+    if (!next || !(await switchQuiz(next.id))) fresh = createNewQuiz();
   }
   library.quizzes = library.quizzes.filter((q) => q.id !== id);
   stacks.delete(id);
   saveLibrary();
   enqueue(() => removeStored(quizKey(id)));
-  const restore = saved && {
+  if (!saved) return;
+  const restore = {
     label: 'Undo',
     run: () => {
-      library.quizzes.push(entry);
+      library.quizzes.splice(Math.min(index, library.quizzes.length), 0, entry);
       save(JSON.stringify(saved), id);
+      activate(id, structuredClone(saved));
+      // Drop the empty quiz that stood in for the last tab, unless it has been used since.
+      const stand = library.quizzes.find((q) => q.id === fresh);
+      if (stand && !stand.count) {
+        library.quizzes = library.quizzes.filter((q) => q.id !== fresh);
+        stacks.delete(fresh);
+        saveLibrary();
+        enqueue(() => removeStored(quizKey(fresh)));
+      }
     },
   };
-  notify(`Deleted “${entry.name}”.`, 'success', 8000, restore);
+  notify(`Closed “${entry.name}”.`, 'success', 8000, restore);
 }
 
 /** Copies (or moves) questions of the open quiz to another quiz, or to a new one when `targetId` is null. */
@@ -707,7 +709,7 @@ function importQuizzes(quizzes) {
     addClosedQuiz(quiz);
     n += quiz.questions.length;
   }
-  notify(`Added ${quizzes.length} quiz${quizzes.length === 1 ? '' : 'zes'} to your quiz list.`, 'success', 5000, { label: 'Show quizzes', run: () => openModal('quizzes') });
+  notify(`Opened ${quizzes.length} quiz${quizzes.length === 1 ? '' : 'zes'} in new tabs.`, 'success');
   return n;
 }
 

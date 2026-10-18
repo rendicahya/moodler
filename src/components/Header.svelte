@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { Sun, Moon, Maximize, Minimize, Undo2, Redo2, Upload, Download, FilePlus, Settings, CircleQuestionMark, Presentation, Printer, ChevronsUpDown } from '@lucide/svelte';
+  import { Sun, Moon, Maximize, Minimize, Undo2, Redo2, Upload, Download, FilePlus, Settings, CircleQuestionMark, Presentation, Printer } from '@lucide/svelte';
   import { app, history, backup, REMIND_AFTER, undo, redo, toggleTheme, openModal, newQuiz, downloadBackup } from '../lib/store.svelte.js';
 
   let fullscreen = $state(false);
@@ -16,8 +16,6 @@
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen().catch(() => {});
   }
-
-  const total = $derived(app.quiz.questions.reduce((s, q) => s + (Number(q.defaultgrade) || 0), 0));
 
   // The save status is plain text, except when a backup is due or saving failed: then it becomes a backup button.
   const backupDue = $derived(app.quiz.questions.length > 0 && backup.edits >= REMIND_AFTER);
@@ -50,14 +48,7 @@
         <path d="M9 11.5h10M9 16h14M9 20.5h8" stroke="var(--on-accent)" stroke-width="2.4" stroke-linecap="round" />
         <circle cx="23" cy="11.5" r="2" fill="var(--on-accent)" />
       </svg>
-      <div class="titles">
-        <span class="app-name">Moodler</span>
-        <button class="quiz-name" title="Switch quiz or start a new one (Alt+O)" onclick={() => openModal('quizzes')}>
-          <span class="quiz-title">{app.quiz.name || 'Untitled quiz'}</span>
-          <span class="meta">· {app.quiz.questions.length} question{app.quiz.questions.length === 1 ? '' : 's'} · {Math.round(total * 100) / 100} marks</span>
-          <ChevronsUpDown size={14} />
-        </button>
-      </div>
+      <span class="app-name">Moodler</span>
     </div>
   </div>
 
@@ -134,50 +125,10 @@
     height: 30px;
     flex: none;
   }
-  .titles {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    line-height: 1.2;
-  }
   .app-name {
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--text-3);
-  }
-  .quiz-name {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    min-width: 0;
-    border: none;
-    background: none;
-    padding: 0;
-    text-align: left;
-    font-weight: 600;
-    font-size: 14.5px;
-    cursor: pointer;
-    white-space: nowrap;
-    border-radius: 4px;
-  }
-  .quiz-title {
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .quiz-name :global(svg) {
-    flex: none;
-    color: var(--text-3);
-  }
-  .quiz-name:hover,
-  .quiz-name:hover :global(svg) {
-    color: var(--accent);
-  }
-  .meta {
-    font-weight: 400;
-    color: var(--text-3);
-    font-size: 13px;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
   }
   .group {
     display: flex;
@@ -220,11 +171,6 @@
     height: 22px;
     background: var(--border);
     margin: 0 4px;
-  }
-  @media (max-width: 1100px) {
-    .meta {
-      display: none;
-    }
   }
   @media (max-width: 1240px) {
     .status:not(.due):not(.error) .status-text {

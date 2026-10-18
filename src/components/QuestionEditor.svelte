@@ -1,6 +1,6 @@
 <script>
   import { tick } from 'svelte';
-  import { ChevronLeft, ChevronRight, ChevronDown, Copy, Trash, Pencil, Eye, Columns2, TriangleAlert, Plus, X } from '@lucide/svelte';
+  import { ChevronLeft, ChevronRight, Copy, Trash, Pencil, Eye, Columns2, TriangleAlert, Plus, X } from '@lucide/svelte';
   import Section from './ui/Section.svelte';
   import Switch from './ui/Switch.svelte';
   import Segmented from './ui/Segmented.svelte';
@@ -16,8 +16,8 @@
   import ClozeEditor from './editors/ClozeEditor.svelte';
   import GapEditor from './editors/GapEditor.svelte';
   import OrderingEditor from './editors/OrderingEditor.svelte';
-  import { app, duplicateQuestion, deleteQuestion, setView, goToQuestion, select, saveLayout } from '../lib/store.svelte.js';
-  import { TYPE_MAP, TEXT_FORMATS, PENALTIES, validateQuestion, questionTitle, uid } from '../lib/model.js';
+  import { app, duplicateQuestion, deleteQuestion, setView, goToQuestion, saveLayout } from '../lib/store.svelte.js';
+  import { TYPE_MAP, TEXT_FORMATS, PENALTIES, validateQuestion, uid } from '../lib/model.js';
   import { TYPE_ICONS } from '../lib/icons.js';
   import { HELP } from '../lib/help.js';
 
@@ -47,7 +47,6 @@
   const showPreview = $derived(app.wide ? app.view !== 'edit' : app.tab === 'preview');
 
   const total = $derived(app.quiz.questions.length);
-  const clip = (s, n = 70) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 
   // The editor is re-created for each question, so put focus back on the button that was used to navigate.
   async function go(step, e) {
@@ -91,16 +90,6 @@
       <span class="icon"><Icon size={18} /></span>
       <div class="ident-text">
         <div class="type">{meta.label}</div>
-        <!-- The position doubles as a jump menu listing every question. -->
-        <label class="pos" title="Jump to another question">
-          Question {index + 1} of {total}
-          <ChevronDown size={13} />
-          <select class="jump" value={index} aria-label="Jump to question" onchange={(e) => select(app.quiz.questions[Number(e.currentTarget.value)].id)}>
-            {#each app.quiz.questions as item, i (item.id)}
-              <option value={i}>{i + 1}. {clip(questionTitle(item))}</option>
-            {/each}
-          </select>
-        </label>
       </div>
     </div>
     <!-- Navigation and layout switch are centred; identity on the left, actions on the right. -->
@@ -404,33 +393,6 @@
   }
   .ident-text {
     min-width: 0;
-  }
-  .pos {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    font-size: 12px;
-    color: var(--text-3);
-    border-radius: 4px;
-    white-space: nowrap;
-    cursor: pointer;
-  }
-  .pos:hover,
-  .pos:focus-within {
-    color: var(--accent-text);
-  }
-  .pos:focus-within {
-    box-shadow: var(--focus);
-  }
-  /* Invisible native select stretched over the label, so the full question list opens on click. */
-  .jump {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    opacity: 0;
-    cursor: pointer;
-    font-size: 13px;
   }
   .pager {
     display: flex;
