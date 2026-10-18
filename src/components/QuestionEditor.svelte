@@ -127,7 +127,7 @@
     </div>
     <div class="acts">
       <button class="btn btn-ghost btn-icon btn-sm" title="Duplicate" aria-label="Duplicate" onclick={() => duplicateQuestion(q.id)}><Copy size={15} /></button>
-      <button class="btn btn-ghost btn-icon btn-sm danger" title="Delete" aria-label="Delete" onclick={() => deleteQuestion(q.id)}><Trash size={15} /></button>
+      <button class="btn btn-ghost btn-icon btn-sm danger" title="Delete question (Alt+Delete)" aria-label="Delete question" onclick={() => deleteQuestion(q.id)}><Trash size={15} /></button>
     </div>
   </div>
 

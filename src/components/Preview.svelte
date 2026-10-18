@@ -80,8 +80,13 @@
     <div class="bar">
       <span class="hint">Student view preview — options are shown in their original order.</span>
       {#if q.type !== 'description' && q.type !== 'essay'}
-        <button class="btn btn-sm" class:active={app.revealAnswers} title="Alt+A" onclick={() => (app.revealAnswers = !app.revealAnswers)}>
-          {#if app.revealAnswers}<EyeOff size={15} /> Hide answers{:else}<Eye size={15} /> Show correct answers{/if}
+        <button class="btn btn-sm" class:active={app.revealAnswers} title="Alt+A" aria-pressed={app.revealAnswers} onclick={() => (app.revealAnswers = !app.revealAnswers)}>
+          {#if app.revealAnswers}<EyeOff size={15} />{:else}<Eye size={15} />{/if}
+          <!-- Both labels take up space so the button keeps its width when toggled. -->
+          <span class="swap">
+            <span class:off={app.revealAnswers} aria-hidden={app.revealAnswers}>Show correct answers</span>
+            <span class:off={!app.revealAnswers} aria-hidden={!app.revealAnswers}>Hide correct answers</span>
+          </span>
         </button>
       {/if}
     </div>
@@ -203,6 +208,15 @@
 </div>
 
 <style>
+  .swap {
+    display: inline-grid;
+  }
+  .swap > span {
+    grid-area: 1 / 1;
+  }
+  .swap .off {
+    visibility: hidden;
+  }
   .wrap {
     container-type: inline-size;
     display: flex;
