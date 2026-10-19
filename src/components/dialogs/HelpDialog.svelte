@@ -40,6 +40,7 @@
       <li><strong>GIFT</strong> and <strong>Aiken</strong> are plain-text formats that only support some question types; unsupported questions are listed when exporting.</li>
       <li>Images pasted or inserted into the editor are embedded in Moodle XML exports.</li>
       <li>Drag the <span class="grip">⠿</span> handle to reorder questions, answers and items.</li>
+      <li>Drag a question onto another quiz's tab to move it there (hold Ctrl to copy), or hold it over the tab until it opens to drop it at a chosen place.</li>
       <li>Tick questions in the list (hover a number, or Ctrl+click) to export, edit, move, duplicate or delete several at once.</li>
       <li>
         Use <strong>Project (JSON)</strong> to back up your work or move it to another browser. When it's been a while, the save status at the top right turns into a

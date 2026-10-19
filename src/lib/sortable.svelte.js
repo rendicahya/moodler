@@ -16,6 +16,7 @@ export function createSortable(onMove) {
     get dragging() {
       return state.from;
     },
+    reset,
     /** Returns 'before' | 'after' | null for drop-indicator styling. */
     indicator(i) {
       if (state.from === -1 || state.over !== i) return null;

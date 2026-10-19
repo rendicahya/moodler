@@ -215,6 +215,9 @@ let timer = null;
 let writing = Promise.resolve();
 const enqueue = (fn) => (writing = writing.then(fn));
 
+// Search, edit/preview tab and ticked questions of the quizzes in the other tabs, for when they are opened again.
+const views = new Map();
+
 /** Saves a quiz (the open one unless `id` is given) together with the quiz list. */
 function save(snapshot, id = library.activeId) {
   enqueue(async () => {
@@ -541,20 +544,24 @@ function activate(id, quiz) {
   ({ past, future } = stacks.get(id) ?? { past: [], future: [] });
   const left = library.quizzes.find((q) => q.id === library.activeId);
   if (left) left.selected = app.selectedId;
+  views.set(library.activeId, { search: app.search, tab: app.tab, checked: app.checked });
+  const view = views.get(id);
   library.activeId = id;
   app.quiz = quiz;
   current = JSON.stringify(quiz);
   app.selectedId = rememberedQuestion(id, quiz);
-  app.checked = [];
-  app.search = '';
-  app.tab = 'edit';
+  app.checked = view?.checked.filter((c) => quiz.questions.some((q) => q.id === c)) ?? [];
+  app.search = view?.search ?? '';
+  app.tab = view?.tab ?? 'edit';
   updateFlags();
   saveLibrary();
 }
 
 /** Reads a quiz from storage, or the live copy when it is the open one. */
 async function loadQuiz(id) {
-  return id === library.activeId ? $state.snapshot(app.quiz) : parseQuiz(await readStored(quizKey(id)));
+  if (id === library.activeId) return $state.snapshot(app.quiz);
+  // Queued behind pending writes, so a save that hasn't finished yet is never read back stale.
+  return parseQuiz(await enqueue(() => readStored(quizKey(id))));
 }
 
 /** Opens another saved quiz. Resolves to false when it couldn't be read. */
@@ -661,6 +668,7 @@ export async function closeTab(id) {
   }
   library.quizzes = library.quizzes.filter((q) => q.id !== id);
   stacks.delete(id);
+  views.delete(id);
   saveLibrary();
   enqueue(() => removeStored(quizKey(id)));
   if (!saved) return;
@@ -708,6 +716,72 @@ export async function copyQuestionsTo(targetId, ids, move = false) {
     pruneChecked();
   }
   notify(`${move ? 'Moved' : 'Copied'} ${plural(copies.length)} to “${quiz.name}”.`, 'success', 5000, { label: 'Open quiz', run: () => switchQuiz(targetId) });
+}
+
+// ---------------------------------------------------------------- dragging questions between quizzes
+
+/** Questions being dragged out of the list, which can be dropped on another quiz's tab or, once it is open, its list. */
+export const transfer = $state({ from: null, ids: [] });
+
+export function startTransfer(ids) {
+  transfer.from = library.activeId;
+  transfer.ids = ids;
+}
+
+export function endTransfer() {
+  transfer.from = null;
+  transfer.ids = [];
+}
+
+/** Changes a quiz: the live copy when it is open, so the change joins its undo history, else the stored copy. */
+async function editQuiz(id, fn) {
+  if (id === library.activeId) {
+    fn(app.quiz);
+    return app.quiz;
+  }
+  const quiz = await loadQuiz(id);
+  if (!quiz) return null;
+  fn(quiz);
+  const entry = library.quizzes.find((q) => q.id === id);
+  if (entry) Object.assign(entry, entryFor(id, quiz));
+  save(JSON.stringify(quiz), id);
+  return quiz;
+}
+
+/** Keeps the open question and the ticks valid after questions were taken out of the open quiz. */
+function fixSelection(near) {
+  const list = app.quiz.questions;
+  if (!list.some((q) => q.id === app.selectedId)) app.selectedId = list[Math.min(near, list.length - 1)]?.id ?? null;
+  pruneChecked();
+}
+
+/** Moves (or copies) questions from one quiz to another, inserting them at `at` (default: the end). */
+export async function transferQuestions(fromId, toId, ids, { at = Infinity, copy = false } = {}) {
+  if (!fromId || fromId === toId) return;
+  const source = await loadQuiz(fromId);
+  const picked = source?.questions.filter((q) => ids.includes(q.id)) ?? [];
+  if (!picked.length) return;
+  const positions = picked.map((q) => source.questions.indexOf(q));
+  // New ids, so they can't clash with copies of the same questions already in the other quiz.
+  const added = picked.map(cloneQuestion);
+  const addedIds = added.map((q) => q.id);
+  const target = await editQuiz(toId, (quiz) => quiz.questions.splice(Math.min(at, quiz.questions.length), 0, ...added));
+  if (!target) return notify('Could not open that quiz: its saved data is missing or damaged.', 'error');
+  if (!copy) await editQuiz(fromId, (quiz) => (quiz.questions = quiz.questions.filter((q) => !ids.includes(q.id))));
+  if (toId === library.activeId) {
+    app.search = '';
+    app.selectedId = addedIds[0];
+    app.checked = addedIds.length > 1 ? addedIds : [];
+  } else if (fromId === library.activeId) fixSelection(positions[0]);
+
+  const undo = async () => {
+    await editQuiz(toId, (quiz) => (quiz.questions = quiz.questions.filter((q) => !addedIds.includes(q.id))));
+    if (!copy)
+      await editQuiz(fromId, (quiz) => picked.forEach((q, k) => quiz.questions.splice(Math.min(positions[k], quiz.questions.length), 0, structuredClone(q))));
+    if (fromId === library.activeId && !copy) app.selectedId = picked[0].id;
+    else if (toId === library.activeId) fixSelection(0);
+  };
+  notify(`${copy ? 'Copied' : 'Moved'} ${plural(picked.length)} to “${target.name || 'Untitled quiz'}”.`, 'success', 8000, { label: 'Undo', run: undo });
 }
 
 /** Adds every quiz from a full backup as separate quizzes, without opening them. */

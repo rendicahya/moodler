@@ -1,6 +1,19 @@
 <script>
   import { Plus, X, Pencil, Copy, Download } from '@lucide/svelte';
-  import { app, library, switchQuiz, closeTab, moveTab, renameQuiz, duplicateQuiz, newQuiz, downloadBackup } from '../lib/store.svelte.js';
+  import {
+    app,
+    library,
+    switchQuiz,
+    closeTab,
+    moveTab,
+    renameQuiz,
+    duplicateQuiz,
+    newQuiz,
+    downloadBackup,
+    transfer,
+    endTransfer,
+    transferQuestions,
+  } from '../lib/store.svelte.js';
 
   let editing = $state(null);
   let draft = $state('');
@@ -56,17 +69,51 @@
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', t.name);
   }
-  function ondragover(e, i) {
+  function ondragover(e, i, t) {
+    if (transfer.from) return overWithQuestions(e, t);
     if (!dragId) return;
     e.preventDefault();
     dropAt = i;
   }
-  function ondrop(e, i) {
+  function ondrop(e, i, t) {
+    if (transfer.from) return dropQuestions(e, t);
     if (!dragId) return;
     e.preventDefault();
     moveTab(dragId, i);
     dragId = dropAt = null;
   }
+
+  // Questions dragged from the list: dropping them on a tab moves them to the end of that quiz (Ctrl copies);
+  // holding them over a tab for a moment opens it, so they can be dropped at a chosen place in its list.
+  let hoverId = $state(null);
+  let hoverTimer;
+  const copying = (e) => e.ctrlKey || e.altKey;
+
+  function hover(id) {
+    if (hoverId === id) return;
+    clearTimeout(hoverTimer);
+    hoverId = id;
+    if (id && id !== library.activeId) hoverTimer = setTimeout(() => hoverId === id && transfer.from && switchQuiz(id), 700);
+  }
+  function overWithQuestions(e, t) {
+    hover(t.id);
+    if (t.id === transfer.from) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = copying(e) ? 'copy' : 'move';
+  }
+  function dropQuestions(e, t) {
+    e.preventDefault();
+    const { from, ids } = transfer;
+    endTransfer();
+    hover(null);
+    if (t.id !== from) transferQuestions(from, t.id, [...ids], { copy: copying(e) });
+  }
+  function leave(e) {
+    if (!e.currentTarget.contains(e.relatedTarget)) hover(null);
+  }
+  $effect(() => {
+    if (!transfer.from) hover(null);
+  });
 
   function onwheel(e) {
     // Let a normal mouse wheel scroll the tabs sideways.
@@ -79,6 +126,9 @@
 
 <svelte:window
   onpointerdown={(e) => menu && !e.target.closest?.('.menu') && (menu = null)}
+  ondrop={() => transfer.from && endTransfer()}
+  ondragend={() => transfer.from && endTransfer()}
+  onpointermove={() => transfer.from && endTransfer()}
   onkeydown={(e) => menu && e.key === 'Escape' && (e.stopPropagation(), (menu = null))}
   onblur={() => (menu = null)}
 />
@@ -93,11 +143,13 @@
         class:active
         class:dragging={dragId === t.id}
         class:drop={dropAt === i && dragId !== t.id}
+        class:target={transfer.from && hoverId === t.id && t.id !== transfer.from}
         role="presentation"
         draggable={editing !== t.id}
         ondragstart={(e) => ondragstart(e, t)}
-        ondragover={(e) => ondragover(e, i)}
-        ondrop={(e) => ondrop(e, i)}
+        ondragover={(e) => ondragover(e, i, t)}
+        ondragleave={leave}
+        ondrop={(e) => ondrop(e, i, t)}
         ondragend={() => (dragId = dropAt = null)}
         onauxclick={(e) => onauxclick(e, t)}
         oncontextmenu={(e) => oncontextmenu(e, t)}
@@ -212,6 +264,10 @@
   }
   .tab.drop {
     box-shadow: inset 2px 0 0 var(--accent);
+  }
+  .tab.target {
+    background: var(--accent-soft);
+    box-shadow: inset 0 0 0 1px var(--accent);
   }
   .label {
     flex: 1;

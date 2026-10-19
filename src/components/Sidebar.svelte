@@ -1,3 +1,8 @@
+<script module>
+  // How far each quiz's list was scrolled; kept here so it survives the sidebar closing on small screens.
+  const scrolls = new Map();
+</script>
+
 <script>
   import { Plus, Search, GripVertical, Copy, Trash, TriangleAlert, X, Upload, EyeOff, SquarePen, ArrowUpToLine, ArrowDownToLine, Replace, FolderInput } from '@lucide/svelte';
   import {
@@ -12,12 +17,80 @@
     deleteChecked,
     duplicateChecked,
     moveChecked,
+    library,
+    transfer,
+    startTransfer,
+    endTransfer,
+    transferQuestions,
   } from '../lib/store.svelte.js';
   import { questionTitle, validateQuestion, TYPE_MAP, QUESTION_TYPES, stripHtml } from '../lib/model.js';
   import { TYPE_ICONS } from '../lib/icons.js';
   import { createSortable } from '../lib/sortable.svelte.js';
 
   const sort = createSortable((from, to) => moveQuestion(from, to));
+
+  // Dragging a row also lets it be dropped on another quiz's tab: the ticked questions go along when it is one of them.
+  function handle(i, id) {
+    const h = sort.handle(i);
+    return {
+      ...h,
+      ondragstart: (e) => {
+        h.ondragstart(e);
+        e.dataTransfer.effectAllowed = 'copyMove';
+        startTransfer(app.checked.includes(id) ? [...app.checked] : [id]);
+      },
+      ondragend: () => (h.ondragend(), endTransfer()),
+    };
+  }
+
+  // Questions dragged in from another quiz, after hovering over this quiz's tab opened it.
+  const foreign = $derived(transfer.from !== null && transfer.from !== library.activeId);
+  let over = $state(null);
+  $effect(() => {
+    if (transfer.from) return;
+    over = null;
+    // The dragged row may have left the page with its quiz, so its own dragend never came.
+    sort.reset();
+  });
+
+  function dropForeign(e, at) {
+    e.preventDefault();
+    e.stopPropagation();
+    const { from, ids } = transfer;
+    endTransfer();
+    transferQuestions(from, library.activeId, [...ids], { at, copy: e.ctrlKey || e.altKey });
+  }
+
+  function rowDrop(i) {
+    if (!foreign) return sort.item(i);
+    return {
+      'data-sortable-item': '',
+      ondragover: (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = e.ctrlKey || e.altKey ? 'copy' : 'move';
+        const r = e.currentTarget.getBoundingClientRect();
+        over = { i, after: e.clientY > r.top + r.height / 2 };
+      },
+      ondrop: (e) => dropForeign(e, over?.i === i && over.after ? i + 1 : i),
+    };
+  }
+
+  function listDragover(e) {
+    if (!foreign) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = e.ctrlKey || e.altKey ? 'copy' : 'move';
+    // Below the last row: add at the end.
+    if (e.target === listEl) over = 'end';
+  }
+
+  const indicator = (i) => (foreign ? (over?.i === i ? (over.after ? 'after' : 'before') : null) : sort.indicator(i));
+
+  // Opens the next question with problems after the open one, wrapping around.
+  function nextIssue() {
+    const bad = rows.filter((r) => r.issues.length);
+    const at = app.quiz.questions.findIndex((q) => q.id === app.selectedId);
+    select((bad.find((r) => r.i > at) ?? bad[0]).q.id);
+  }
 
   const query = $derived(app.search.trim().toLowerCase());
   const rows = $derived(
@@ -39,10 +112,18 @@
   );
 
   // Keep the open question visible in the list when it changes from elsewhere (Next/Previous, jump menu, shortcuts).
+  // Each quiz's list goes back to where it was scrolled when its tab is opened again.
   let listEl = $state();
+  let shown = null;
   $effect(() => {
     app.selectedId;
-    listEl?.querySelector('.row.selected')?.scrollIntoView({ block: 'nearest' });
+    const id = library.activeId;
+    if (!listEl) return;
+    if (id !== shown) {
+      shown = id;
+      if (scrolls.has(id)) return void (listEl.scrollTop = scrolls.get(id));
+    }
+    listEl.querySelector('.row.selected')?.scrollIntoView({ block: 'nearest' });
   });
 
   // Ticking applies to the rows currently shown, so a search narrows what "select all" picks.
@@ -130,7 +211,9 @@
           {/each}
         </ul>
         {#if issueCount}
-          <span class="badge warning" title="Questions with problems"><TriangleAlert size={12} /> {issueCount}</span>
+          <button class="badge warning issues" title="{issueCount} question{issueCount === 1 ? ' has' : 's have'} problems: click to go to the next one" onclick={nextIssue}>
+            <TriangleAlert size={12} /> {issueCount}
+          </button>
         {/if}
       </div>
     {/if}
@@ -171,16 +254,29 @@
     </div>
   {/if}
 
-  <div class="list" bind:this={listEl} class:selecting={app.checked.length > 0} role="listbox" aria-label="Questions" aria-multiselectable="true">
+  <div
+    class="list"
+    bind:this={listEl}
+    class:selecting={app.checked.length > 0}
+    class:drop-end={foreign && over === 'end'}
+    role="listbox"
+    aria-label="Questions"
+    aria-multiselectable="true"
+    tabindex="-1"
+    onscroll={() => scrolls.set(library.activeId, listEl.scrollTop)}
+    ondragover={listDragover}
+    ondragleave={(e) => foreign && !listEl.contains(e.relatedTarget) && (over = null)}
+    ondrop={(e) => foreign && dropForeign(e, app.quiz.questions.length)}
+  >
     {#each rows as { q, i, issues } (q.id)}
       {@const Icon = TYPE_ICONS[q.type]}
-      {@const ind = sort.indicator(i)}
+      {@const ind = indicator(i)}
       {@const ticked = app.checked.includes(q.id)}
       <div
         class="row"
         class:selected={q.id === app.selectedId}
         class:ticked
-        class:dragging={sort.dragging === i}
+        class:dragging={!foreign && sort.dragging === i}
         class:drop-before={ind === 'before'}
         class:drop-after={ind === 'after'}
         role="option"
@@ -190,10 +286,10 @@
         onclick={(e) => onrowclick(e, q.id)}
         onmousedown={(e) => e.shiftKey && e.preventDefault()}
         onkeydown={(e) => onkeydown(e, i)}
-        {...sort.item(i)}
+        {...rowDrop(i)}
       >
         {#if !query}
-          <span class="drag-handle" title="Drag to reorder (or Alt+↑/↓)" {...sort.handle(i)}><GripVertical size={15} /></span>
+          <span class="drag-handle" title="Drag to reorder (or Alt+↑/↓), or onto another quiz's tab to move it there (hold Ctrl to copy)" {...handle(i, q.id)}><GripVertical size={15} /></span>
         {/if}
         <!-- The number turns into a checkbox on hover, or for every row once any question is ticked. -->
         <span class="num-slot">
@@ -262,6 +358,19 @@
   .summary .badge {
     flex: none;
   }
+  .issues {
+    border: none;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .issues:hover {
+    filter: brightness(0.95);
+  }
+  .issues:focus-visible {
+    outline: none;
+    box-shadow: var(--focus);
+  }
   .types {
     display: flex;
     flex-wrap: wrap;
@@ -326,6 +435,12 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
+  }
+  .list {
+    outline: none;
+  }
+  .drop-end {
+    box-shadow: inset 0 -2px 0 0 var(--accent);
   }
   .row {
     position: relative;

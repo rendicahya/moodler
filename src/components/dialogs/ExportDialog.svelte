@@ -1,12 +1,12 @@
 <script>
-  import { Download, Copy, TriangleAlert, Check } from '@lucide/svelte';
+  import { Download, Copy, TriangleAlert, Check, CircleCheck, ArrowRight } from '@lucide/svelte';
   import Modal from '../ui/Modal.svelte';
   import Switch from '../ui/Switch.svelte';
   import Segmented from '../ui/Segmented.svelte';
-  import { questionTitle, TYPE_MAP } from '../../lib/model.js';
+  import { questionTitle, validateQuestion, TYPE_MAP } from '../../lib/model.js';
   import { TYPE_ICONS } from '../../lib/icons.js';
   import { FORMATS, FORMAT_MAP } from '../../lib/formats/index.js';
-  import { app, library, closeModal, notify, markBackedUp } from '../../lib/store.svelte.js';
+  import { app, library, closeModal, notify, markBackedUp, select } from '../../lib/store.svelte.js';
   import { downloadText, slugify } from '../../lib/download.js';
 
   const exportable = FORMATS.filter((f) => f.export);
@@ -43,6 +43,18 @@
     }
   });
   const size = $derived(new Blob([output.text]).size);
+
+  // Questions about to be exported that Moodle may reject or that would not work as intended.
+  const problems = $derived(
+    questions.map((q) => ({ q, n: app.quiz.questions.indexOf(q) + 1, issues: validateQuestion(q) })).filter((p) => p.issues.length)
+  );
+
+  function fix(id) {
+    closeModal();
+    app.search = '';
+    app.tab = 'edit';
+    select(id);
+  }
 
   function choose(id) {
     format = id;
@@ -135,6 +147,31 @@
         {/each}
       </ul>
     </div>
+  {/if}
+
+  {#if questions.length}
+    {#if problems.length}
+      <div class="check bad">
+        <div class="check-head">
+          <TriangleAlert size={16} />
+          <strong>{problems.length} of {questions.length} question{questions.length === 1 ? '' : 's'} need{problems.length === 1 ? 's' : ''} attention before import</strong>
+        </div>
+        <ul class="problems">
+          {#each problems as { q, n, issues } (q.id)}
+            <li>
+              <span class="pick-num">{n}</span>
+              <span class="problem">
+                <span class="pick-name">{questionTitle(q)}</span>
+                <span class="issue-text">{issues.join(' ')}</span>
+              </span>
+              <button class="btn btn-sm" onclick={() => fix(q.id)}>Fix <ArrowRight size={14} /></button>
+            </li>
+          {/each}
+        </ul>
+      </div>
+    {:else}
+      <div class="check ok"><CircleCheck size={16} /> All {questions.length} question{questions.length === 1 ? '' : 's'} passed the checks.</div>
+    {/if}
   {/if}
 
   {#if output.warnings.length}
@@ -280,6 +317,58 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .check {
+    flex: none;
+    border-radius: var(--radius);
+    font-size: 13px;
+  }
+  .check.ok {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--success-soft);
+    color: var(--success);
+  }
+  .check.bad {
+    border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent);
+    overflow: hidden;
+  }
+  .check-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--warning-soft);
+    color: var(--warning);
+  }
+  .problems {
+    list-style: none;
+    margin: 0;
+    padding: 4px;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+  .problems li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 8px;
+    border-radius: 6px;
+  }
+  .problems li:hover {
+    background: var(--hover);
+  }
+  .problem {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .issue-text {
+    font-size: 12px;
+    color: var(--text-2);
   }
   .warn {
     display: flex;
