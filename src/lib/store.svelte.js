@@ -118,8 +118,14 @@ export async function loadSavedQuiz() {
     library.activeId = id;
     if (legacy && (await writeStored(quizKey(id), JSON.stringify(legacy))) && (await writeStored(LIBRARY_KEY, libraryJson()))) await removeStored(LEGACY_KEY);
   }
-  app.selectedId = app.quiz.questions[0]?.id ?? null;
+  app.selectedId = rememberedQuestion(library.activeId, app.quiz);
   current = JSON.stringify(app.quiz);
+}
+
+/** The question that was open when the quiz was last left, or its first question. */
+function rememberedQuestion(id, quiz) {
+  const last = library.quizzes.find((q) => q.id === id)?.selected;
+  return quiz.questions.some((q) => q.id === last) ? last : (quiz.questions[0]?.id ?? null);
 }
 
 /** Wide-screen layouts: editor only, editor and preview side by side, or preview only. */
@@ -179,7 +185,8 @@ export const app = $state({
 
 /** Every quiz saved in this browser ({ id, name, count, updated }), and which one is open. */
 export const library = $state({ quizzes: [], activeId: null });
-const libraryJson = () => JSON.stringify({ activeId: library.activeId, quizzes: library.quizzes });
+const libraryJson = () =>
+  JSON.stringify({ activeId: library.activeId, quizzes: library.quizzes.map((q) => (q.id === library.activeId ? { ...q, selected: app.selectedId } : q)) });
 export const byRecent = (a, b) => b.updated - a.updated;
 
 export const history = $state({ canUndo: false, canRedo: false, savedAt: null, pending: false, saveFailed: false });
@@ -532,10 +539,12 @@ function activate(id, quiz) {
   save(current);
   stacks.set(library.activeId, { past, future });
   ({ past, future } = stacks.get(id) ?? { past: [], future: [] });
+  const left = library.quizzes.find((q) => q.id === library.activeId);
+  if (left) left.selected = app.selectedId;
   library.activeId = id;
   app.quiz = quiz;
   current = JSON.stringify(quiz);
-  app.selectedId = quiz.questions[0]?.id ?? null;
+  app.selectedId = rememberedQuestion(id, quiz);
   app.checked = [];
   app.search = '';
   app.tab = 'edit';
