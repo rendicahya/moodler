@@ -1,5 +1,7 @@
 // Internal question model. Field names follow Moodle XML so that round-trips are lossless.
 
+import { syncDatasets, calculatedIssues } from './calc.js';
+
 export function uid() {
   if (globalThis.crypto?.randomUUID) return crypto.randomUUID();
   return 'id-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -10,6 +12,7 @@ export const QUESTION_TYPES = [
   { type: 'truefalse', label: 'True / False', short: 'TF', description: 'A simple choice between True and False.' },
   { type: 'shortanswer', label: 'Short answer', short: 'SA', description: 'Type a word or phrase matched against accepted answers.' },
   { type: 'numerical', label: 'Numerical', short: 'NUM', description: 'Type a number, graded with an optional tolerance.' },
+  { type: 'calculated', label: 'Calculated', short: 'CALC', description: 'A formula with random values, so each student gets other numbers.' },
   { type: 'essay', label: 'Essay', short: 'ESS', description: 'Free-text response graded manually.' },
   { type: 'matching', label: 'Matching', short: 'MAT', description: 'Match each sub-question to the correct answer.' },
   { type: 'cloze', label: 'Embedded answers (Cloze)', short: 'CLZ', description: 'Text with embedded gaps of various types.' },
@@ -91,6 +94,23 @@ export function createQuestion(type, defaults = {}) {
         showunits: 3,
         unitsleft: false,
       };
+    case 'calculated': {
+      const q = {
+        ...base,
+        questiontext: '<p>A rectangle is {a} m long and {b} m wide. What is its area in m²?</p>',
+        answers: [newAnswer({ text: '{a} * {b}', fraction: 100, tolerance: 0.01, tolerancetype: 1, correctanswerformat: 1, correctanswerlength: 2 })],
+        units: [],
+        unitgradingtype: 0,
+        unitpenalty: 0.1,
+        showunits: 3,
+        unitsleft: false,
+        synchronize: 0,
+        itemcount: 10,
+        datasets: [],
+      };
+      syncDatasets(q);
+      return q;
+    }
     case 'essay':
       return {
         ...base,
@@ -156,7 +176,7 @@ export function createQuestion(type, defaults = {}) {
 export function cloneQuestion(q) {
   const copy = JSON.parse(JSON.stringify(q));
   copy.id = uid();
-  for (const key of ['answers', 'subquestions', 'choices', 'items', 'hints']) {
+  for (const key of ['answers', 'subquestions', 'choices', 'items', 'hints', 'datasets']) {
     if (Array.isArray(copy[key])) copy[key].forEach((row) => row && typeof row === 'object' && (row.id = uid()));
   }
   return copy;
@@ -166,11 +186,13 @@ export function cloneQuestion(q) {
 export function normalizeQuestion(partial, defaults) {
   const q = { ...createQuestion(partial.type, defaults), ...partial };
   if (!q.id) q.id = uid();
-  for (const key of ['answers', 'subquestions', 'choices', 'items']) {
+  for (const key of ['answers', 'subquestions', 'choices', 'items', 'datasets']) {
     if (Array.isArray(q[key])) q[key] = q[key].map((row) => ({ id: uid(), ...row }));
   }
   q.hints = (q.hints || []).map((h) => (typeof h === 'string' ? { id: uid(), text: h } : { id: uid(), ...h }));
   q.tags = q.tags || [];
+  // An imported question may come without generated values (an AI is told to leave them out).
+  if (q.type === 'calculated') syncDatasets(q);
   return q;
 }
 
@@ -238,6 +260,12 @@ export function validateQuestion(q) {
       if (q.answers.some((a) => a.text !== '*' && String(a.text).trim() !== '' && !Number.isFinite(Number(a.text))))
         issues.push('Answers must be numbers (or * for any).');
       if (!q.answers.some((a) => Number(a.fraction) === 100)) issues.push('One answer must be worth 100%.');
+      break;
+    case 'calculated':
+      if (!q.answers.some((a) => String(a.text).trim() !== '')) issues.push('At least one answer formula is required.');
+      else if (!q.answers.some((a) => Number(a.fraction) === 100)) issues.push('One answer must be worth 100%.');
+      if (!q.datasets?.length) issues.push('The question has no wildcards such as {a}, so every student gets the same numbers.');
+      issues.push(...calculatedIssues(q));
       break;
     case 'matching': {
       const withQ = q.subquestions.filter((s) => stripHtml(s.text));

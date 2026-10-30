@@ -1,6 +1,6 @@
 <script>
   import { tick } from 'svelte';
-  import { ChevronLeft, ChevronRight, Copy, Trash, Pencil, Eye, Columns2, TriangleAlert, Plus, X, CircleCheck } from '@lucide/svelte';
+  import { ChevronLeft, ChevronRight, Copy, Trash, Pencil, Eye, Columns2, TriangleAlert, Plus, X, CircleCheck, WandSparkles } from '@lucide/svelte';
   import Section from './ui/Section.svelte';
   import Switch from './ui/Switch.svelte';
   import Segmented from './ui/Segmented.svelte';
@@ -16,7 +16,8 @@
   import ClozeEditor from './editors/ClozeEditor.svelte';
   import GapEditor from './editors/GapEditor.svelte';
   import OrderingEditor from './editors/OrderingEditor.svelte';
-  import { app, duplicateQuestion, deleteQuestion, setView, goToQuestion, saveLayout, markReviewed } from '../lib/store.svelte.js';
+  import CalculatedEditor from './editors/CalculatedEditor.svelte';
+  import { app, duplicateQuestion, deleteQuestion, setView, goToQuestion, saveLayout, markReviewed, openModal } from '../lib/store.svelte.js';
   import { TYPE_MAP, TEXT_FORMATS, PENALTIES, validateQuestion, uid } from '../lib/model.js';
   import { TYPE_ICONS } from '../lib/icons.js';
   import { HELP } from '../lib/help.js';
@@ -131,6 +132,7 @@
           <CircleCheck size={15} /><span class="review-text">Mark reviewed</span>
         </button>
       {/if}
+      <button class="btn btn-ghost btn-icon btn-sm" title="Improve with AI: fix, simplify, translate or write similar questions (Alt+I)" aria-label="Improve with AI" onclick={() => openModal('ai-question', { id: q.id })}><WandSparkles size={15} /></button>
       <button class="btn btn-ghost btn-icon btn-sm" title="Duplicate" aria-label="Duplicate" onclick={() => duplicateQuestion(q.id)}><Copy size={15} /></button>
       <button class="btn btn-ghost btn-icon btn-sm danger" title="Delete question (Alt+Delete)" aria-label="Delete question" onclick={() => deleteQuestion(q.id)}><Trash size={15} /></button>
     </div>
@@ -170,7 +172,9 @@
                 ? 'The whole question, including the gaps. Each gap is written in Cloze syntax inside curly braces — use “Insert gap” below to build them.'
                 : q.type === 'gapselect' || q.type === 'ddwtos'
                   ? 'Write [[1]], [[2]], … where each choice should go. The number refers to the choice’s position in the list below.'
-                  : 'What the student reads. You can format text, add images, links and equations.'}
+                  : q.type === 'calculated'
+                    ? 'Write wildcards such as {a} where a random number should go. Each student sees one set of values, and the answer formula below uses the same wildcards.'
+                    : 'What the student reads. You can format text, add images, links and equations.'}
             />
             <select class="select select-sm fmt" bind:value={q.questiontextformat} aria-label="Text format">
               {#each TEXT_FORMATS as f}<option value={f.value}>{f.label}</option>{/each}
@@ -185,7 +189,9 @@
                 ? 'Write the text and insert gaps like {1:SHORTANSWER:=answer}'
                 : q.type === 'gapselect' || q.type === 'ddwtos'
                   ? 'Write the text with placeholders like [[1]] and [[2]]'
-                  : 'Enter the question text'}
+                  : q.type === 'calculated'
+                    ? 'Write the text with wildcards like {a} and {b}'
+                    : 'Enter the question text'}
               label="Question text"
             />
           {:else}
@@ -240,6 +246,8 @@
         <ShortAnswerEditor bind:q />
       {:else if q.type === 'numerical'}
         <ShortAnswerEditor bind:q numerical />
+      {:else if q.type === 'calculated'}
+        <CalculatedEditor bind:q />
       {:else if q.type === 'essay'}
         <EssayEditor bind:q />
       {:else if q.type === 'matching'}

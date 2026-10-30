@@ -17,6 +17,7 @@
   import CopyToQuizDialog from './components/dialogs/CopyToQuizDialog.svelte';
   import AiPromptDialog from './components/dialogs/AiPromptDialog.svelte';
   import CheckDialog from './components/dialogs/CheckDialog.svelte';
+  import AiQuestionDialog from './components/dialogs/AiQuestionDialog.svelte';
   import { app, library, switchToTab, closeTab, initPersistence, undo, redo, openModal, notify, selectedQuestion, selectedIndex, addQuestion, deleteQuestion, newQuiz, cycleView, goToQuestion, markReviewed, nextUnreviewed, setSidebarWidth, saveLayout, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT } from './lib/store.svelte.js';
   import { QUESTION_TYPES } from './lib/model.js';
   import { looksLikeQuestions } from './lib/formats/index.js';
@@ -187,6 +188,9 @@
     } else if (e.altKey && !mod && key === 'g') {
       e.preventDefault();
       openModal('ai-prompt');
+    } else if (e.altKey && !mod && key === 'i' && q) {
+      e.preventDefault();
+      openModal('ai-question', { id: q.id });
     } else if (e.altKey && key === 'q' && app.quiz.questions.length) {
       e.preventDefault();
       openModal('quiz-preview');
@@ -304,6 +308,8 @@
   <AiPromptDialog />
 {:else if app.modal === 'check'}
   <CheckDialog />
+{:else if app.modal === 'ai-question'}
+  <AiQuestionDialog />
 {/if}
 
 {#if app.confirm}

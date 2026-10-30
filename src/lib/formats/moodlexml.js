@@ -164,6 +164,44 @@ function readQuestion(el, type, warnings) {
         unitsleft: bool(el, 'unitsleft', false),
       };
     }
+    case 'calculated':
+    case 'calculatedsimple': {
+      const unitsEl = child(el, 'units');
+      const datasets = childrenNamed(child(el, 'dataset_definitions'), 'dataset_definition').map((d) => ({
+        id: uid(),
+        name: innerText(child(child(d, 'name'), 'text')).trim(),
+        status: innerText(child(child(d, 'status'), 'text')).trim() || 'private',
+        distribution: innerText(child(child(d, 'distribution'), 'text')).trim() || 'uniform',
+        min: parseFloat(innerText(child(child(d, 'minimum'), 'text'))) || 0,
+        max: parseFloat(innerText(child(child(d, 'maximum'), 'text'))) || 0,
+        decimals: parseInt(innerText(child(child(d, 'decimals'), 'text')), 10) || 0,
+        items: childrenNamed(child(d, 'dataset_items'), 'dataset_item')
+          .map((it) => ({ n: num(it, 'number', 0), v: num(it, 'value', NaN) }))
+          .filter((it) => Number.isFinite(it.v))
+          .sort((a, b) => a.n - b.n)
+          .map((it) => it.v),
+      }));
+      return {
+        ...base,
+        type: 'calculated',
+        // Remembered so the question goes back to Moodle as the same kind.
+        variant: type,
+        answers: readAnswers(el, (a) => ({
+          tolerance: num(a, 'tolerance', 0.01),
+          tolerancetype: num(a, 'tolerancetype', 1),
+          correctanswerformat: num(a, 'correctanswerformat', 1),
+          correctanswerlength: num(a, 'correctanswerlength', 2),
+        })),
+        units: childrenNamed(unitsEl, 'unit').map((u) => ({ id: uid(), unit: val(u, 'unit_name'), multiplier: num(u, 'multiplier', 1) })),
+        unitgradingtype: num(el, 'unitgradingtype', 0),
+        unitpenalty: num(el, 'unitpenalty', 0.1),
+        showunits: num(el, 'showunits', 3),
+        unitsleft: bool(el, 'unitsleft', false),
+        synchronize: num(el, 'synchronize', 0),
+        itemcount: Math.max(0, ...datasets.map((d) => d.items.length)) || 10,
+        datasets,
+      };
+    }
     case 'essay':
       return {
         ...base,
@@ -336,8 +374,24 @@ function answerBlock(a, fraction, format = 'html', extra = []) {
   ];
 }
 
+function unitLines(q) {
+  const lines = [];
+  if (q.units?.length) {
+    lines.push('<units>');
+    for (const u of q.units) lines.push('  <unit>', `    <multiplier>${Number(u.multiplier) || 1}</multiplier>`, `    <unit_name>${esc(u.unit)}</unit_name>`, '  </unit>');
+    lines.push('</units>');
+  }
+  lines.push(
+    `<unitgradingtype>${q.unitgradingtype ?? 0}</unitgradingtype>`,
+    `<unitpenalty>${fmtNum(q.unitpenalty ?? 0.1)}</unitpenalty>`,
+    `<showunits>${q.showunits ?? 3}</showunits>`,
+    `<unitsleft>${b10(q.unitsleft)}</unitsleft>`
+  );
+  return lines;
+}
+
 function writeQuestion(q, warnings) {
-  const type = q.type === 'cloze' ? 'cloze' : q.type;
+  const type = q.type === 'calculated' ? (q.variant === 'calculatedsimple' ? 'calculatedsimple' : 'calculated') : q.type;
   const L = [`<!-- question: ${esc(q.name || defaultName(q)).replace(/--/g, '- -')} -->`, `<question type="${type}">`];
   const I = (lines) => L.push(...lines.map((l) => '  ' + l));
 
@@ -368,18 +422,45 @@ function writeQuestion(q, warnings) {
       break;
     case 'numerical':
       for (const a of q.answers) I(answerBlock(a, fmtFraction(a.fraction), 'moodle_auto_format', [`<tolerance>${Number(a.tolerance) || 0}</tolerance>`]));
-      if (q.units?.length) {
-        I(['<units>']);
-        for (const u of q.units) I(['  <unit>', `    <multiplier>${Number(u.multiplier) || 1}</multiplier>`, `    <unit_name>${esc(u.unit)}</unit_name>`, '  </unit>']);
-        I(['</units>']);
-      }
-      I([
-        `<unitgradingtype>${q.unitgradingtype ?? 0}</unitgradingtype>`,
-        `<unitpenalty>${fmtNum(q.unitpenalty ?? 0.1)}</unitpenalty>`,
-        `<showunits>${q.showunits ?? 3}</showunits>`,
-        `<unitsleft>${b10(q.unitsleft)}</unitsleft>`,
-      ]);
+      I(unitLines(q));
       break;
+    case 'calculated': {
+      I([`<synchronize>${q.synchronize || 0}</synchronize>`, '<single>0</single>', '<answernumbering>abc</answernumbering>', '<shuffleanswers>0</shuffleanswers>']);
+      for (const a of q.answers) {
+        I(
+          answerBlock(a, fmtFraction(a.fraction), 'moodle_auto_format', [
+            `<tolerance>${Number(a.tolerance) || 0}</tolerance>`,
+            `<tolerancetype>${a.tolerancetype || 1}</tolerancetype>`,
+            `<correctanswerformat>${a.correctanswerformat || 1}</correctanswerformat>`,
+            `<correctanswerlength>${a.correctanswerlength ?? 2}</correctanswerlength>`,
+          ])
+        );
+      }
+      I(unitLines(q));
+      // Moodle needs the same number of values for every wildcard.
+      const count = Math.min(...(q.datasets ?? []).map((d) => d.items?.length ?? 0));
+      I(['<dataset_definitions>']);
+      for (const d of q.datasets ?? []) {
+        I([
+          '  <dataset_definition>',
+          `    <status><text>${esc(d.status || 'private')}</text></status>`,
+          `    <name><text>${esc(d.name)}</text></name>`,
+          '    <type>calculated</type>',
+          `    <distribution><text>${esc(d.distribution || 'uniform')}</text></distribution>`,
+          `    <minimum><text>${Number(d.min) || 0}</text></minimum>`,
+          `    <maximum><text>${Number(d.max) || 0}</text></maximum>`,
+          `    <decimals><text>${Number(d.decimals) || 0}</text></decimals>`,
+          `    <itemcount>${count}</itemcount>`,
+          '    <dataset_items>',
+          ...d.items.slice(0, count).flatMap((v, i) => ['      <dataset_item>', `        <number>${i + 1}</number>`, `        <value>${v}</value>`, '      </dataset_item>']),
+          '    </dataset_items>',
+          `    <number_of_items>${count}</number_of_items>`,
+          '  </dataset_definition>',
+        ]);
+      }
+      I(['</dataset_definitions>']);
+      break;
+    }
     case 'essay':
       I([
         `<responseformat>${esc(q.responseformat)}</responseformat>`,

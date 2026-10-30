@@ -48,6 +48,16 @@ export const XML_EXAMPLES = {
   <defaultgrade>1</defaultgrade>
   <answer fraction="100" format="moodle_auto_format"><text>9</text><tolerance>0.01</tolerance></answer>
 </question>`,
+  calculated: `<question type="calculated">
+  <name><text>Average speed</text></name>
+  <questiontext format="html"><text><![CDATA[<p>A car travels {d} km in {t} hours. What is its average speed in km/h?</p>]]></text></questiontext>
+  <defaultgrade>1</defaultgrade>
+  <answer fraction="100"><text>{d} / {t}</text><tolerance>0.01</tolerance><tolerancetype>1</tolerancetype><correctanswerformat>1</correctanswerformat><correctanswerlength>1</correctanswerlength></answer>
+  <dataset_definitions>
+    <dataset_definition><status><text>private</text></status><name><text>d</text></name><type>calculated</type><distribution><text>uniform</text></distribution><minimum><text>50</text></minimum><maximum><text>300</text></maximum><decimals><text>0</text></decimals></dataset_definition>
+    <dataset_definition><status><text>private</text></status><name><text>t</text></name><type>calculated</type><distribution><text>uniform</text></distribution><minimum><text>1</text></minimum><maximum><text>5</text></maximum><decimals><text>1</text></decimals></dataset_definition>
+  </dataset_definitions>
+</question>`,
   essay: `<question type="essay">
   <name><text>Causes of climate change</text></name>
   <questiontext format="html"><text><![CDATA[<p>Explain two human activities that contribute to climate change.</p>]]></text></questiontext>
@@ -117,6 +127,11 @@ export const PROMPT_TYPES = [
   { type: 'truefalse', label: 'True / False', rule: 'type="truefalse"; two answers whose text is exactly "true" and "false", the correct one with fraction="100".' },
   { type: 'shortanswer', label: 'Short answer', rule: 'type="shortanswer"; a one-word or short-phrase answer, listing accepted variants as extra answers with fraction="100".' },
   { type: 'numerical', label: 'Numerical', rule: 'type="numerical"; the answer is a plain number (dot as decimal separator) with a <tolerance>.' },
+  {
+    type: 'calculated',
+    label: 'Calculated (random numbers)',
+    rule: 'type="calculated"; write wildcards such as {a} and {b} in the question text where numbers go, and the answer as a formula using them (e.g. {a} * {b}, sqrt({a}), pow({a}, 2), pi()) with a relative <tolerance>; give every wildcard a <dataset_definition> with a realistic <minimum>, <maximum> and <decimals> so every combination gives a sensible question; leave out <dataset_items>, Moodler generates the values.',
+  },
   { type: 'essay', label: 'Essay', rule: 'type="essay"; put a marking guide for the teacher in <graderinfo>.' },
   { type: 'matching', label: 'Matching', rule: 'type="matching"; at least 3 <subquestion> items, each with its matching <answer>.' },
   { type: 'cloze', label: 'Embedded answers (Cloze)', rule: 'type="cloze"; gaps written inside the question text as {1:MULTICHOICE:=right~wrong~wrong}, {1:SHORTANSWER:=answer} or {1:NUMERICAL:=number:tolerance}.' },

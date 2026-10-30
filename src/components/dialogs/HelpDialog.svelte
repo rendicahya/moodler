@@ -22,6 +22,7 @@
     [['Alt', 'Home / End'], 'First / last question'],
     [['Alt', 'Q'], 'Preview the whole quiz'],
     [['Alt', 'G'], 'Generate questions with AI (write a prompt)'],
+    [['Alt', 'I'], 'Improve the open question with AI'],
     [['Alt', 'R'], 'Mark the question reviewed and open the next one to review'],
     [['Alt', 'C'], 'Check questions: review progress, answer key, repeats'],
     [[mod, 'V'], 'Import pasted questions (outside text fields)'],

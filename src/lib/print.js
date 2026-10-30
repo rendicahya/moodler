@@ -4,6 +4,7 @@
 import { escapeHtml, round, stripHtml } from './model.js';
 import { parseCloze, CLOZE_RE, isChoiceCloze, canonicalClozeType } from './formats/cloze.js';
 import { sanitizeHtml } from './sanitize.js';
+import { substitute, itemValues, tryEvaluate, formatAnswer, toleranceText } from './calc.js';
 
 const html = (text, format = 'html') => (format === 'html' ? sanitizeHtml(text || '') : escapeHtml(text || '').replace(/\n/g, '<br>'));
 const plain = (text) => escapeHtml(stripHtml(text));
@@ -96,6 +97,11 @@ function body(q, show) {
       const unit = q.type === 'numerical' && q.units?.length && q.showunits !== 3 ? ` <span class="muted">Unit: ${q.units.map((u) => escapeHtml(u.unit)).join(' / ')}</span>` : '';
       return `<p class="answer-line">Answer: ${blank(show && accepted.length, text, 16)}${unit}</p>`;
     }
+    case 'calculated': {
+      const text = calculatedKey(q);
+      const unit = q.units?.length && q.showunits !== 3 ? ` <span class="muted">Unit: ${q.units.map((u) => escapeHtml(u.unit)).join(' / ')}</span>` : '';
+      return `<p class="answer-line">Answer: ${blank(show && text, text, 16)}${unit}</p>`;
+    }
     case 'essay': {
       if (show && q.graderinfo && stripHtml(q.graderinfo)) return `<div class="key-note"><strong>Information for graders</strong>${html(q.graderinfo)}</div>`;
       if (q.responseformat === 'noinline') return '';
@@ -134,6 +140,19 @@ function body(q, show) {
   }
 }
 
+// The paper version uses the first value set.
+function calculatedKey(q) {
+  const values = itemValues(q, 0);
+  return q.answers
+    .filter((a) => a.fraction > 0 && String(a.text).trim())
+    .map((a) => {
+      const r = tryEvaluate(a.text, values);
+      if (r.error) return '?';
+      return `${formatAnswer(r.value, a.correctanswerformat, a.correctanswerlength)} ${escapeHtml(toleranceText(a))}${a.fraction < 100 ? ` (${round(a.fraction, 2)}%)` : ''}`;
+    })
+    .join('; ');
+}
+
 /** One-line summary of the correct answer, for the answer key. */
 function keyText(q) {
   switch (q.type) {
@@ -152,6 +171,8 @@ function keyText(q) {
         .filter((a) => a.fraction > 0)
         .map((a) => `${escapeHtml(a.text)}${a.tolerance ? ` ± ${escapeHtml(a.tolerance)}` : ''}${a.fraction < 100 ? ` (${round(a.fraction, 2)}%)` : ''}`)
         .join('; ');
+    case 'calculated':
+      return calculatedKey(q);
     case 'essay':
       return stripHtml(q.graderinfo) ? plain(q.graderinfo) : '<span class="muted">Graded manually</span>';
     case 'matching': {
@@ -195,7 +216,7 @@ export function buildPrintHtml(quiz, questions, { answers = 'none', marks = true
 
   const items = numbered
     .map(({ q, number }) => {
-      const text = q.type === 'cloze' ? cloze(q, show) : q.type === 'gapselect' || q.type === 'ddwtos' ? gaps(q, show) : html(q.questiontext, q.questiontextformat);
+      const text = q.type === 'cloze' ? cloze(q, show) : q.type === 'gapselect' || q.type === 'ddwtos' ? gaps(q, show) : q.type === 'calculated' ? html(substitute(q.questiontext, q, 0), q.questiontextformat) : html(q.questiontext, q.questiontextformat);
       const fb = show && feedback && stripHtml(q.generalfeedback) ? `<div class="feedback">${html(q.generalfeedback)}</div>` : '';
       if (!number) return `<section class="q info">${text}</section>`;
       return `<section class="q"><div class="qhead"><span class="qno">${number}.</span>${marks ? `<span class="qmark">${markText(markOf(q))}</span>` : ''}</div><div class="qbody"><div class="qtext">${text}</div>${body(q, show)}${fb}</div></section>`;

@@ -10,6 +10,7 @@ import {
   Move,
   ListOrdered,
   Info,
+  Calculator,
 } from '@lucide/svelte';
 
 export const TYPE_ICONS = {
@@ -17,6 +18,7 @@ export const TYPE_ICONS = {
   truefalse: ToggleLeft,
   shortanswer: TextCursorInput,
   numerical: Hash,
+  calculated: Calculator,
   essay: FileText,
   matching: GitCompareArrows,
   cloze: Braces,

@@ -1,8 +1,9 @@
 <script>
-  import { Flag, Eye, EyeOff } from '@lucide/svelte';
+  import { Flag, Eye, EyeOff, Dices } from '@lucide/svelte';
   import { TYPE_MAP, escapeHtml, round, stripHtml } from '../lib/model.js';
   import { parseCloze, CLOZE_RE, isChoiceCloze, canonicalClozeType } from '../lib/formats/cloze.js';
   import { sanitizeHtml } from '../lib/sanitize.js';
+  import { substitute, itemValues, tryEvaluate, formatAnswer, toleranceText } from '../lib/calc.js';
   import { app } from '../lib/store.svelte.js';
 
   // `showAnswers` lets a parent control the answer reveal (the whole-quiz preview); without it the pane has its own toggle,
@@ -11,6 +12,10 @@
   const reveal = $derived(showAnswers ?? app.revealAnswers);
 
   const toHtml = (text, format = 'html') => (format === 'html' ? sanitizeHtml(text || '') : escapeHtml(text || '').replace(/\n/g, '<br>'));
+  // The value set shown for a calculated question.
+  let valueSet = $state(0);
+  const set = $derived(Math.min(valueSet, Math.max(0, (q.itemcount || 1) - 1)));
+
   const mark = $derived(q.type === 'cloze' ? parseCloze(q.questiontext).reduce((s, g) => s + g.weight, 0) : Number(q.defaultgrade));
 
   function numberLabel(i, style) {
@@ -112,6 +117,8 @@
           {@html clozeHtml(q.questiontext, reveal)}
         {:else if q.type === 'gapselect' || q.type === 'ddwtos'}
           {@html gapHtml(q.questiontext, reveal)}
+        {:else if q.type === 'calculated'}
+          {@html toHtml(substitute(q.questiontext, q, set), q.questiontextformat)}
         {:else}
           {@html toHtml(q.questiontext, q.questiontextformat)}
         {/if}
@@ -156,8 +163,31 @@
               .join(', ')}
           </p>
         {/if}
-      {:else if q.type === 'essay'}
-        {#if q.responseformat !== 'noinline'}
+      {:else if q.type === 'calculated'}
+        {@const values = itemValues(q, set)}
+        {@const right = q.answers.filter((a) => a.fraction > 0 && String(a.text).trim()).map((a) => ({ a, r: tryEvaluate(a.text, values) }))}
+        {@const best = right.find((x) => Number(x.a.fraction) === 100 && !x.r.error)}
+        <label class="ans-line">
+          Answer:
+          <input class="p-input" class:ok={reveal} value={reveal && best ? formatAnswer(best.r.value, best.a.correctanswerformat, best.a.correctanswerlength) : ''} size="24" />
+          {#if q.units?.length && q.showunits !== 3}
+            <select class="p-select">{#each q.units as u}<option>{u.unit}</option>{/each}</select>
+          {/if}
+        </label>
+        {#if reveal}
+          <p class="right">
+            Accepted: {right
+              .map(({ a, r }) => (r.error ? `Error in ${a.text}` : `${formatAnswer(r.value, a.correctanswerformat, a.correctanswerlength)} ${toleranceText(a)}${a.fraction < 100 ? ` (${round(a.fraction, 2)}%)` : ''}`))
+              .join(', ')}
+          </p>
+        {/if}
+        {#if (q.itemcount || 0) > 1}
+          <div class="sets">
+            <span class="small">Value set {set + 1} of {q.itemcount}</span>
+            <button class="btn btn-sm" title="Show the question with other values" onclick={() => (valueSet = (set + 1) % q.itemcount)}><Dices size={14} /> Other values</button>
+          </div>
+        {/if}
+      {:else if q.type === 'essay'}        {#if q.responseformat !== 'noinline'}
           <div class="essay rendered" contenteditable="true" style:min-height="{q.responsefieldlines * 1.5}em" class:mono={q.responseformat === 'monospaced'}>
             {@html toHtml(q.responsetemplate)}
           </div>
@@ -313,6 +343,11 @@
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+  .sets {
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
   .right {
     font-size: 13px;

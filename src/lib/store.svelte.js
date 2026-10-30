@@ -473,6 +473,35 @@ export function moveQuestion(from, to) {
   moveItem(app.quiz.questions, from, to);
 }
 
+/**
+ * Puts questions read from an AI reply into the quiz: in place of question `id` (keeping its category, ID number
+ * and tags when the reply has none), or after it. Returns how many were added.
+ */
+export function applyAiQuestions(id, questions, replace = false) {
+  const i = app.quiz.questions.findIndex((q) => q.id === id);
+  if (i === -1 || !questions.length) return 0;
+  const old = app.quiz.questions[i];
+  const fresh = questions.map((q) => normalizeQuestion(q, app.quiz.defaults));
+  if (replace) {
+    const [first] = fresh;
+    first.category ||= old.category;
+    first.idnumber ||= old.idnumber;
+    if (!first.tags.length) first.tags = [...old.tags];
+    if (old.unreviewed) first.unreviewed = true;
+    app.quiz.questions.splice(i, 1, ...fresh);
+  } else {
+    for (const q of fresh) {
+      q.category ||= old.category;
+      q.unreviewed = true;
+    }
+    app.quiz.questions.splice(i + 1, 0, ...fresh);
+  }
+  app.selectedId = fresh[0].id;
+  app.tab = 'edit';
+  pruneChecked();
+  return fresh.length;
+}
+
 // ---------------------------------------------------------------- review status
 
 // Imported questions (typically written by an AI) are marked `unreviewed` until the teacher has checked them.
