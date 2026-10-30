@@ -368,9 +368,9 @@
   .add {
     width: 28px;
     height: 28px;
-    margin: 0 0 1px 2px;
+    /* Centred on the tabs' labels, which sit along the bottom of the bar. */
+    margin: 0 0 4px 2px;
     border-radius: 6px;
-    align-self: center;
   }
   .menu {
     position: fixed;
