@@ -10,7 +10,9 @@ const EXT = Object.fromEntries(Object.entries(MIME).map(([e, m]) => [m, e]));
 
 export function importMoodleXml(src) {
   const warnings = [];
-  const doc = parseXml(src.replace(/^﻿/, ''));
+  // AI chatbots often wrap the XML in a ```xml block or add a sentence around it: keep only the quiz itself.
+  const quizOnly = src.match(/(?:<\?xml[^>]*\?>\s*)?<quiz[\s>][\s\S]*<\/quiz>/);
+  const doc = parseXml((quizOnly ? quizOnly[0] : src).replace(/^﻿/, ''));
   const quizEl = child(doc, 'quiz');
   if (!quizEl) throw new Error('Not a Moodle XML file: missing <quiz> root element.');
 

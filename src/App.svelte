@@ -1,5 +1,5 @@
 <script>
-  import { Plus, Upload, ChevronLeft, ChevronRight } from '@lucide/svelte';
+  import { Plus, Upload, Sparkles, ChevronLeft, ChevronRight } from '@lucide/svelte';
   import Header from './components/Header.svelte';
   import Sidebar from './components/Sidebar.svelte';
   import QuestionEditor from './components/QuestionEditor.svelte';
@@ -15,6 +15,7 @@
   import PrintDialog from './components/dialogs/PrintDialog.svelte';
   import FindReplaceDialog from './components/dialogs/FindReplaceDialog.svelte';
   import CopyToQuizDialog from './components/dialogs/CopyToQuizDialog.svelte';
+  import AiPromptDialog from './components/dialogs/AiPromptDialog.svelte';
   import { app, library, switchToTab, closeTab, initPersistence, undo, redo, openModal, notify, selectedQuestion, selectedIndex, addQuestion, deleteQuestion, newQuiz, cycleView, goToQuestion, setSidebarWidth, saveLayout, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT } from './lib/store.svelte.js';
   import { QUESTION_TYPES } from './lib/model.js';
   import { looksLikeQuestions } from './lib/formats/index.js';
@@ -182,6 +183,9 @@
       // Step through questions from anywhere, including while typing.
       e.preventDefault();
       goToQuestion({ PageUp: -1, PageDown: 1, Home: -Infinity, End: Infinity }[e.key]);
+    } else if (e.altKey && !mod && key === 'g') {
+      e.preventDefault();
+      openModal('ai-prompt');
     } else if (e.altKey && key === 'q' && app.quiz.questions.length) {
       e.preventDefault();
       openModal('quiz-preview');
@@ -245,6 +249,9 @@
           <div class="cta">
             <button class="btn btn-primary" onclick={() => openModal('add')}><Plus size={16} /> Add a question</button>
             <button class="btn" onclick={() => openModal('import')}><Upload size={16} /> Import questions</button>
+            <button class="btn" title="Write a prompt that makes an AI chatbot produce questions you can import (Alt+G)" onclick={() => openModal('ai-prompt')}>
+              <Sparkles size={16} /> Generate with AI
+            </button>
           </div>
         </div>
         <div class="quick">
@@ -284,6 +291,8 @@
   <FindReplaceDialog />
 {:else if app.modal === 'copy-to'}
   <CopyToQuizDialog />
+{:else if app.modal === 'ai-prompt'}
+  <AiPromptDialog />
 {/if}
 
 {#if app.confirm}

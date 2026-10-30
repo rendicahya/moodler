@@ -37,6 +37,9 @@
   if (app.modalProps.text) {
     source = 'paste';
     text = app.modalProps.text;
+  } else if (app.modalProps.paste) {
+    // Opened from the AI prompt dialog, to paste the chatbot's reply.
+    source = 'paste';
   } else if (app.modalProps.file) {
     readFile(app.modalProps.file);
   }
@@ -64,7 +67,7 @@
 
 <Modal
   title="Import questions"
-  subtitle="Load questions from a file or paste them as text. Tip: you can also paste questions anywhere in Moodler to import them."
+  subtitle="Load questions from a file or paste them as text, such as an AI chatbot's Moodle XML reply. Tip: you can also paste questions anywhere in Moodler to import them."
   width="760px"
   onclose={closeModal}
 >
@@ -112,6 +115,7 @@
       rows="12"
       bind:value={text}
       oninput={() => (filename = '')}
+      data-autofocus={app.modalProps.paste || undefined}
       placeholder={'::Capital:: What is the capital of France? {=Paris ~London ~Berlin}\n\nThe sky is blue. {T}'}
       spellcheck="false"
     ></textarea>

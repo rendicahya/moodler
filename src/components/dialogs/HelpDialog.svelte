@@ -21,6 +21,7 @@
     [['Alt', 'Page Up / Down'], 'Previous / next question (works anywhere)'],
     [['Alt', 'Home / End'], 'First / last question'],
     [['Alt', 'Q'], 'Preview the whole quiz'],
+    [['Alt', 'G'], 'Generate questions with AI (write a prompt)'],
     [[mod, 'V'], 'Import pasted questions (outside text fields)'],
     [['↑', '↓'], 'Select previous / next question (in the list)'],
     [['Alt', '↑ / ↓'], 'Move the selected question (in the list)'],

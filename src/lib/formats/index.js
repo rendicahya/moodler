@@ -82,6 +82,8 @@ export function detectFormat(text, filename = '') {
   const t = text.replace(/^﻿/, '').trimStart();
   const ext = filename.split('.').pop().toLowerCase();
   if (ext === 'xml' || t.startsWith('<?xml') || /^<quiz[\s>]/.test(t)) return 'xml';
+  // Moodle XML pasted from an AI chat, inside a code block or after a sentence.
+  if (/<quiz[\s>][\s\S]*<\/quiz>/.test(t)) return 'xml';
   if (ext === 'json' || t.startsWith('{"') || /^\{\s*"/.test(t)) return 'json';
   if (/^\s*ANSWER\s*:\s*[A-Z]\s*$/im.test(t) && /^\s*[A-Z][.)]\s+/m.test(t)) return 'aiken';
   if (/\{\d*:(SHORTANSWER|SA|MW|NUMERICAL|NM|MULTICHOICE|MC|MULTIRESPONSE|MR)[A-Z_]*:/.test(t) && !/^::/m.test(t)) return 'cloze';
