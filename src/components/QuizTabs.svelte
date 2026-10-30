@@ -202,14 +202,16 @@
 {/if}
 
 <style>
+  /* The tabs sit in the header between the logo and the buttons, along its bottom edge. */
   .tabbar {
-    flex: none;
+    flex: 1;
+    min-width: 0;
     display: flex;
     align-items: flex-end;
-    height: 36px;
-    padding: 0 8px 0 6px;
-    background: var(--surface-2);
-    border-bottom: 1px solid var(--border);
+    align-self: stretch;
+    /* Reach over the header's bottom border, so the open tab can cover it and join the page below. */
+    margin-bottom: -1px;
+    padding: 0 4px;
   }
   .strip {
     flex: 1;
@@ -232,7 +234,8 @@
     align-items: center;
     min-width: 96px;
     max-width: 240px;
-    height: 30px;
+    height: 34px;
+    margin-bottom: 1px;
     border: 1px solid transparent;
     border-bottom: none;
     border-radius: 7px 7px 0 0;
@@ -245,9 +248,9 @@
     background: var(--surface);
     border-color: var(--border);
     color: var(--text);
-    /* Cover the bar's bottom border so the tab joins the page below. */
-    margin-bottom: -1px;
-    height: 31px;
+    /* Cover the header's bottom border so the tab joins the page below. */
+    margin-bottom: 0;
+    height: 35px;
   }
   .tab.active::before {
     content: '';

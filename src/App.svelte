@@ -15,7 +15,6 @@
   import PrintDialog from './components/dialogs/PrintDialog.svelte';
   import FindReplaceDialog from './components/dialogs/FindReplaceDialog.svelte';
   import CopyToQuizDialog from './components/dialogs/CopyToQuizDialog.svelte';
-  import QuizTabs from './components/QuizTabs.svelte';
   import { app, library, switchToTab, closeTab, initPersistence, undo, redo, openModal, notify, selectedQuestion, selectedIndex, addQuestion, deleteQuestion, newQuiz, cycleView, goToQuestion, setSidebarWidth, saveLayout, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT } from './lib/store.svelte.js';
   import { QUESTION_TYPES } from './lib/model.js';
   import { looksLikeQuestions } from './lib/formats/index.js';
@@ -204,7 +203,6 @@
 
 <div class="app">
   <Header />
-  <QuizTabs />
   <div class="main">
     {#if app.sidebarOpen}
       {#if narrow}

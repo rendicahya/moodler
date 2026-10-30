@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { Sun, Moon, Maximize, Minimize, Undo2, Redo2, Upload, Download, FilePlus, Settings, CircleQuestionMark, Presentation, Printer } from '@lucide/svelte';
+  import QuizTabs from './QuizTabs.svelte';
   import { app, history, backup, REMIND_AFTER, undo, redo, toggleTheme, openModal, newQuiz, downloadBackup } from '../lib/store.svelte.js';
 
   let fullscreen = $state(false);
@@ -51,6 +52,8 @@
       <span class="app-name">Moodler</span>
     </div>
   </div>
+
+  <QuizTabs />
 
   <div class="right">
     {#if actionable}
@@ -109,10 +112,10 @@
   }
   .left,
   .right {
+    flex: none;
     display: flex;
     align-items: center;
     gap: 6px;
-    min-width: 0;
   }
   .brand {
     display: flex;
@@ -174,6 +177,12 @@
   }
   @media (max-width: 1240px) {
     .status:not(.due):not(.error) .status-text {
+      display: none;
+    }
+  }
+  /* Leave the room to the quiz tabs. */
+  @media (max-width: 1100px) {
+    .app-name {
       display: none;
     }
   }
