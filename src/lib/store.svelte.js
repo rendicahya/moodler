@@ -527,6 +527,14 @@ export function markReviewed(id) {
   if (!nextUnreviewed()) notify('All questions are reviewed.', 'success', 3000);
 }
 
+/** Puts a reviewed question back on the list of questions to review. */
+export function markUnreviewed(id) {
+  const q = app.quiz.questions.find((x) => x.id === id);
+  if (!q || q.unreviewed) return;
+  q.unreviewed = true;
+  notify('Marked as not reviewed.', 'info', 2500);
+}
+
 /** Sets the review status of several questions (all of them when `ids` is omitted). */
 export function setReviewed(on, ids = null) {
   for (const q of app.quiz.questions) {

@@ -258,6 +258,8 @@
         <button class="btn btn-ghost btn-icon btn-sm" title="Copy or move to another quiz" aria-label="Copy or move to another quiz" onclick={() => openModal('copy-to')}><FolderInput size={15} /></button>
         {#if checkedToReview}
           <button class="btn btn-ghost btn-icon btn-sm" title="Mark as reviewed" aria-label="Mark selected as reviewed" onclick={() => setReviewed(true, [...app.checked])}><CircleCheck size={15} /></button>
+        {:else}
+          <button class="btn btn-ghost btn-icon btn-sm" title="Mark as not reviewed" aria-label="Mark selected as not reviewed" onclick={() => setReviewed(false, [...app.checked])}><CircleDot size={15} /></button>
         {/if}
         <span class="spacer"></span>
         <button class="btn btn-ghost btn-icon btn-sm" title="Move to top" aria-label="Move to top" onclick={() => moveChecked('top')}><ArrowUpToLine size={15} /></button>

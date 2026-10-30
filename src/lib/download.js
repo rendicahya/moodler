@@ -1,6 +1,10 @@
 /** Saves text as a file through the browser's download mechanism. */
 export function downloadText(text, filename, mime = 'text/plain') {
-  const blob = new Blob([text], { type: `${mime};charset=utf-8` });
+  downloadBlob(new Blob([text], { type: `${mime};charset=utf-8` }), filename);
+}
+
+/** Saves a blob as a file through the browser's download mechanism. */
+export function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

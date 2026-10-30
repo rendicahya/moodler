@@ -203,11 +203,19 @@ function keyText(q) {
   }
 }
 
+// Paper sizes in millimetres. F4 (folio) is common in Indonesia.
+export const PAPERS = {
+  a4: { label: 'A4', width: 210, height: 297 },
+  f4: { label: 'F4', width: 215, height: 330 },
+  letter: { label: 'Letter', width: 215.9, height: 279.4 },
+};
+export const PAGE_MARGIN = { x: 15, y: 16 };
+
 /**
  * Builds a standalone HTML document for printing.
- * options: { answers: 'none' | 'inline' | 'key', marks: boolean, studentFields: boolean, feedback: boolean }
+ * options: { answers: 'none' | 'inline' | 'key', marks: boolean, studentFields: boolean, feedback: boolean, paper: keyof PAPERS }
  */
-export function buildPrintHtml(quiz, questions, { answers = 'none', marks = true, studentFields = true, feedback = false } = {}) {
+export function buildPrintHtml(quiz, questions, { answers = 'none', marks = true, studentFields = true, feedback = false, paper = 'a4' } = {}) {
   const show = answers === 'inline';
   let n = 0;
   const numbered = questions.map((q) => ({ q, number: q.type === 'description' ? 0 : ++n }));
@@ -236,12 +244,13 @@ export function buildPrintHtml(quiz, questions, { answers = 'none', marks = true
   const fields = studentFields ? `<div class="student"><span class="name">Name: <span class="blank"></span></span><span>ID: <span class="blank"></span></span><span>Date: <span class="blank"></span></span></div>` : '';
   const meta = `${n} question${n === 1 ? '' : 's'}${marks ? ` · ${markText(total)}` : ''}${answers === 'inline' ? ' · with answers' : ''}`;
 
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>${CSS}</style></head><body>
+  const size = PAPERS[paper] ?? PAPERS.a4;
+  const page = `@page { size: ${size.width}mm ${size.height}mm; margin: ${PAGE_MARGIN.y}mm ${PAGE_MARGIN.x}mm; }`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>${page}${CSS}</style></head><body>
 <header class="top"><h1>${title}</h1><p class="meta">${meta}</p>${fields}</header>${intro}<main>${items}</main>${key}</body></html>`;
 }
 
 const CSS = `
-@page { margin: 16mm 15mm; }
 * { box-sizing: border-box; }
 body { margin: 0; font: 11pt/1.5 "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif; color: #000; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 img { max-width: 100%; height: auto; }
@@ -299,8 +308,8 @@ h2 { font-size: 13pt; margin: 0 0 .6em; }
 .answer-key ol { margin: 0; padding-left: 22pt; }
 .answer-key li { padding: 2pt 0; break-inside: avoid; }
 @media screen {
-  body { max-width: 760px; margin: 0 auto; padding: 28px 32px; }
-  .answer-key { margin-top: 28px; padding-top: 16px; border-top: 1.5pt dashed #999; }
+  html:not(.pdf) body { max-width: 760px; margin: 0 auto; padding: 28px 32px; }
+  html:not(.pdf) .answer-key { margin-top: 28px; padding-top: 16px; border-top: 1.5pt dashed #999; }
 }
 `;
 

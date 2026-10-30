@@ -1,5 +1,5 @@
 <script>
-  import { Download, Copy, TriangleAlert, Check, CircleCheck, ArrowRight, ListChecks } from '@lucide/svelte';
+  import { Download, Copy, TriangleAlert, Check, CircleCheck, ArrowRight, ListChecks, FileDown } from '@lucide/svelte';
   import { answerKeyReport, findDuplicates } from '../../lib/quality.js';
   import Modal from '../ui/Modal.svelte';
   import Switch from '../ui/Switch.svelte';
@@ -220,6 +220,7 @@
   </div>
 
   {#snippet footer()}
+    <button class="btn btn-ghost pdf-link" title="A paper version to print or download as PDF" onclick={() => openModal('print')}><FileDown size={16} /> PDF / print…</button>
     <button class="btn" onclick={copy} disabled={!questions.length || !output.text}>
       {#if copied}<Check size={16} /> Copied{:else}<Copy size={16} /> Copy{/if}
     </button>
@@ -443,6 +444,9 @@
     font-size: 12.5px;
     font-weight: 600;
     color: var(--text-2);
+  }
+  .pdf-link {
+    margin-right: auto;
   }
   textarea {
     white-space: pre;

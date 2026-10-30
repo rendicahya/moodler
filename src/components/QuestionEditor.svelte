@@ -1,6 +1,6 @@
 <script>
   import { tick } from 'svelte';
-  import { ChevronLeft, ChevronRight, Copy, Trash, Pencil, Eye, Columns2, TriangleAlert, Plus, X, CircleCheck, WandSparkles } from '@lucide/svelte';
+  import { ChevronLeft, ChevronRight, Copy, Trash, Pencil, Eye, Columns2, TriangleAlert, Plus, X, CircleCheck, CircleDot, WandSparkles } from '@lucide/svelte';
   import Section from './ui/Section.svelte';
   import Switch from './ui/Switch.svelte';
   import Segmented from './ui/Segmented.svelte';
@@ -17,7 +17,7 @@
   import GapEditor from './editors/GapEditor.svelte';
   import OrderingEditor from './editors/OrderingEditor.svelte';
   import CalculatedEditor from './editors/CalculatedEditor.svelte';
-  import { app, duplicateQuestion, deleteQuestion, setView, goToQuestion, saveLayout, markReviewed, openModal } from '../lib/store.svelte.js';
+  import { app, duplicateQuestion, deleteQuestion, setView, goToQuestion, saveLayout, markReviewed, markUnreviewed, openModal } from '../lib/store.svelte.js';
   import { TYPE_MAP, TEXT_FORMATS, PENALTIES, validateQuestion, uid } from '../lib/model.js';
   import { TYPE_ICONS } from '../lib/icons.js';
   import { HELP } from '../lib/help.js';
@@ -131,6 +131,8 @@
         <button class="btn btn-sm review" title="Imported and not checked yet. Mark it as reviewed and open the next question to review (Alt+R)" onclick={() => markReviewed(q.id)}>
           <CircleCheck size={15} /><span class="review-text">Mark reviewed</span>
         </button>
+      {:else}
+        <button class="btn btn-ghost btn-icon btn-sm" title="Mark as not reviewed, to check it again later (Alt+Shift+R)" aria-label="Mark as not reviewed" onclick={() => markUnreviewed(q.id)}><CircleDot size={15} /></button>
       {/if}
       <button class="btn btn-ghost btn-icon btn-sm" title="Improve with AI: fix, simplify, translate or write similar questions (Alt+I)" aria-label="Improve with AI" onclick={() => openModal('ai-question', { id: q.id })}><WandSparkles size={15} /></button>
       <button class="btn btn-ghost btn-icon btn-sm" title="Duplicate" aria-label="Duplicate" onclick={() => duplicateQuestion(q.id)}><Copy size={15} /></button>

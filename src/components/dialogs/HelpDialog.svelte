@@ -24,6 +24,7 @@
     [['Alt', 'G'], 'Generate questions with AI (write a prompt)'],
     [['Alt', 'I'], 'Improve the open question with AI'],
     [['Alt', 'R'], 'Mark the question reviewed and open the next one to review'],
+    [['Alt', 'Shift', 'R'], 'Mark the question as not reviewed'],
     [['Alt', 'C'], 'Check questions: review progress, answer key, repeats'],
     [[mod, 'V'], 'Import pasted questions (outside text fields)'],
     [['↑', '↓'], 'Select previous / next question (in the list)'],

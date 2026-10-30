@@ -18,7 +18,7 @@
   import AiPromptDialog from './components/dialogs/AiPromptDialog.svelte';
   import CheckDialog from './components/dialogs/CheckDialog.svelte';
   import AiQuestionDialog from './components/dialogs/AiQuestionDialog.svelte';
-  import { app, library, switchToTab, closeTab, initPersistence, undo, redo, openModal, notify, selectedQuestion, selectedIndex, addQuestion, deleteQuestion, newQuiz, cycleView, goToQuestion, markReviewed, nextUnreviewed, setSidebarWidth, saveLayout, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT } from './lib/store.svelte.js';
+  import { app, library, switchToTab, closeTab, initPersistence, undo, redo, openModal, notify, selectedQuestion, selectedIndex, addQuestion, deleteQuestion, newQuiz, cycleView, goToQuestion, markReviewed, markUnreviewed, nextUnreviewed, setSidebarWidth, saveLayout, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT } from './lib/store.svelte.js';
   import { QUESTION_TYPES } from './lib/model.js';
   import { looksLikeQuestions } from './lib/formats/index.js';
   import { TYPE_ICONS } from './lib/icons.js';
@@ -197,6 +197,9 @@
     } else if (e.altKey && !mod && key === 'c' && app.quiz.questions.length) {
       e.preventDefault();
       openModal('check');
+    } else if (e.altKey && e.shiftKey && !mod && key === 'r' && q) {
+      e.preventDefault();
+      markUnreviewed(q.id);
     } else if (e.altKey && !mod && key === 'r' && q) {
       // Mark the open question as reviewed and move on, or jump to the next one still to review.
       e.preventDefault();
