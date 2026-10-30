@@ -4,7 +4,7 @@
 </script>
 
 <script>
-  import { Plus, Search, GripVertical, Copy, Trash, TriangleAlert, X, Upload, EyeOff, SquarePen, ArrowUpToLine, ArrowDownToLine, Replace, FolderInput } from '@lucide/svelte';
+  import { Plus, Search, GripVertical, Copy, Trash, TriangleAlert, X, Upload, EyeOff, SquarePen, ArrowUpToLine, ArrowDownToLine, Replace, FolderInput, CircleDot, CircleCheck } from '@lucide/svelte';
   import {
     app,
     select,
@@ -22,6 +22,8 @@
     startTransfer,
     endTransfer,
     transferQuestions,
+    nextUnreviewed,
+    setReviewed,
   } from '../lib/store.svelte.js';
   import { questionTitle, validateQuestion, TYPE_MAP, QUESTION_TYPES, stripHtml } from '../lib/model.js';
   import { TYPE_ICONS } from '../lib/icons.js';
@@ -107,6 +109,8 @@
       })
   );
   const issueCount = $derived(rows.filter((r) => r.issues.length).length);
+  const reviewCount = $derived(app.quiz.questions.filter((q) => q.unreviewed).length);
+  const checkedToReview = $derived(app.quiz.questions.some((q) => q.unreviewed && app.checked.includes(q.id)));
   const typeCounts = $derived(
     QUESTION_TYPES.map((t) => ({ ...t, count: app.quiz.questions.filter((q) => q.type === t.type).length })).filter((t) => t.count)
   );
@@ -210,11 +214,18 @@
             </li>
           {/each}
         </ul>
-        {#if issueCount}
-          <button class="badge warning issues" title="{issueCount} question{issueCount === 1 ? ' has' : 's have'} problems: click to go to the next one" onclick={nextIssue}>
-            <TriangleAlert size={12} /> {issueCount}
-          </button>
-        {/if}
+        <span class="badges">
+          {#if reviewCount}
+            <button class="badge to-review" title="{reviewCount} question{reviewCount === 1 ? '' : 's'} still to review: click to go to the next one (Alt+R)" onclick={nextUnreviewed}>
+              <CircleDot size={12} /> {reviewCount}
+            </button>
+          {/if}
+          {#if issueCount}
+            <button class="badge warning issues" title="{issueCount} question{issueCount === 1 ? ' has' : 's have'} problems: click to go to the next one" onclick={nextIssue}>
+              <TriangleAlert size={12} /> {issueCount}
+            </button>
+          {/if}
+        </span>
       </div>
     {/if}
     <button class="btn btn-primary add" onclick={() => openModal('add')}><Plus size={16} /> Add question</button>
@@ -245,6 +256,9 @@
         <button class="btn btn-sm" title="Export the selected questions" onclick={() => openModal('export')}><Upload size={14} /> Export</button>
         <button class="btn btn-sm" title="Change mark, penalty, tags, category or visibility" onclick={() => openModal('bulk')}><SquarePen size={14} /> Edit</button>
         <button class="btn btn-ghost btn-icon btn-sm" title="Copy or move to another quiz" aria-label="Copy or move to another quiz" onclick={() => openModal('copy-to')}><FolderInput size={15} /></button>
+        {#if checkedToReview}
+          <button class="btn btn-ghost btn-icon btn-sm" title="Mark as reviewed" aria-label="Mark selected as reviewed" onclick={() => setReviewed(true, [...app.checked])}><CircleCheck size={15} /></button>
+        {/if}
         <span class="spacer"></span>
         <button class="btn btn-ghost btn-icon btn-sm" title="Move to top" aria-label="Move to top" onclick={() => moveChecked('top')}><ArrowUpToLine size={15} /></button>
         <button class="btn btn-ghost btn-icon btn-sm" title="Move to bottom" aria-label="Move to bottom" onclick={() => moveChecked('bottom')}><ArrowDownToLine size={15} /></button>
@@ -312,6 +326,7 @@
             {#if q.type !== 'description'}· {Number(q.defaultgrade)} mark{Number(q.defaultgrade) === 1 ? '' : 's'}{/if}
           </span>
         </span>
+        {#if q.unreviewed}<span class="flag review" title="Not reviewed yet"><CircleDot size={14} /></span>{/if}
         {#if q.hidden}<span class="flag" title="Hidden"><EyeOff size={14} /></span>{/if}
         {#if issues.length}<span class="flag warn" title={issues.join('\n')}><TriangleAlert size={14} /></span>{/if}
         <span class="actions">
@@ -355,19 +370,28 @@
     justify-content: space-between;
     gap: 6px;
   }
-  .summary .badge {
+  .badges {
     flex: none;
+    display: flex;
+    gap: 4px;
   }
-  .issues {
+  .to-review {
+    background: var(--accent-soft);
+    color: var(--accent-text);
+  }
+  .issues,
+  .to-review {
     border: none;
     font: inherit;
     font-size: 12px;
     cursor: pointer;
   }
-  .issues:hover {
+  .issues:hover,
+  .to-review:hover {
     filter: brightness(0.95);
   }
-  .issues:focus-visible {
+  .issues:focus-visible,
+  .to-review:focus-visible {
     outline: none;
     box-shadow: var(--focus);
   }
@@ -570,6 +594,9 @@
   }
   .flag.warn {
     color: var(--warning);
+  }
+  .flag.review {
+    color: var(--accent);
   }
   .actions {
     display: none;

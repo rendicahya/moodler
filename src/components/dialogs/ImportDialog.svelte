@@ -2,6 +2,7 @@
   import { Upload, ClipboardPaste, FileText, TriangleAlert, CircleCheck } from '@lucide/svelte';
   import Modal from '../ui/Modal.svelte';
   import Segmented from '../ui/Segmented.svelte';
+  import Switch from '../ui/Switch.svelte';
   import { FORMATS, FORMAT_MAP, detectFormat } from '../../lib/formats/index.js';
   import { TYPE_MAP, questionTitle } from '../../lib/model.js';
   import { app, applyImport, closeModal, notify } from '../../lib/store.svelte.js';
@@ -14,6 +15,24 @@
   let mode = $state(app.quiz.questions.length ? 'new' : 'replace');
   let dragging = $state(false);
   let fileInput = $state();
+
+  // Imported questions are marked as still to review, unless the user turned that off. Backups keep their own marks.
+  const REVIEW_KEY = 'mqe.importReview';
+  let review = $state(readReview());
+  function readReview() {
+    try {
+      return localStorage.getItem(REVIEW_KEY) !== 'off';
+    } catch {
+      return true;
+    }
+  }
+  function saveReview(on) {
+    try {
+      localStorage.setItem(REVIEW_KEY, on ? 'on' : 'off');
+    } catch {
+      /* ignore */
+    }
+  }
 
   const detected = $derived(text.trim() ? detectFormat(text, filename) : null);
   const effective = $derived(format === 'auto' ? detected : format);
@@ -52,7 +71,7 @@
 
   function doImport() {
     if (!parsed?.result) return;
-    const n = applyImport(parsed.result, mode, filename);
+    const n = applyImport(parsed.result, mode, filename, review && effective !== 'json');
     closeModal();
     if (!parsed.result.quizzes) notify(`Imported ${n} question${n === 1 ? '' : 's'} from ${FORMAT_MAP[effective].label}${mode === 'new' ? ' as a new quiz' : ''}.`, 'success');
     if (parsed.result.warnings.length) notify(`${parsed.result.warnings.length} warning(s) during import — see the import dialog for details.`, 'warning', 6000);
@@ -153,6 +172,14 @@
             {/each}
             {#if r.questions.length > 50}<li class="hint">…and {r.questions.length - 50} more</li>{/if}
           </ol>
+          {#if effective !== 'json'}
+            <Switch
+              bind:checked={review}
+              onchange={saveReview}
+              label="Mark as to review"
+              description="Flag the questions until you have checked each one, useful for AI-generated questions. Mark them reviewed with Alt+R."
+            />
+          {/if}
         {/if}
       </div>
     {/if}

@@ -1,6 +1,6 @@
 <script>
   import { tick } from 'svelte';
-  import { ChevronLeft, ChevronRight, Copy, Trash, Pencil, Eye, Columns2, TriangleAlert, Plus, X } from '@lucide/svelte';
+  import { ChevronLeft, ChevronRight, Copy, Trash, Pencil, Eye, Columns2, TriangleAlert, Plus, X, CircleCheck } from '@lucide/svelte';
   import Section from './ui/Section.svelte';
   import Switch from './ui/Switch.svelte';
   import Segmented from './ui/Segmented.svelte';
@@ -16,7 +16,7 @@
   import ClozeEditor from './editors/ClozeEditor.svelte';
   import GapEditor from './editors/GapEditor.svelte';
   import OrderingEditor from './editors/OrderingEditor.svelte';
-  import { app, duplicateQuestion, deleteQuestion, setView, goToQuestion, saveLayout } from '../lib/store.svelte.js';
+  import { app, duplicateQuestion, deleteQuestion, setView, goToQuestion, saveLayout, markReviewed } from '../lib/store.svelte.js';
   import { TYPE_MAP, TEXT_FORMATS, PENALTIES, validateQuestion, uid } from '../lib/model.js';
   import { TYPE_ICONS } from '../lib/icons.js';
   import { HELP } from '../lib/help.js';
@@ -126,6 +126,11 @@
       {/if}
     </div>
     <div class="acts">
+      {#if q.unreviewed}
+        <button class="btn btn-sm review" title="Imported and not checked yet. Mark it as reviewed and open the next question to review (Alt+R)" onclick={() => markReviewed(q.id)}>
+          <CircleCheck size={15} /><span class="review-text">Mark reviewed</span>
+        </button>
+      {/if}
       <button class="btn btn-ghost btn-icon btn-sm" title="Duplicate" aria-label="Duplicate" onclick={() => duplicateQuestion(q.id)}><Copy size={15} /></button>
       <button class="btn btn-ghost btn-icon btn-sm danger" title="Delete question (Alt+Delete)" aria-label="Delete question" onclick={() => deleteQuestion(q.id)}><Trash size={15} /></button>
     </div>
@@ -411,6 +416,25 @@
     display: flex;
     align-items: center;
     gap: 2px;
+  }
+  .review {
+    margin-right: 6px;
+    gap: 6px;
+    border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+    background: var(--accent-soft);
+    color: var(--accent-text);
+  }
+  .review:hover {
+    border-color: var(--accent);
+  }
+  @container (max-width: 760px) {
+    .review-text {
+      display: none;
+    }
+    .review {
+      width: 30px;
+      padding: 0;
+    }
   }
   .body {
     flex: 1;

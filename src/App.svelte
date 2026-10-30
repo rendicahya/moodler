@@ -16,7 +16,8 @@
   import FindReplaceDialog from './components/dialogs/FindReplaceDialog.svelte';
   import CopyToQuizDialog from './components/dialogs/CopyToQuizDialog.svelte';
   import AiPromptDialog from './components/dialogs/AiPromptDialog.svelte';
-  import { app, library, switchToTab, closeTab, initPersistence, undo, redo, openModal, notify, selectedQuestion, selectedIndex, addQuestion, deleteQuestion, newQuiz, cycleView, goToQuestion, setSidebarWidth, saveLayout, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT } from './lib/store.svelte.js';
+  import CheckDialog from './components/dialogs/CheckDialog.svelte';
+  import { app, library, switchToTab, closeTab, initPersistence, undo, redo, openModal, notify, selectedQuestion, selectedIndex, addQuestion, deleteQuestion, newQuiz, cycleView, goToQuestion, markReviewed, nextUnreviewed, setSidebarWidth, saveLayout, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT } from './lib/store.svelte.js';
   import { QUESTION_TYPES } from './lib/model.js';
   import { looksLikeQuestions } from './lib/formats/index.js';
   import { TYPE_ICONS } from './lib/icons.js';
@@ -189,6 +190,14 @@
     } else if (e.altKey && key === 'q' && app.quiz.questions.length) {
       e.preventDefault();
       openModal('quiz-preview');
+    } else if (e.altKey && !mod && key === 'c' && app.quiz.questions.length) {
+      e.preventDefault();
+      openModal('check');
+    } else if (e.altKey && !mod && key === 'r' && q) {
+      // Mark the open question as reviewed and move on, or jump to the next one still to review.
+      e.preventDefault();
+      if (q.unreviewed) markReviewed(q.id);
+      else if (!nextUnreviewed()) notify('All questions are reviewed.', 'success', 3000);
     }
   }
 </script>
@@ -293,6 +302,8 @@
   <CopyToQuizDialog />
 {:else if app.modal === 'ai-prompt'}
   <AiPromptDialog />
+{:else if app.modal === 'check'}
+  <CheckDialog />
 {/if}
 
 {#if app.confirm}

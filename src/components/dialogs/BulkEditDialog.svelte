@@ -18,6 +18,7 @@
   let categoryMode = $state('keep');
   let category = $state('');
   let visibility = $state('keep');
+  let review = $state('keep');
 
   const existingTags = [...new Set(questions.flatMap((q) => q.tags))].sort((a, b) => a.localeCompare(b));
   const markable = questions.filter((q) => !['description', 'cloze'].includes(q.type)).length;
@@ -30,7 +31,8 @@
       (penalty !== 'keep' ? 1 : 0) +
       (addTags.length || removeTags.length ? 1 : 0) +
       (categoryMode !== 'keep' ? 1 : 0) +
-      (visibility !== 'keep' ? 1 : 0)
+      (visibility !== 'keep' ? 1 : 0) +
+      (review !== 'keep' ? 1 : 0)
   );
 
   function toggleRemove(t) {
@@ -48,6 +50,8 @@
       if (categoryMode === 'set') q.category = category.trim();
       else if (categoryMode === 'clear') q.category = '';
       if (visibility !== 'keep') q.hidden = visibility === 'hidden';
+      if (review === 'done') delete q.unreviewed;
+      else if (review === 'todo') q.unreviewed = true;
     }
     closeModal();
     notify(`Updated ${n} question${n === 1 ? '' : 's'}. Undo with Ctrl+Z.`, 'success');
@@ -114,6 +118,20 @@
         { value: 'keep', label: 'Unchanged' },
         { value: 'shown', label: 'Shown in bank' },
         { value: 'hidden', label: 'Hidden' },
+      ]}
+    />
+  </div>
+
+  <div class="field">
+    <FieldLabel text="Review" optional info="Questions to review are flagged in the list until you have checked them. Only used in Moodler, never exported." />
+    <Segmented
+      size="sm"
+      label="Review"
+      bind:value={review}
+      options={[
+        { value: 'keep', label: 'Unchanged' },
+        { value: 'done', label: 'Reviewed' },
+        { value: 'todo', label: 'To review' },
       ]}
     />
   </div>

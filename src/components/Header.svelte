@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { Sun, Moon, Maximize, Minimize, Undo2, Redo2, Upload, Download, FilePlus, Settings, CircleQuestionMark, Presentation, Printer, Sparkles } from '@lucide/svelte';
+  import { Sun, Moon, Maximize, Minimize, Undo2, Redo2, Upload, Download, FilePlus, Settings, CircleQuestionMark, Presentation, Printer, Sparkles, ListChecks } from '@lucide/svelte';
   import QuizTabs from './QuizTabs.svelte';
   import { app, history, backup, REMIND_AFTER, undo, redo, toggleTheme, openModal, newQuiz, downloadBackup } from '../lib/store.svelte.js';
 
@@ -75,6 +75,7 @@
     <button class="btn btn-ghost" title="Preview the whole quiz (Alt+Q)" disabled={!app.quiz.questions.length} onclick={() => openModal('quiz-preview')}>
       <Presentation size={16} /><span class="btn-text">Preview</span>
     </button>
+    <button class="btn btn-ghost btn-icon hide-xs" title="Check questions: review progress, answer key and repeated questions (Alt+C)" aria-label="Check questions" disabled={!app.quiz.questions.length} onclick={() => openModal('check')}><ListChecks size={17} /></button>
     <button class="btn btn-ghost btn-icon hide-xs" title="Print or save as PDF (Ctrl+P)" aria-label="Print" disabled={!app.quiz.questions.length} onclick={() => openModal('print')}><Printer size={17} /></button>
     <button class="btn btn-ghost btn-icon hide-xs" title="Generate questions with AI: write a prompt for an AI chatbot (Alt+G)" aria-label="Generate questions with AI" onclick={() => openModal('ai-prompt')}><Sparkles size={17} /></button>
     <button class="btn" title="Import questions (Ctrl+O)" onclick={() => openModal('import')}><Download size={16} /><span class="btn-text">Import</span></button>

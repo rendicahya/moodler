@@ -108,7 +108,11 @@ export const XML_EXAMPLES = {
 
 /** The question types offered in the prompt builder, with how the AI should write each. */
 export const PROMPT_TYPES = [
-  { type: 'multichoice', label: 'Multiple choice (one answer)', rule: 'type="multichoice" with <single>true</single>; exactly one answer with fraction="100", the others fraction="0"; plausible distractors.' },
+  {
+    type: 'multichoice',
+    label: 'Multiple choice (one answer)',
+    rule: 'type="multichoice" with <single>true</single>; exactly one answer with fraction="100", the others fraction="0"; plausible distractors of similar length and style to the correct answer; put the correct answer in a different position from question to question, evenly spread.',
+  },
   { type: 'multiresponse', label: 'Multiple choice (several answers)', rule: 'type="multichoice" with <single>false</single>; the correct answers\' fractions add up to 100 and wrong ones are negative.' },
   { type: 'truefalse', label: 'True / False', rule: 'type="truefalse"; two answers whose text is exactly "true" and "false", the correct one with fraction="100".' },
   { type: 'shortanswer', label: 'Short answer', rule: 'type="shortanswer"; a one-word or short-phrase answer, listing accepted variants as extra answers with fraction="100".' },
@@ -134,6 +138,8 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
  * @param {object} o
  * @param {string} o.topic       what the questions are about
  * @param {string} [o.material]  source text the questions must be based on
+ * @param {{ name: string, text?: string }[]} [o.files]  material files: their text goes into the prompt, or, without
+ *   text, they are attached to the chat message by the user and only named in the prompt
  * @param {Record<string, number>} o.counts  number of questions per PROMPT_TYPES type
  * @param {string} [o.difficulty]
  * @param {string} [o.language]
@@ -148,12 +154,19 @@ export function buildPrompt(o) {
   const difficulty = DIFFICULTIES.find((d) => d.value === o.difficulty);
   const topic = o.topic.trim();
   const material = o.material?.trim();
+  const files = (o.files ?? []).filter((f) => f.text?.trim());
+  const attached = (o.files ?? []).filter((f) => !f.text?.trim());
+  const hasSource = !!(material || files.length || attached.length);
+  const quote = (list) => list.map((f) => `"${f.name}"`).join(', ');
   const L = [];
 
-  L.push(
-    `You are an experienced teacher and assessment writer. Write ${plural(total, 'quiz question')}${topic ? ` about: ${topic}` : ''}.`,
-    ''
-  );
+  L.push(`You are an experienced teacher and assessment writer. Write ${plural(total, 'quiz question')}${topic ? ` about: ${topic}` : ''}.`);
+  if (attached.length) {
+    L.push(
+      `I have attached ${attached.length === 1 ? 'a file' : `${attached.length} files`} to this message: ${quote(attached)}. Read ${attached.length === 1 ? 'it' : 'them'} in full and use ${attached.length === 1 ? 'it' : 'them'} as source material.`
+    );
+  }
+  L.push('');
 
   const req = [];
   if (o.audience?.trim()) req.push(`Audience: ${o.audience.trim()}.`);
@@ -163,7 +176,11 @@ export function buildPrompt(o) {
     'Questions must be factually correct, unambiguous and independent of each other. Every question must have a clearly correct answer.',
     'Cover different parts of the topic rather than asking the same thing twice.'
   );
-  if (material) req.push('Base the questions only on the source material below; do not test anything it does not contain.');
+  if (hasSource) {
+    const where = [material || files.length ? 'below' : '', attached.length ? `in the attached file${attached.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ');
+    req.push(`Base the questions only on the source material ${where}; do not test anything it does not contain.`);
+    if (files.length + attached.length + (material ? 1 : 0) > 1) req.push('Spread the questions over all of the source material, not just the first part.');
+  }
   if (o.feedback) {
     req.push(
       'Give each question a <generalfeedback> that explains the correct answer, and give multiple-choice and true/false answers a short <feedback> saying why they are right or wrong.'
@@ -196,6 +213,7 @@ export function buildPrompt(o) {
   L.push('```');
 
   if (material) L.push('', 'Source material:', '"""', material, '"""');
+  for (const f of files) L.push('', `Source material from the file "${f.name}":`, '"""', f.text.trim(), '"""');
   return L.join('\n');
 }
 

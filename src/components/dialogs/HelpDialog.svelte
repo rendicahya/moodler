@@ -22,6 +22,8 @@
     [['Alt', 'Home / End'], 'First / last question'],
     [['Alt', 'Q'], 'Preview the whole quiz'],
     [['Alt', 'G'], 'Generate questions with AI (write a prompt)'],
+    [['Alt', 'R'], 'Mark the question reviewed and open the next one to review'],
+    [['Alt', 'C'], 'Check questions: review progress, answer key, repeats'],
     [[mod, 'V'], 'Import pasted questions (outside text fields)'],
     [['↑', '↓'], 'Select previous / next question (in the list)'],
     [['Alt', '↑ / ↓'], 'Move the selected question (in the list)'],

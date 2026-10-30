@@ -1,12 +1,13 @@
 <script>
-  import { Download, Copy, TriangleAlert, Check, CircleCheck, ArrowRight } from '@lucide/svelte';
+  import { Download, Copy, TriangleAlert, Check, CircleCheck, ArrowRight, ListChecks } from '@lucide/svelte';
+  import { answerKeyReport, findDuplicates } from '../../lib/quality.js';
   import Modal from '../ui/Modal.svelte';
   import Switch from '../ui/Switch.svelte';
   import Segmented from '../ui/Segmented.svelte';
   import { questionTitle, validateQuestion, TYPE_MAP } from '../../lib/model.js';
   import { TYPE_ICONS } from '../../lib/icons.js';
   import { FORMATS, FORMAT_MAP } from '../../lib/formats/index.js';
-  import { app, library, closeModal, notify, markBackedUp, select } from '../../lib/store.svelte.js';
+  import { app, library, closeModal, openModal, notify, markBackedUp, select } from '../../lib/store.svelte.js';
   import { downloadText, slugify } from '../../lib/download.js';
 
   const exportable = FORMATS.filter((f) => f.export);
@@ -48,6 +49,19 @@
   const problems = $derived(
     questions.map((q) => ({ q, n: app.quiz.questions.indexOf(q) + 1, issues: validateQuestion(q) })).filter((p) => p.issues.length)
   );
+
+  // Not errors, but worth a look before the questions reach students.
+  const notes = $derived.by(() => {
+    const list = [];
+    const toReview = questions.filter((q) => q.unreviewed).length;
+    if (toReview) list.push(`${toReview} question${toReview === 1 ? ' has' : 's have'} not been reviewed yet.`);
+    const key = answerKeyReport(questions);
+    if (key.skewed) list.push('The correct answers of the multiple-choice questions are not spread evenly over the positions.');
+    if (key.longSkew) list.push(`The correct answer is clearly the longest in ${key.longest.length} multiple-choice questions.`);
+    const dupes = findDuplicates(questions.map((q) => ({ id: q.id, quizId: '', q })));
+    if (dupes.length) list.push(`${dupes.length} set${dupes.length === 1 ? '' : 's'} of questions repeat each other.`);
+    return list;
+  });
 
   function fix(id) {
     closeModal();
@@ -172,6 +186,16 @@
     {:else}
       <div class="check ok"><CircleCheck size={16} /> All {questions.length} question{questions.length === 1 ? '' : 's'} passed the checks.</div>
     {/if}
+  {/if}
+
+  {#if questions.length && notes.length}
+    <div class="notes">
+      <ListChecks size={16} />
+      <ul>
+        {#each notes as note}<li>{note}</li>{/each}
+      </ul>
+      <button class="btn btn-sm" onclick={() => openModal('check')}>Check <ArrowRight size={14} /></button>
+    </div>
   {/if}
 
   {#if output.warnings.length}
@@ -369,6 +393,26 @@
   .issue-text {
     font-size: 12px;
     color: var(--text-2);
+  }
+  .notes {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: var(--radius);
+    background: var(--accent-soft);
+    color: var(--accent-text);
+    font-size: 13px;
+  }
+  .notes :global(svg) {
+    flex: none;
+    margin-top: 2px;
+  }
+  .notes ul {
+    flex: 1;
+    margin: 0;
+    padding-left: 16px;
+    color: var(--text);
   }
   .warn {
     display: flex;

@@ -473,6 +473,40 @@ export function moveQuestion(from, to) {
   moveItem(app.quiz.questions, from, to);
 }
 
+// ---------------------------------------------------------------- review status
+
+// Imported questions (typically written by an AI) are marked `unreviewed` until the teacher has checked them.
+export const unreviewedCount = () => app.quiz.questions.filter((q) => q.unreviewed).length;
+
+/** Opens the next question still to review after the open one, wrapping around. Returns false when there is none. */
+export function nextUnreviewed() {
+  const list = app.quiz.questions;
+  const at = selectedIndex();
+  const next = list.find((q, i) => i > at && q.unreviewed) ?? list.find((q) => q.unreviewed);
+  if (!next) return false;
+  app.search = '';
+  app.tab = 'edit';
+  app.selectedId = next.id;
+  return true;
+}
+
+/** Marks a question as reviewed and opens the next one still to review. */
+export function markReviewed(id) {
+  const q = app.quiz.questions.find((x) => x.id === id);
+  if (!q?.unreviewed) return;
+  delete q.unreviewed;
+  if (!nextUnreviewed()) notify('All questions are reviewed.', 'success', 3000);
+}
+
+/** Sets the review status of several questions (all of them when `ids` is omitted). */
+export function setReviewed(on, ids = null) {
+  for (const q of app.quiz.questions) {
+    if (ids && !ids.includes(q.id)) continue;
+    if (on) delete q.unreviewed;
+    else q.unreviewed = true;
+  }
+}
+
 // ---------------------------------------------------------------- bulk operations on ticked questions
 
 function pruneChecked() {
@@ -562,6 +596,16 @@ async function loadQuiz(id) {
   if (id === library.activeId) return $state.snapshot(app.quiz);
   // Queued behind pending writes, so a save that hasn't finished yet is never read back stale.
   return parseQuiz(await enqueue(() => readStored(quizKey(id))));
+}
+
+/** Every quiz in the list ({ id, name, quiz }), in tab order; quizzes that can't be read are left out. */
+export async function loadAllQuizzes() {
+  const all = [];
+  for (const entry of library.quizzes) {
+    const quiz = await loadQuiz(entry.id);
+    if (quiz) all.push({ id: entry.id, name: quiz.name || 'Untitled quiz', quiz });
+  }
+  return all;
 }
 
 /** Opens another saved quiz. Resolves to false when it couldn't be read. */
@@ -799,11 +843,12 @@ function importQuizzes(quizzes) {
 /**
  * Applies an importer result: adds the questions to the open quiz ('append'), replaces its contents ('replace')
  * or opens them as a new quiz ('new'), named after the file when the import has no name of its own.
+ * With `review`, the questions are marked as still to be reviewed.
  */
-export function applyImport(result, mode = 'append', fileName = '') {
+export function applyImport(result, mode = 'append', fileName = '', review = false) {
   if (result.quizzes) return importQuizzes(result.quizzes);
   const fresh = mode !== 'append' && normalizeQuiz({ ...createQuiz(), ...result.quiz, questions: [] });
-  const questions = result.questions.map((q) => normalizeQuestion(q, (fresh || app.quiz).defaults));
+  const questions = result.questions.map((q) => normalizeQuestion(review ? { ...q, unreviewed: true } : q, (fresh || app.quiz).defaults));
   if (mode === 'new') {
     fresh.questions = questions;
     if (fileName && !result.quiz?.name) fresh.name = fileName.replace(/\.[^.]+$/, '');
