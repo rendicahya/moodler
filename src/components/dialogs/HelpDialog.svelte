@@ -40,7 +40,8 @@
   <section>
     <h3>How it works</h3>
     <ul>
-      <li>Everything runs in your browser. Your quiz is saved automatically in this browser’s storage — nothing is uploaded.</li>
+      <li>Everything runs in your browser. Your quiz is saved automatically in this browser’s storage, and nothing is uploaded unless you use the <strong>Cloud</strong> button.</li>
+      <li>The <strong>Cloud</strong> button signs you in with Google so you can upload the open quiz to your private list and download it on any device.</li>
       <li>Export to <strong>Moodle XML</strong> for full fidelity. In Moodle, go to <em>Question bank → Import</em>, choose the same format and upload the file.</li>
       <li><strong>GIFT</strong> and <strong>Aiken</strong> are plain-text formats that only support some question types; unsupported questions are listed when exporting.</li>
       <li>Images pasted or inserted into the editor are embedded in Moodle XML exports.</li>

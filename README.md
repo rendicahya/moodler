@@ -1,6 +1,6 @@
 # Moodler
 
-A frontend-only web app for creating and editing Moodle quiz questions. It runs entirely in the browser: nothing is uploaded, and your work is saved automatically in the browser (IndexedDB, so quizzes with many images fit).
+A frontend-only web app for creating and editing Moodle quiz questions. It runs in the browser: your work is saved automatically there (IndexedDB, so quizzes with many images fit), and nothing is uploaded unless you use the Cloud button.
 
 Built with [Svelte 5](https://svelte.dev) and [Vite](https://vite.dev), and deployed to GitHub Pages at **https://rendicahya.github.io/moodler/**.
 
@@ -24,6 +24,7 @@ Built with [Svelte 5](https://svelte.dev) and [Vite](https://vite.dev), and depl
 - **Overview:** the question list shows how many questions of each type the quiz has.
 - **Bulk actions:** tick several questions in the list (hover a number, Ctrl+click or Shift+click) to export, move, duplicate or delete them, or to change their mark, penalty, tags, category or visibility in one go.
 - **Backups:** after many changes Moodler reminds you to back up, and the save status in the header turns into a "Back up" button that downloads a JSON backup of all your quizzes in one click. Import that file to restore them.
+- **Cloud:** sign in with Google to upload the open quiz to your private list in Firebase and download it on any device. Each quiz shows whether it is up to date with this browser, and Moodler asks before a copy that may have other changes is replaced. Only your account can read your uploads.
 - **Offline:** after the first visit the app works without a connection and can be installed from the browser's menu.
 - **Print / PDF:** print a paper version of the quiz (Ctrl+P) with answer circles, blank lines and name/ID fields. Correct answers can be hidden, marked in place, or listed in an answer key at the end. "Download PDF" saves it as a PDF file directly, on A4, F4 or Letter paper, without breaking questions across pages.
 - **Find and replace:** search and replace text in every question at once (Ctrl+H), with match-case and whole-word options. Only the visible text is changed, never images, links or HTML tags.
@@ -44,6 +45,16 @@ npm run build    # production build in dist/
 The workflow in `.github/workflows/deploy.yml` builds and deploys the site on every push to `main`. To enable it, go to **Settings → Pages** in your repository and set **Source** to **GitHub Actions**.
 
 The build uses a relative base path, so it works under any repository name.
+
+## Firebase
+
+Cloud copies use Firebase Authentication (Google sign-in) and Firestore on the free plan, in the project named in `.firebaserc`. The app can only sign in from the domains listed under **Authentication → Settings → Authorized domains**. The access rules are in `firestore.rules`; publish changes to them with:
+
+```bash
+npx firebase-tools deploy --only firestore:rules
+```
+
+To try the feature without touching the real project, run `npx firebase-tools emulators:start --only auth,firestore` and start the app with `VITE_FIREBASE_EMULATOR=1` set.
 
 ## Importing into Moodle
 

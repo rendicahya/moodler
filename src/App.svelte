@@ -18,6 +18,7 @@
   import AiPromptDialog from './components/dialogs/AiPromptDialog.svelte';
   import CheckDialog from './components/dialogs/CheckDialog.svelte';
   import AiQuestionDialog from './components/dialogs/AiQuestionDialog.svelte';
+  import CloudDialog from './components/dialogs/CloudDialog.svelte';
   import { app, library, switchToTab, closeTab, initPersistence, undo, redo, openModal, notify, selectedQuestion, selectedIndex, addQuestion, deleteQuestion, newQuiz, cycleView, goToQuestion, markReviewed, markUnreviewed, nextUnreviewed, setSidebarWidth, saveLayout, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT } from './lib/store.svelte.js';
   import { QUESTION_TYPES } from './lib/model.js';
   import { looksLikeQuestions } from './lib/formats/index.js';
@@ -313,6 +314,8 @@
   <CheckDialog />
 {:else if app.modal === 'ai-question'}
   <AiQuestionDialog />
+{:else if app.modal === 'cloud'}
+  <CloudDialog />
 {/if}
 
 {#if app.confirm}

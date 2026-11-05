@@ -671,6 +671,49 @@ export function newQuiz() {
   createNewQuiz();
 }
 
+/** The open quiz as it stands now, for uploading. */
+export function prepareCloudUpload() {
+  commit(JSON.stringify($state.snapshot(app.quiz)));
+  const entry = library.quizzes.find((q) => q.id === library.activeId);
+  return { id: library.activeId, text: current, name: app.quiz.name || 'Untitled quiz', count: app.quiz.questions.length, entry };
+}
+
+/** Remembers which cloud copy a quiz matches. `updated` is the entry's edit time at that moment. */
+export function markCloudSynced(id, version, updated) {
+  const entry = library.quizzes.find((q) => q.id === id);
+  if (!entry) return;
+  entry.cloudVersion = version;
+  entry.cloudUpdated = updated;
+  saveLibrary();
+}
+
+/**
+ * Opens a quiz downloaded from the cloud under its cloud ID. A copy already in this browser is replaced as one undo
+ * step. Resolves to false when the download or the local copy can't be read.
+ */
+export async function applyCloudQuiz(meta, text) {
+  const quiz = parseQuiz(text);
+  if (!quiz) return false;
+  const snapshot = JSON.stringify(quiz);
+  if (library.quizzes.some((q) => q.id === meta.id)) {
+    if (!(await switchQuiz(meta.id))) return false;
+    commit(JSON.stringify($state.snapshot(app.quiz)));
+    if (snapshot !== current) {
+      past.push(current);
+      if (past.length > HISTORY_LIMIT) past.shift();
+      future = [];
+      restore(snapshot);
+    }
+  } else {
+    library.quizzes.push(entryFor(meta.id, quiz));
+    activate(meta.id, quiz);
+    save(current, meta.id);
+  }
+  const entry = library.quizzes.find((q) => q.id === meta.id);
+  markCloudSynced(meta.id, meta.version, entry.updated);
+  return true;
+}
+
 /** Number of questions in a quiz, using the live copy for the open one. */
 const countOf = (entry) => (entry.id === library.activeId ? app.quiz.questions.length : entry.count);
 
