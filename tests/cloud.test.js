@@ -1,6 +1,48 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { splitChunks } from '../src/lib/cloud.js';
+import { splitChunks, normalizeFolders, folderPath, childFolders, folderTreeIds, folderOptions } from '../src/lib/cloud.js';
+
+// a / b / c, and d at the top level
+const TREE = [
+  { id: 'c', name: 'C', parent: 'b' },
+  { id: 'a', name: 'A', parent: null },
+  { id: 'd', name: 'D', parent: null },
+  { id: 'b', name: 'B', parent: 'a' },
+];
+
+test('a folder path runs from the top level down', () => {
+  assert.deepEqual(folderPath(TREE, 'c').map((f) => f.id), ['a', 'b', 'c']);
+  assert.deepEqual(folderPath(TREE, null), []);
+});
+
+test('child folders are sorted by name, with natural number order', () => {
+  const folders = [{ id: '1', name: 'Week 10', parent: null }, { id: '2', name: 'week 2', parent: null }, { id: '3', name: 'Inner', parent: '1' }];
+  assert.deepEqual(childFolders(folders, null).map((f) => f.id), ['2', '1']);
+  assert.deepEqual(childFolders(folders, '1').map((f) => f.id), ['3']);
+});
+
+test('a folder tree holds the folder and everything below it', () => {
+  assert.deepEqual(folderTreeIds(TREE, 'a').sort(), ['a', 'b', 'c']);
+  assert.deepEqual(folderTreeIds(TREE, 'd'), ['d']);
+});
+
+test('move targets are in tree order and never the moved folder or anything below it', () => {
+  assert.deepEqual(folderOptions(TREE).map((o) => [o.id, o.depth]), [['a', 0], ['b', 1], ['c', 2], ['d', 0]]);
+  assert.deepEqual(folderOptions(TREE, 'b').map((o) => o.id), ['a', 'd']);
+});
+
+test('folders with a missing parent or in a loop go to the top level', () => {
+  const fixed = normalizeFolders([
+    { id: 'ok', name: 'Ok' },
+    { id: 'under', name: 'Under', parent: 'ok' },
+    { id: 'lost', name: 'Lost', parent: 'gone' },
+    { id: 'x', name: 'X', parent: 'y' },
+    { id: 'y', name: 'Y', parent: 'x' },
+    { id: 'self', name: 'Self', parent: 'self' },
+  ]);
+  const parents = Object.fromEntries(fixed.map((f) => [f.id, f.parent]));
+  assert.deepEqual(parents, { ok: null, under: 'ok', lost: null, x: null, y: null, self: null });
+});
 
 const MIB = 1024 * 1024;
 
