@@ -71,14 +71,18 @@ export function folderTreeIds(folders, id) {
   return ids;
 }
 
-/** Every folder in tree order as { id, name, depth }, leaving out the folder `skip` and everything below it. */
-export function folderOptions(folders, skip = null) {
+/**
+ * Every folder in tree order as { id, name, parent, depth, hasChildren }, leaving out the folder `skip` and everything
+ * below it, and whatever is below a folder that `isExpanded` says is collapsed.
+ */
+export function folderOptions(folders, skip = null, isExpanded = () => true) {
   const options = [];
   const walk = (parent, depth) => {
     for (const f of childFolders(folders, parent)) {
       if (f.id === skip) continue;
-      options.push({ id: f.id, name: f.name, depth });
-      walk(f.id, depth + 1);
+      const hasChildren = folders.some((x) => x.parent === f.id && x.id !== skip);
+      options.push({ id: f.id, name: f.name, parent: f.parent ?? null, depth, hasChildren });
+      if (isExpanded(f.id)) walk(f.id, depth + 1);
     }
   };
   walk(null, 0);

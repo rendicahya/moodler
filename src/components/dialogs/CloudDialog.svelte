@@ -1,5 +1,6 @@
 <script>
   import { onMount, tick } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import { Cloud, CloudUpload, CloudDownload, LogIn, LogOut, Trash2, Folder, FolderPlus, FolderInput, Pencil, ChevronRight, Check, X } from '@lucide/svelte';
   import Modal from '../ui/Modal.svelte';
   import { app, library, closeModal, notify, ask, prepareCloudUpload, markCloudSynced, applyCloudQuiz } from '../../lib/store.svelte.js';
@@ -27,8 +28,10 @@
   let user = $state(null);
   let quizzes = $state(null);
   let folders = $state([]);
-  // The folder being shown; null is the top level.
+  // The folder selected in the tree; null is the top level.
   let current = $state(null);
+  const expanded = new SvelteSet();
+  let tree = $state(null);
   let error = $state('');
   // What is running: { label, done, total }, where total is 0 until the number of parts is known.
   let busy = $state(null);
@@ -41,11 +44,21 @@
   const progressText = $derived(busy ? (busy.total > 1 ? `${busy.label} ${busy.done} / ${busy.total}…` : `${busy.label}…`) : '');
   const openCopy = $derived(quizzes?.find((q) => q.id === library.activeId));
   const crumbs = $derived(folderPath(folders, current));
-  const shownFolders = $derived(childFolders(folders, current));
+  const selected = $derived(crumbs.at(-1));
+  // The rows the tree shows: the top level, then the folders whose parents are all expanded.
+  const treeRows = $derived([
+    { id: null, name: 'Cloud', parent: null, depth: 0, hasChildren: false },
+    ...folderOptions(folders, null, (id) => expanded.has(id)).map((r) => ({ ...r, depth: r.depth + 1 })),
+  ]);
   // A quiz whose folder was deleted on another device shows at the top level.
   const folderOf = (q) => (folders.some((f) => f.id === q.folder) ? q.folder : null);
   const shownQuizzes = $derived(quizzes?.filter((q) => folderOf(q) === current) ?? []);
-  const uploadLabel = $derived(openCopy ? 'Upload again' : current ? `Upload to ${crumbs.at(-1)?.name}` : 'Upload this quiz');
+  const quizzesPerFolder = $derived.by(() => {
+    const counts = new Map();
+    for (const q of quizzes ?? []) counts.set(folderOf(q), (counts.get(folderOf(q)) ?? 0) + 1);
+    return counts;
+  });
+  const uploadLabel = $derived(openCopy ? 'Upload again' : selected ? `Upload to ${selected.name}` : 'Upload this quiz');
   const moveOptions = $derived(moving ? folderOptions(folders, moving.kind === 'folder' ? moving.id : null) : []);
 
   const quizzesIn = (ids) => (quizzes ?? []).filter((q) => ids.includes(folderOf(q)));
@@ -75,11 +88,28 @@
   async function refresh() {
     [quizzes, folders] = await Promise.all([listCloudQuizzes(user.uid), listCloudFolders(user.uid)]);
     if (current && !folders.some((f) => f.id === current)) current = null;
+    reveal(current);
   }
 
-  /** Shows the folder holding the open quiz's cloud copy. */
+  /** Expands the folders above this one, so that it has a row in the tree. */
+  function reveal(id) {
+    for (const f of folderPath(folders, id).slice(0, -1)) expanded.add(f.id);
+  }
+
+  function show(id) {
+    current = id;
+    reveal(id);
+  }
+
+  // Keeps the selected folder in sight, such as when the dialog opens at a folder far down a long tree.
+  $effect(() => {
+    void [current, treeRows];
+    tick().then(() => tree?.querySelector('.selected')?.scrollIntoView({ block: 'nearest' }));
+  });
+
+  /** Selects the folder holding the open quiz's cloud copy. */
   function showOpenCopy() {
-    if (openCopy) current = folderOf(openCopy);
+    if (openCopy) show(folderOf(openCopy));
   }
 
   onMount(() => {
@@ -91,6 +121,7 @@
       quizzes = null;
       folders = [];
       current = null;
+      expanded.clear();
       naming = moving = null;
       if (u) {
         run('Loading', async () => {
@@ -116,9 +147,40 @@
   const logout = () => run('Signing out', signOut);
 
   function open(id) {
-    current = id;
+    // An upload that is running puts a first copy in the selected folder.
+    if (busy) return;
+    show(id);
     naming = moving = null;
     error = '';
+  }
+
+  function toggle(id) {
+    if (busy) return;
+    if (!expanded.delete(id)) expanded.add(id);
+    // Collapsing the folder around the selected one would hide the selection, so it moves up to the collapsed folder.
+    else if (current !== id && folderTreeIds(folders, id).includes(current)) open(id);
+  }
+
+  /** Arrow keys, Home and End in the tree, as in a file manager. */
+  function treeKey(e) {
+    const at = treeRows.findIndex((r) => r.id === current);
+    const row = treeRows[at];
+    let next;
+    if (e.key === 'ArrowDown') next = treeRows[at + 1];
+    else if (e.key === 'ArrowUp') next = treeRows[at - 1];
+    else if (e.key === 'Home') next = treeRows[0];
+    else if (e.key === 'End') next = treeRows.at(-1);
+    else if (e.key === 'ArrowRight') {
+      if (row.hasChildren && !expanded.has(row.id)) toggle(row.id);
+      else if (row.hasChildren) next = treeRows[at + 1];
+    } else if (e.key === 'ArrowLeft') {
+      if (expanded.has(row.id)) toggle(row.id);
+      else if (row.id) next = treeRows.find((r) => r.id === row.parent);
+    } else return;
+    e.preventDefault();
+    if (!next) return;
+    open(next.id);
+    tick().then(() => tree?.querySelector('[tabindex="0"]')?.focus());
   }
 
   function upload() {
@@ -190,6 +252,7 @@
     if (!ok) return;
     await run('Deleting', async () => {
       await deleteCloudFolders(user.uid, ids, inside, progress);
+      current = folder.parent;
       await refresh();
     });
   }
@@ -213,8 +276,9 @@
     }
     run(id ? 'Renaming' : 'Creating folder', async () => {
       if (id) await updateCloudFolder(user.uid, id, { name });
-      else await createCloudFolder(user.uid, name, current);
+      const made = id ? null : await createCloudFolder(user.uid, name, current);
       await refresh();
+      if (made) show(made);
       naming = null;
     });
   }
@@ -306,15 +370,15 @@
   </div>
 {/snippet}
 
-{#snippet nameRow(label)}
+{#snippet nameRow(label, placeholder)}
   <form class="inline" onsubmit={saveName} onkeydown={(e) => cancelOnEscape(e, cancelNaming)}>
-    <input class="input" aria-label={label} placeholder="Folder name" maxlength="100" bind:value={naming.name} use:focusOnMount />
+    <input class="input" aria-label={label} {placeholder} maxlength="100" bind:value={naming.name} use:focusOnMount />
     <button class="btn btn-ghost btn-icon" type="submit" title="Save" aria-label="Save" disabled={!!busy || !naming.name.trim()}><Check size={16} /></button>
     <button class="btn btn-ghost btn-icon" type="button" title="Cancel" aria-label="Cancel" disabled={!!busy} onclick={cancelNaming}><X size={16} /></button>
   </form>
 {/snippet}
 
-<Modal title="Cloud" subtitle="Upload quizzes to your private Firebase folders and download them on any device." width="680px" onclose={close}>
+<Modal title="Cloud" subtitle="Upload quizzes to your private Firebase folders and download them on any device." width="920px" onclose={close}>
   {#if !ready}
     <p class="note">Connecting…</p>
   {:else if !user}
@@ -326,58 +390,93 @@
     </div>
 
     {#if quizzes}
-      <div class="bar">
-        <nav class="crumbs" aria-label="Folder path">
-          <button class="crumb" aria-current={current ? undefined : 'page'} onclick={() => open(null)}><Cloud size={14} /> Cloud</button>
-          {#each crumbs as c, i (c.id)}
-            <ChevronRight size={13} class="sep" />
-            <button class="crumb" aria-current={i === crumbs.length - 1 ? 'page' : undefined} title={c.name} onclick={() => open(c.id)}>{c.name}</button>
-          {/each}
-        </nav>
-        <button class="btn btn-sm" disabled={!!busy} onclick={() => startNaming(null, '')}><FolderPlus size={15} /> New folder</button>
-      </div>
-
-      <ul class="list">
-        {#if naming && !naming.id}
-          <li class="item">{@render nameRow('New folder name')}</li>
-        {/if}
-        {#each shownFolders as f (f.id)}
-          {@const count = quizzesIn(folderTreeIds(folders, f.id)).length}
-          <li class="item folder">
-            {#if naming?.id === f.id}
-              {@render nameRow(`New name for ${f.name}`)}
-            {:else}
-              <button class="open-folder" title="Open {f.name}" onclick={() => open(f.id)}>
-                <Folder size={18} />
-                <span class="info">
-                  <span class="name">{f.name}</span>
-                  <span class="meta">{quizCount(count)}</span>
-                </span>
-              </button>
-              <button class="btn btn-ghost btn-icon" title="Rename" aria-label="Rename {f.name}" disabled={!!busy} onclick={() => startNaming(f.id, f.name)}><Pencil size={15} /></button>
-              <button class="btn btn-ghost btn-icon" title="Move to another folder" aria-label="Move {f.name}" disabled={!!busy} onclick={() => startMoving('folder', f.id, f.parent)}><FolderInput size={15} /></button>
-              <button class="btn btn-ghost btn-icon danger" title="Delete the folder" aria-label="Delete the folder {f.name}" disabled={!!busy} onclick={() => removeFolder(f)}><Trash2 size={15} /></button>
-            {/if}
-            {#if moving?.id === f.id}{@render moveRow()}{/if}
-          </li>
-        {/each}
-        {#each shownQuizzes as q (q.id)}
-          <li class="item" class:open={q.id === library.activeId}>
-            <div class="info">
-              <span class="name" title={q.name}>{q.name}</span>
-              <span class="meta">{plural(q.count, 'question')} · {sizeText(q.size)} · {when(q.uploaded)}</span>
-              <span class="state {statusOf(q)}">{STATUS[statusOf(q)]}</span>
+      <div class="panes">
+        <div class="tree" role="tree" aria-label="Folders" bind:this={tree}>
+          {#each treeRows as r (r.id ?? 'top level')}
+            {@const count = quizzesPerFolder.get(r.id)}
+            <div
+              class="row"
+              class:selected={r.id === current}
+              role="treeitem"
+              aria-level={r.depth + 1}
+              aria-selected={r.id === current}
+              aria-expanded={r.hasChildren ? expanded.has(r.id) : undefined}
+              tabindex={r.id === current ? 0 : -1}
+              title={r.name}
+              style:padding-left="{6 + Math.min(r.depth, 8) * 14}px"
+              onclick={() => {
+                open(r.id);
+                if (r.hasChildren && !busy) expanded.add(r.id);
+              }}
+              onkeydown={treeKey}
+            >
+              {#if r.hasChildren}
+                <!-- The arrow keys do this from the keyboard. -->
+                <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+                <span
+                  class="twist"
+                  class:open={expanded.has(r.id)}
+                  aria-hidden="true"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    toggle(r.id);
+                  }}><ChevronRight size={14} /></span>
+              {:else if r.id}
+                <span class="twist"></span>
+              {/if}
+              {#if r.id}<Folder size={15} />{:else}<Cloud size={15} />{/if}
+              <span class="label">{r.name}</span>
+              {#if count}<span class="count" title={quizCount(count)}>{count}</span>{/if}
             </div>
-            <button class="btn btn-sm" disabled={!!busy} onclick={() => download(q)}><CloudDownload size={15} /> Download</button>
-            <button class="btn btn-ghost btn-icon" title="Move to another folder" aria-label="Move {q.name}" disabled={!!busy} onclick={() => startMoving('quiz', q.id, folderOf(q))}><FolderInput size={15} /></button>
-            <button class="btn btn-ghost btn-icon danger" title="Delete the cloud copy" aria-label="Delete the cloud copy of {q.name}" disabled={!!busy} onclick={() => removeQuiz(q)}><Trash2 size={15} /></button>
-            {#if moving?.id === q.id}{@render moveRow()}{/if}
-          </li>
-        {/each}
-        {#if !shownFolders.length && !shownQuizzes.length && !naming}
-          <li class="note empty">{current ? 'This folder is empty.' : 'Nothing uploaded yet. Upload the open quiz to see it here.'}</li>
-        {/if}
-      </ul>
+          {/each}
+        </div>
+
+        <section class="files" aria-label="Quizzes in the selected folder">
+          <div class="bar">
+            <nav class="crumbs" aria-label="Folder path">
+              <button class="crumb" aria-current={current ? undefined : 'page'} onclick={() => open(null)}>Cloud</button>
+              {#if crumbs.length > 3}
+                <ChevronRight size={13} />
+                <span class="crumb-gap" title={pathText(current)}>…</span>
+              {/if}
+              {#each crumbs.slice(-3) as c (c.id)}
+                <ChevronRight size={13} />
+                <button class="crumb" aria-current={c.id === current ? 'page' : undefined} title={c.name} onclick={() => open(c.id)}>{c.name}</button>
+              {/each}
+            </nav>
+            <div class="actions">
+              {#if selected}
+                <button class="btn btn-ghost btn-icon" title="Rename the folder" aria-label="Rename {selected.name}" disabled={!!busy} onclick={() => startNaming(selected.id, selected.name)}><Pencil size={15} /></button>
+                <button class="btn btn-ghost btn-icon" title="Move the folder" aria-label="Move {selected.name}" disabled={!!busy} onclick={() => startMoving('folder', selected.id, selected.parent)}><FolderInput size={15} /></button>
+                <button class="btn btn-ghost btn-icon danger" title="Delete the folder" aria-label="Delete the folder {selected.name}" disabled={!!busy} onclick={() => removeFolder(selected)}><Trash2 size={15} /></button>
+              {/if}
+              <button class="btn btn-sm" disabled={!!busy} onclick={() => startNaming(null, '')}><FolderPlus size={15} /> New folder</button>
+            </div>
+            {#if naming}
+              {@render nameRow(naming.id ? `New name for ${selected.name}` : 'New folder name', naming.id ? 'Folder name' : `New folder in ${selected?.name ?? 'Cloud'}`)}
+            {/if}
+            {#if moving?.kind === 'folder'}{@render moveRow()}{/if}
+          </div>
+
+          <ul class="list">
+            {#each shownQuizzes as q (q.id)}
+              <li class="item" class:open={q.id === library.activeId}>
+                <div class="info">
+                  <span class="name" title={q.name}>{q.name}</span>
+                  <span class="meta">{plural(q.count, 'question')} · {sizeText(q.size)} · {when(q.uploaded)}</span>
+                  <span class="state {statusOf(q)}">{STATUS[statusOf(q)]}</span>
+                </div>
+                <button class="btn btn-sm" disabled={!!busy} onclick={() => download(q)}><CloudDownload size={15} /> Download</button>
+                <button class="btn btn-ghost btn-icon" title="Move to another folder" aria-label="Move {q.name}" disabled={!!busy} onclick={() => startMoving('quiz', q.id, folderOf(q))}><FolderInput size={15} /></button>
+                <button class="btn btn-ghost btn-icon danger" title="Delete the cloud copy" aria-label="Delete the cloud copy of {q.name}" disabled={!!busy} onclick={() => removeQuiz(q)}><Trash2 size={15} /></button>
+                {#if moving?.id === q.id}{@render moveRow()}{/if}
+              </li>
+            {:else}
+              <li class="note empty">{quizzes.length || folders.length ? 'No quizzes in this folder.' : 'Nothing uploaded yet. Upload the open quiz to see it here.'}</li>
+            {/each}
+          </ul>
+        </section>
+      </div>
     {/if}
   {/if}
 
@@ -404,7 +503,7 @@
     color: var(--text-2);
   }
   .empty {
-    padding: 14px 2px;
+    padding: 14px 4px;
   }
   .account,
   .bar {
@@ -412,7 +511,90 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+  }
+  .account {
     margin-bottom: 12px;
+  }
+  .panes {
+    display: grid;
+    grid-template-columns: 250px minmax(0, 1fr);
+    height: min(58vh, 520px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .tree {
+    min-height: 0;
+    padding: 6px;
+    overflow: auto;
+    border-right: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 30px;
+    padding-right: 8px;
+    border-radius: 6px;
+    color: var(--text-2);
+    cursor: pointer;
+  }
+  .row:hover {
+    background: var(--hover);
+  }
+  .row.selected {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .row:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  .twist {
+    flex: none;
+    width: 18px;
+    display: inline-flex;
+    justify-content: center;
+    color: var(--text-3);
+    transition: transform 0.1s;
+  }
+  .twist.open {
+    transform: rotate(90deg);
+  }
+  .label {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .count {
+    flex: none;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-3);
+  }
+  .files {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .bar {
+    flex-wrap: wrap;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .actions {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .actions .btn-sm {
+    margin-left: 6px;
   }
   .who {
     min-width: 0;
@@ -425,16 +607,17 @@
     flex: 1;
     min-width: 0;
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
     gap: 2px;
     color: var(--text-3);
   }
+  .crumbs :global(svg),
+  .crumb-gap {
+    flex: none;
+  }
   .crumb {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    max-width: 180px;
+    flex: 0 1 auto;
+    min-width: 24px;
     padding: 3px 6px;
     border: 0;
     border-radius: 6px;
@@ -450,17 +633,20 @@
     background: var(--hover);
   }
   .crumb[aria-current='page'] {
+    flex-shrink: 0;
+    max-width: 60%;
     color: var(--text);
     font-weight: 600;
   }
   .list {
+    flex: 1;
+    min-height: 0;
     list-style: none;
     margin: 0;
-    padding: 0;
+    padding: 8px;
     display: flex;
     flex-direction: column;
     gap: 4px;
-    max-height: 50vh;
     overflow: auto;
   }
   .item {
@@ -475,23 +661,6 @@
   .item.open {
     border-color: color-mix(in srgb, var(--accent) 40%, transparent);
     background: var(--accent-soft);
-  }
-  .item.folder:hover {
-    background: var(--hover);
-  }
-  .open-folder {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--accent);
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
   }
   .info {
     flex: 1;
@@ -553,5 +722,20 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  @media (max-width: 640px) {
+    .panes {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(0, 35%) minmax(0, 1fr);
+      height: 68vh;
+    }
+    .tree {
+      border-right: 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .crumbs,
+    .info {
+      flex: 1 0 100%;
+    }
   }
 </style>

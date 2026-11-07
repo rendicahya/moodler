@@ -31,6 +31,11 @@ test('move targets are in tree order and never the moved folder or anything belo
   assert.deepEqual(folderOptions(TREE, 'b').map((o) => o.id), ['a', 'd']);
 });
 
+test('the tree hides what is below a collapsed folder and says which folders can open', () => {
+  const rows = folderOptions(TREE, null, (id) => id === 'a');
+  assert.deepEqual(rows.map((o) => [o.id, o.parent, o.hasChildren]), [['a', null, true], ['b', 'a', true], ['d', null, false]]);
+});
+
 test('folders with a missing parent or in a loop go to the top level', () => {
   const fixed = normalizeFolders([
     { id: 'ok', name: 'Ok' },
