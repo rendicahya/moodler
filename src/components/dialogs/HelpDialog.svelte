@@ -25,7 +25,7 @@
     [['Alt', 'I'], 'Improve the open question with AI'],
     [['Alt', 'R'], 'Mark the question reviewed and open the next one to review'],
     [['Alt', 'Shift', 'R'], 'Mark the question as not reviewed'],
-    [['Alt', 'C'], 'Check questions: review progress, answer key, repeats'],
+    [['Alt', 'C'], 'Check questions: review progress, answer key, answers, pictures, repeats'],
     [['Alt', 'B'], 'Question bank: copy questions from your other quizzes'],
     [['Alt', 'U'], 'Upload the changes to the cloud copy (or open Cloud)'],
     [[mod, 'V'], 'Import pasted questions (outside text fields)'],

@@ -1,6 +1,6 @@
 <script>
   import { Download, Copy, TriangleAlert, Check, CircleCheck, ArrowRight, ListChecks, FileDown } from '@lucide/svelte';
-  import { answerKeyReport, findDuplicates } from '../../lib/quality.js';
+  import { answerKeyReport, findDuplicates, placeProblem, lookAlikeAnswers, imagesWithoutAlt } from '../../lib/quality.js';
   import Modal from '../ui/Modal.svelte';
   import Switch from '../ui/Switch.svelte';
   import Segmented from '../ui/Segmented.svelte';
@@ -58,6 +58,12 @@
     const key = answerKeyReport(questions);
     if (key.skewed) list.push('The correct answers of the multiple-choice questions are not spread evenly over the positions.');
     if (key.longSkew) list.push(`The correct answer is clearly the longest in ${key.longest.length} multiple-choice questions.`);
+    const placed = questions.filter(placeProblem).length;
+    if (placed) list.push(`${placed} question${placed === 1 ? ' has' : 's have'} an answer like “All of the above” that may not stay in its place.`);
+    const alike = questions.filter((q) => lookAlikeAnswers(q).length).length;
+    if (alike) list.push(`${alike} question${alike === 1 ? ' has' : 's have'} answers that look alike.`);
+    const pictures = questions.reduce((n, q) => n + imagesWithoutAlt(q).length, 0);
+    if (pictures) list.push(`${pictures} picture${pictures === 1 ? ' has' : 's have'} no description for screen readers.`);
     const dupes = findDuplicates(questions.map((q) => ({ id: q.id, quizId: '', q })));
     if (dupes.length) list.push(`${dupes.length} set${dupes.length === 1 ? '' : 's'} of questions repeat each other.`);
     return list;

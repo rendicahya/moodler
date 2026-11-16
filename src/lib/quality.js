@@ -20,9 +20,12 @@ export function correctPosition(q) {
 /** Whether the correct answer is noticeably longer than every other answer, a hint students learn to use. */
 export function correctIsLongest(q) {
   const at = correctPosition(q);
-  if (at < 0 || q.answers.length < 3) return false;
+  // "All of the above" is long by nature and gives nothing away by it.
+  if (at < 0 || q.answers.length < 3 || isPinned(q.answers[at])) return false;
   const len = q.answers.map((a) => stripHtml(a.text).length);
-  const other = Math.max(...len.filter((_, i) => i !== at));
+  const others = len.filter((_, i) => i !== at && !isPinned(q.answers[i]));
+  if (others.length < 2) return false;
+  const other = Math.max(...others);
   return len[at] >= other * 1.25 && len[at] - other >= 8;
 }
 
@@ -80,6 +83,175 @@ export function balanceAnswers(questions) {
     q.answers = order;
   }
   return changed;
+}
+
+// ---------------------------------------------------------------- answers that refer to their place
+
+// Answers whose meaning depends on where they stand: "All of the above", "None of the above", "A and B".
+const ABOVE = /\b(above|di ?atas)\b/i;
+const LETTER_PAIR = /(^|\s)\(?[a-e]\)?,? (dan|and|&|or|atau) \(?[a-e]\)?(\s|[.,]|$)/i;
+
+export const refersToPlace = (answer) => {
+  const text = stripHtml(answer.text).trim();
+  return text.length <= 60 && (ABOVE.test(text) || LETTER_PAIR.test(text));
+};
+const refersAbove = (answer) => refersToPlace(answer) && ABOVE.test(stripHtml(answer.text));
+
+/**
+ * Problems with answers such as "All of the above" in a multiple-choice question: `shuffled` when Moodle may
+ * shuffle them into another place, `notLast` when an "… of the above" answer has ordinary answers after it.
+ */
+export function placeProblem(q) {
+  if (q.type !== 'multichoice' || !q.answers?.some(refersToPlace)) return null;
+  if (q.shuffleanswers) return 'shuffled';
+  const last = q.answers.findLastIndex((a) => !refersToPlace(a));
+  return q.answers.some((a, i) => i < last && refersAbove(a)) ? 'notLast' : null;
+}
+
+/** Turns off shuffling and moves "… of the above" answers after the ordinary ones. Returns whether anything changed. */
+export function fixPlace(q) {
+  if (!placeProblem(q)) return false;
+  q.shuffleanswers = false;
+  const last = q.answers.findLastIndex((a) => !refersToPlace(a));
+  const moved = q.answers.filter((a, i) => i < last && refersAbove(a));
+  if (moved.length) q.answers = [...q.answers.filter((a) => !moved.includes(a)), ...moved];
+  return true;
+}
+
+// ---------------------------------------------------------------- answers that look alike
+
+const normalized = (html) =>
+  stripHtml(html ?? '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+
+/** The lists in a question whose entries should all differ, as [what, [{ n, text }]] with n the 1-based number. */
+function answerLists(q) {
+  const rows = (list) => (list ?? []).map((x, i) => ({ n: i + 1, text: x.text, group: x.group }));
+  switch (q.type) {
+    case 'multichoice':
+      return [['answers', rows(q.answers)]];
+    case 'ordering':
+      return [['items', rows(q.items)]];
+    case 'matching':
+      return [['questions', rows(q.subquestions)]];
+    case 'gapselect':
+    case 'ddwtos': {
+      const groups = new Map();
+      for (const c of rows(q.choices)) groups.set(c.group, [...(groups.get(c.group) ?? []), c]);
+      return [...groups.values()].map((list) => ['choices', list]);
+    }
+    default:
+      return [];
+  }
+}
+
+/**
+ * Pairs of answers in one question that students can't tell apart: the same text apart from capitals, spaces
+ * and punctuation (`same`), or the same words in another order (`reordered`). Empty answers are left to the
+ * other checks. Returns [{ what, a, b, kind }] with `a` and `b` the 1-based numbers in their list.
+ */
+export function lookAlikeAnswers(q) {
+  const found = [];
+  for (const [what, list] of answerLists(q)) {
+    const keys = list.map((x) => normalized(x.text));
+    const sorted = keys.map((k) => k.split(' ').sort().join(' '));
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        if (!keys[i] || !keys[j]) continue;
+        const kind = keys[i] === keys[j] ? 'same' : sorted[i] === sorted[j] && keys[i].includes(' ') ? 'reordered' : null;
+        if (kind) found.push({ what, a: list[i].n, b: list[j].n, kind });
+      }
+    }
+  }
+  return found;
+}
+
+// ---------------------------------------------------------------- images without alt text
+
+const IMG = /<img\b[^>]*>/gi;
+const ALT = /\salt\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/i;
+// What editors and phones name pictures, which says nothing about what they show.
+const FILE_NAME = /^[^\s/\\]*\.(png|jpe?g|gif|webp|svg|bmp|tiff?|heic|avif)$/i;
+const GENERIC = /^(image|img|picture|pic|photo|foto|gambar|screenshot|screen ?shot|clipboard|untitled|pasted image)[\s_-]*[\d\s_-]*$/i;
+
+const decode = (s) => s.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+const encode = (s) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/** The alt text of an <img> tag, or null when it has none. */
+export function altOf(tag) {
+  const m = tag.match(ALT);
+  return m ? decode(m[1] ?? m[2] ?? m[3] ?? '') : null;
+}
+
+/** Whether an alt text is missing or only a file name, so a student using a screen reader learns nothing. */
+export function altIsMissing(alt) {
+  const a = (alt ?? '').trim();
+  return !a || FILE_NAME.test(a) || GENERIC.test(a);
+}
+
+/** Every text field of a question that contains a picture, as [path, html]; a path is ['answers', 2, 'feedback']. */
+function* imageFields(q) {
+  for (const [key, value] of Object.entries(q)) {
+    if (typeof value === 'string') {
+      if (/<img\b/i.test(value)) yield [[key], value];
+    } else if (Array.isArray(value)) {
+      for (let i = 0; i < value.length; i++) {
+        const row = value[i];
+        if (!row || typeof row !== 'object') continue;
+        for (const [field, v] of Object.entries(row)) if (typeof v === 'string' && /<img\b/i.test(v)) yield [[key, i, field], v];
+      }
+    }
+  }
+}
+
+/** The pictures of a question without a useful alt text: [{ path, index, src, alt }], `index` counting within its field. */
+export function imagesWithoutAlt(q) {
+  const found = [];
+  for (const [path, html] of imageFields(q)) {
+    let index = 0;
+    for (const [tag] of html.matchAll(IMG)) {
+      const alt = altOf(tag);
+      if (altIsMissing(alt)) found.push({ path, index, src: tag.match(/\ssrc\s*=\s*(?:"([^"]*)"|'([^']*)')/i)?.slice(1).find((x) => x != null) ?? '', alt });
+      index++;
+    }
+  }
+  return found;
+}
+
+/** Sets the alt text of the `index`-th picture in the field at `path`. */
+export function setImageAlt(q, path, index, alt) {
+  const owner = path.length === 1 ? q : q[path[0]]?.[path[1]];
+  const field = path.at(-1);
+  if (typeof owner?.[field] !== 'string') return;
+  let n = 0;
+  owner[field] = owner[field].replace(IMG, (tag) => {
+    if (n++ !== index) return tag;
+    const rest = tag.replace(ALT, '').replace(/^<img\b/i, '');
+    return `<img alt="${encode(alt.trim())}"${rest}`;
+  });
+}
+
+/** Where a picture is, in words: "the question text", "answer 2", "the feedback of answer 3". */
+export function placeName(path) {
+  const NAMES = {
+    questiontext: 'the question text',
+    generalfeedback: 'the general feedback',
+    correctfeedback: 'the feedback for a correct response',
+    partiallycorrectfeedback: 'the feedback for a partly correct response',
+    incorrectfeedback: 'the feedback for an incorrect response',
+    feedbacktrue: 'the feedback for True',
+    feedbackfalse: 'the feedback for False',
+    graderinfo: 'the information for graders',
+    responsetemplate: 'the response template',
+  };
+  if (path.length === 1) return NAMES[path[0]] ?? path[0];
+  const ROWS = { answers: 'answer', choices: 'choice', items: 'item', subquestions: 'pair', hints: 'hint' };
+  const row = `${ROWS[path[0]] ?? path[0]} ${path[1] + 1}`;
+  return path[2] === 'text' ? row : path[2] === 'feedback' ? `the feedback of ${row}` : path[2] === 'answer' ? `the answer of ${row}` : `${row} (${path[2]})`;
 }
 
 // ---------------------------------------------------------------- duplicates

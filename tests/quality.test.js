@@ -110,3 +110,60 @@ test('material files go into the prompt as text, or are named as attachments', (
   const none = buildPrompt({ topic: 'Cells', counts: { multichoice: 3 } });
   assert.doesNotMatch(none, /attached|Source material/);
 });
+
+import { placeProblem, fixPlace, lookAlikeAnswers, imagesWithoutAlt, setImageAlt, altIsMissing, placeName } from '../src/lib/quality.js';
+
+test('answers like "All of the above" are flagged when shuffled or not last, and fixed', () => {
+  const q = { ...mc(['Red', 'All of the above', 'Blue', 'Green']), shuffleanswers: true };
+  assert.equal(placeProblem(q), 'shuffled');
+  assert.equal(fixPlace(q), true);
+  assert.equal(q.shuffleanswers, false);
+  assert.deepEqual(q.answers.map((a) => a.text), ['Red', 'Blue', 'Green', 'All of the above']);
+  assert.equal(placeProblem(q), null);
+  // Two at the end are fine; "A and B" only matters when shuffled.
+  assert.equal(placeProblem({ ...mc(['x', 'y', 'All of the above', 'None of the above']), shuffleanswers: false }), null);
+  assert.equal(placeProblem({ ...mc(['x', 'y', 'A and B']), shuffleanswers: true }), 'shuffled');
+  assert.equal(placeProblem({ ...mc(['Semua jawaban di atas benar', 'x', 'y']), shuffleanswers: false }), 'notLast');
+  // Ordinary answers that happen to mention a word are not.
+  assert.equal(placeProblem({ ...mc(['The bird flew above the clouds and far away into the sunset over the sea', 'x']), shuffleanswers: true }), null);
+  assert.equal(placeProblem({ ...mc(['Paris', 'Rome']), shuffleanswers: true }), null);
+});
+
+test('answers that look alike are found, but different ones are not', () => {
+  assert.deepEqual(lookAlikeAnswers(mc(['Photosynthesis', ' photosynthesis.', 'Respiration'])), [{ what: 'answers', a: 1, b: 2, kind: 'same' }]);
+  assert.deepEqual(lookAlikeAnswers(mc(['red and blue', 'Blue and red', 'green'])), [{ what: 'answers', a: 1, b: 2, kind: 'reordered' }]);
+  assert.deepEqual(lookAlikeAnswers(mc(['The pressure increases', 'The pressure decreases', '1998', '1989'])), []);
+  assert.deepEqual(lookAlikeAnswers(mc(['', '<p></p>', 'x'])), []);
+  const gaps = { type: 'gapselect', choices: [{ text: 'cat', group: 1 }, { text: 'Cat', group: 2 }, { text: 'cat', group: 1 }] };
+  assert.deepEqual(lookAlikeAnswers(gaps), [{ what: 'choices', a: 1, b: 3, kind: 'same' }]);
+  const match = { type: 'matching', subquestions: [{ text: '', answer: 'x' }, { text: 'Dog', answer: 'a' }, { text: 'dog', answer: 'b' }] };
+  assert.deepEqual(lookAlikeAnswers(match), [{ what: 'questions', a: 2, b: 3, kind: 'same' }]);
+});
+
+test('pictures without a useful description are found and can be described', () => {
+  assert.equal(altIsMissing(''), true);
+  assert.equal(altIsMissing('image.png'), true);
+  assert.equal(altIsMissing('IMG_2024.JPG'), true);
+  assert.equal(altIsMissing('Screenshot 2'), true);
+  assert.equal(altIsMissing('A right triangle with sides 3, 4 and 5'), false);
+  const q = {
+    ...mc(['<img src="data:image/png;base64,AA">', 'b']),
+    questiontext: '<p><img alt="image.png" src="data:a"> and <img src="data:b" alt="A cell"> <img src=\'data:c\'></p>',
+  };
+  const found = imagesWithoutAlt(q);
+  assert.deepEqual(found.map((f) => [f.path.join('.'), f.index, f.src]), [['questiontext', 0, 'data:a'], ['questiontext', 2, 'data:c'], ['answers.0.text', 0, 'data:image/png;base64,AA']]);
+  setImageAlt(q, ['questiontext'], 2, 'A "big" <cell>');
+  setImageAlt(q, ['answers', 0, 'text'], 0, 'Mitochondrion');
+  assert.equal(q.questiontext, '<p><img alt="image.png" src="data:a"> and <img src="data:b" alt="A cell"> <img alt="A &quot;big&quot; &lt;cell&gt;" src=\'data:c\'></p>');
+  assert.equal(q.answers[0].text, '<img alt="Mitochondrion" src="data:image/png;base64,AA">');
+  setImageAlt(q, ['questiontext'], 0, 'Graph');
+  assert.match(q.questiontext, /^<p><img alt="Graph" src="data:a">/);
+  assert.equal(imagesWithoutAlt(q).length, 0);
+  assert.equal(placeName(['answers', 1, 'feedback']), 'the feedback of answer 2');
+  assert.equal(placeName(['questiontext']), 'the question text');
+});
+
+test('"All of the above" as the key is not counted as the longest answer', () => {
+  assert.equal(correctIsLongest(mc(['Red', 'Blue', 'Green', 'All of the above'], 3)), false);
+  assert.equal(correctIsLongest(mc(['A much longer correct answer here', 'Blue', 'Green', 'None of the above'], 0)), true);
+});

@@ -1,11 +1,23 @@
 <script>
   import { CircleCheck, TriangleAlert, ArrowRight, Shuffle, Trash, LoaderCircle } from '@lucide/svelte';
+  import { tick } from 'svelte';
   import Modal from '../ui/Modal.svelte';
   import Segmented from '../ui/Segmented.svelte';
   import Info from '../ui/Info.svelte';
   import { questionTitle, TYPE_MAP } from '../../lib/model.js';
   import { TYPE_ICONS } from '../../lib/icons.js';
-  import { answerKeyReport, balanceAnswers, findDuplicates, LETTERS } from '../../lib/quality.js';
+  import {
+    answerKeyReport,
+    balanceAnswers,
+    findDuplicates,
+    LETTERS,
+    placeProblem,
+    fixPlace,
+    lookAlikeAnswers,
+    imagesWithoutAlt,
+    setImageAlt,
+    placeName,
+  } from '../../lib/quality.js';
   import { app, library, closeModal, notify, select, switchQuiz, nextUnreviewed, setReviewed, deleteQuestion, loadAllQuizzes } from '../../lib/store.svelte.js';
 
   const questions = $derived(app.quiz.questions);
@@ -30,6 +42,46 @@
     const n = balanceAnswers(app.quiz.questions);
     notify(n ? `Reordered the answers of ${n} question${n === 1 ? '' : 's'}. Undo with Ctrl+Z.` : 'The correct answers were already spread evenly.', 'success', 5000);
   }
+
+  // ------------------------------------------------ answers
+  const placed = $derived(questions.map((q) => ({ q, problem: placeProblem(q) })).filter((x) => x.problem));
+  const alike = $derived(questions.map((q) => ({ q, pairs: lookAlikeAnswers(q) })).filter((x) => x.pairs.length));
+
+  async function fixPlaces(list, e) {
+    const dialog = e?.currentTarget.closest('[role=dialog]');
+    let n = 0;
+    for (const { q } of list) if (fixPlace(q)) n++;
+    if (n) notify(`Fixed ${n} question${n === 1 ? '' : 's'}. Undo with Ctrl+Z.`, 'success', 4000);
+    await tick();
+    if (dialog && !dialog.contains(document.activeElement)) keepFocus(dialog)?.focus();
+  }
+
+  const pairText = (p) => {
+    const what = { answers: 'Answers', items: 'Items', questions: 'Pairs', choices: 'Choices' }[p.what];
+    return `${what} ${p.a} and ${p.b} ${p.kind === 'same' ? 'are the same' : 'have the same words'}`;
+  };
+
+  // ------------------------------------------------ images
+  const images = $derived(questions.flatMap((q) => imagesWithoutAlt(q).map((img) => ({ q, ...img, key: `${q.id}:${img.path.join('.')}:${img.index}` }))));
+  let drafts = $state({});
+
+  let imageList = $state();
+
+  async function saveAlt(img) {
+    const text = (drafts[img.key] ?? '').trim();
+    if (!text) return;
+    const at = images.findIndex((x) => x.key === img.key);
+    const dialog = imageList?.closest('[role=dialog]');
+    setImageAlt(img.q, img.path, img.index, text);
+    delete drafts[img.key];
+    // The row goes away; carry on with the next picture, or keep the focus in the dialog so Escape still works.
+    await tick();
+    const inputs = imageList?.querySelectorAll('input') ?? [];
+    (inputs[Math.min(at, inputs.length - 1)] ?? keepFocus(dialog))?.focus();
+  }
+
+  // A button inside the dialog to move the focus to when the focused row disappears.
+  const keepFocus = (dialog) => dialog?.querySelector('footer button') ?? dialog?.querySelector('button');
 
   // ------------------------------------------------ duplicates
   let scope = $state('quiz');
@@ -70,7 +122,7 @@
 
 <Modal
   title="Check questions"
-  subtitle="Catch the usual problems of generated questions before you export: unchecked questions, a predictable answer key and repeated questions."
+  subtitle="Catch the usual problems before you export: unchecked questions, a predictable answer key, answers that depend on their place or look alike, pictures without a description and repeated questions."
   width="720px"
   onclose={closeModal}
 >
@@ -150,6 +202,101 @@
           </ul>
         </div>
       {/if}
+    {/if}
+  </section>
+
+  <section>
+    <h3>
+      Answers
+      <Info
+        text="Moodle shuffles the answers when both the question's “Shuffle the choices” and the quiz's “Shuffle within questions” are on, so “All of the above” can end up at the top. Answers that read the same are confusing, and a question can't be answered fairly when two of them are the same."
+      />
+    </h3>
+    {#if !placed.length && !alike.length}
+      <p class="status ok"><CircleCheck size={16} /> <span>No answers that depend on their place or look alike.</span></p>
+    {/if}
+    {#if placed.length}
+      <div class="sub">
+        <div class="row">
+          <p class="status warn">
+            <TriangleAlert size={16} />
+            <span>
+              {placed.length} question{placed.length === 1 ? ' has' : 's have'} an answer like “All of the above” or “A and B” that only makes sense in its place.
+              Fix turns off shuffling and moves “… of the above” to the end.
+            </span>
+          </p>
+          {#if placed.length > 1}<button class="btn btn-sm" onclick={(e) => fixPlaces(placed, e)}>Fix all</button>{/if}
+        </div>
+        <ul class="list">
+          {#each placed as { q, problem } (q.id)}
+            {@const Icon = TYPE_ICONS[q.type]}
+            <li>
+              <span class="num">{numberOf(q.id)}</span>
+              <span class="icon"><Icon size={14} /></span>
+              <span class="name">{questionTitle(q)}</span>
+              <span class="why">{problem === 'shuffled' ? 'answers are shuffled' : 'not the last answer'}</span>
+              <button class="btn btn-sm" onclick={(e) => fixPlaces([{ q }], e)}>Fix</button>
+              <button class="btn btn-ghost btn-sm" onclick={() => openQuestion(q.id)}>Open <ArrowRight size={14} /></button>
+            </li>
+          {/each}
+        </ul>
+      </div>
+    {/if}
+    {#if alike.length}
+      <div class="sub">
+        <p class="status warn">
+          <TriangleAlert size={16} />
+          <span>{alike.length} question{alike.length === 1 ? ' has' : 's have'} answers that look alike. Rewrite or remove one of each pair:</span>
+        </p>
+        <ul class="list">
+          {#each alike as { q, pairs } (q.id)}
+            {@const Icon = TYPE_ICONS[q.type]}
+            <li>
+              <span class="num">{numberOf(q.id)}</span>
+              <span class="icon"><Icon size={14} /></span>
+              <span class="name">{questionTitle(q)}</span>
+              <span class="why">{pairs.map(pairText).join('; ')}</span>
+              <button class="btn btn-sm" onclick={() => openQuestion(q.id)}>Open <ArrowRight size={14} /></button>
+            </li>
+          {/each}
+        </ul>
+      </div>
+    {/if}
+  </section>
+
+  <section>
+    <h3>
+      Image descriptions
+      <Info text="Screen readers read a picture's description (its alt text) to students who can't see it. A file name such as image.png says nothing about what the picture shows." />
+    </h3>
+    {#if !images.length}
+      <p class="status ok"><CircleCheck size={16} /> <span>{questions.some((q) => /<img\b/i.test(JSON.stringify(q))) ? 'Every picture has a description.' : 'No pictures in this quiz.'}</span></p>
+    {:else}
+      <p class="status warn">
+        <TriangleAlert size={16} />
+        <span>{images.length} picture{images.length === 1 ? ' has' : 's have'} no description. Type what each one shows and press Enter:</span>
+      </p>
+      <ul class="list images" bind:this={imageList}>
+        {#each images as img (img.key)}
+          <li>
+            <span class="num">{numberOf(img.q.id)}</span>
+            {#if img.src}<img class="thumb" src={img.src} alt="" />{/if}
+            <span class="img-fields">
+              <span class="where">In {placeName(img.path)}{img.alt ? ` · now “${img.alt}”` : ''}</span>
+              <span class="alt-row">
+                <input
+                  class="input"
+                  placeholder="Describe the picture, e.g. “Graph of y = x² from −2 to 2”"
+                  aria-label="Description of the picture in question {numberOf(img.q.id)}, {placeName(img.path)}"
+                  bind:value={drafts[img.key]}
+                  onkeydown={(e) => e.key === 'Enter' && (e.preventDefault(), saveAlt(img))}
+                />
+                <button class="btn btn-sm" disabled={!drafts[img.key]?.trim()} onclick={() => saveAlt(img)}>Save</button>
+              </span>
+            </span>
+          </li>
+        {/each}
+      </ul>
     {/if}
   </section>
 
@@ -399,6 +546,71 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .why {
+    flex: none;
+    max-width: 45%;
+    font-size: 12px;
+    color: var(--text-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .images {
+    max-height: 320px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .images li {
+    align-items: flex-start;
+    padding: 6px;
+  }
+  .images .num {
+    padding-top: 2px;
+  }
+  .thumb {
+    flex: none;
+    width: 56px;
+    height: 42px;
+    object-fit: contain;
+    border-radius: 4px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+  }
+  .img-fields {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .where {
+    font-size: 12px;
+    color: var(--text-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .alt-row {
+    display: flex;
+    gap: 6px;
+  }
+  .alt-row input {
+    flex: 1;
+    min-width: 0;
+    height: 30px;
+  }
+  @media (max-width: 600px) {
+    .list li {
+      flex-wrap: wrap;
+    }
+    .why {
+      max-width: none;
+      flex-basis: 100%;
+      order: 5;
+      padding-left: 28px;
+      white-space: normal;
+    }
   }
   .quiz {
     flex: none;
