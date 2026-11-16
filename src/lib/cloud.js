@@ -8,7 +8,8 @@
 // Folders point at their parent, and a null or absent folder or parent means the top level, so renaming or moving a
 // folder is a single write however much it holds. A new upload writes its chunks first and only then points the quiz
 // at them, so a failed upload leaves the previous copy intact. The previous copies stay as `history` (newest first),
-// up to KEEP_VERSIONS in all. Deleting puts a quiz or folder in the trash by setting `deleted` (a time); what is inside
+// up to KEEP_VERSIONS in all; automatic uploads (`auto`, with `since` the time the run began) replace each other for
+// an hour, so they don't push the earlier copies out. Deleting puts a quiz or folder in the trash by setting `deleted` (a time); what is inside
 // a deleted folder stays where it is, hidden with it, and comes back with it. The SDK is loaded only when needed.
 
 import { uid, questionTitle } from './model.js';
@@ -19,6 +20,8 @@ export const KEEP_VERSIONS = 5;
 /** Days a deleted quiz or folder stays in the trash. */
 export const TRASH_DAYS = 30;
 const DAY = 24 * 60 * 60 * 1000;
+/** Automatic uploads within this time of the first one replace each other in the version history. */
+export const AUTO_SESSION = 60 * 60 * 1000;
 // Plain text of a quiz kept for searching; a Firestore document must stay under 1 MiB, which this does at 3 bytes per unit.
 const SEARCH_LIMIT = 300_000;
 const QUESTION_LIMIT = 2000;
@@ -316,6 +319,14 @@ export const quizVersions = (meta) => [
   ...(meta.history ?? []),
 ];
 
+/**
+ * Whether an automatic upload replaces the current version instead of adding one: it does while automatic uploads
+ * follow each other within AUTO_SESSION, so the version history keeps one copy per working session.
+ */
+export function replacesVersion(previous, auto, now = Date.now()) {
+  return !!(auto && previous && !previous.deleted && previous.auto && now - (previous.since ?? previous.uploaded) < AUTO_SESSION);
+}
+
 /** Puts a quiz or folder in the trash. */
 export async function trashCloudItem(userId, kind, id) {
   const { db, store } = await load();
@@ -350,8 +361,8 @@ export async function deleteCloudFolders(userId, ids, quizzes, onProgress = () =
  * @param {string} userId
  * @param {string} id the quiz's ID, which stays the same on every device
  * @param {string} text the quiz as JSON
- * @param {{ name: string, count: number, folder: string | null, search?: string }} info `folder` is used for a first
- *   upload, and `search` is the quiz's searchable text (see searchText)
+ * @param {{ name: string, count: number, folder: string | null, search?: string, auto?: boolean }} info `folder` is used
+ *   for a first upload, `search` is the quiz's searchable text (see searchText), and `auto` marks an automatic upload
  * @param {(done: number, total: number) => void} [onProgress]
  * @returns {Promise<object>} the stored description of the quiz
  */
@@ -369,11 +380,15 @@ export async function uploadCloudQuiz(userId, id, text, info, onProgress = () =>
       await store.setDoc(store.doc(db, chunkPath(userId, id, version, written)), { data: chunks[written] });
     }
     const folder = previous && !previous.deleted ? (previous.folder ?? null) : info.folder;
-    const older = previous ? quizVersions(previous) : [];
-    const meta = { name: info.name, count: info.count, size: text.length, uploaded: Date.now(), version, chunks: chunks.length, folder, history: older.slice(0, KEEP_VERSIONS - 1) };
+    const now = Date.now();
+    const replace = replacesVersion(previous, info.auto, now);
+    const older = previous ? (replace ? (previous.history ?? []) : quizVersions(previous)) : [];
+    const meta = { name: info.name, count: info.count, size: text.length, uploaded: now, version, chunks: chunks.length, folder, history: older.slice(0, KEEP_VERSIONS - 1) };
+    if (info.auto) Object.assign(meta, { auto: true, since: replace ? (previous.since ?? previous.uploaded) : now });
     await store.setDoc(ref, meta);
     onProgress(chunks.length, chunks.length);
-    for (const old of older.slice(KEEP_VERSIONS - 1)) await deleteChunks(userId, id, old.version, old.chunks).catch(() => {});
+    const dropped = [...older.slice(KEEP_VERSIONS - 1), ...(replace ? [previous] : [])];
+    for (const old of dropped) await deleteChunks(userId, id, old.version, old.chunks).catch(() => {});
     // Searching is a convenience: the upload has succeeded even if this fails.
     if (info.search != null) await store.setDoc(store.doc(db, searchPath(userId, id)), { text: info.search }).catch(() => {});
     return { id, ...meta };

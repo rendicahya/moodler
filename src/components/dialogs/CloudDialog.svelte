@@ -4,7 +4,8 @@
   import { Cloud, CloudUpload, CloudDownload, LogIn, LogOut, Trash2, Folder, FolderPlus, FolderInput, Pencil, ChevronRight, Check, X, History, Undo2, FileText, Search } from '@lucide/svelte';
   import Modal from '../ui/Modal.svelte';
   import { app, library, closeModal, notify, ask, prepareCloudUpload, markCloudSynced, applyCloudQuiz } from '../../lib/store.svelte.js';
-  import { uploadChanges } from '../../lib/cloudsync.svelte.js';
+  import { uploadChanges, sync, setAutoUpload } from '../../lib/cloudsync.svelte.js';
+  import Switch from '../ui/Switch.svelte';
   import {
     watchUser,
     signIn,
@@ -802,7 +803,8 @@
   {/if}
 
   {#snippet footer()}
-    {#if progressText}<span class="progress" role="status">{progressText}</span>{/if}
+    {#if progressText}<span class="progress" role="status">{progressText}</span>
+    {:else if user}<span class="auto"><Switch checked={sync.auto} onchange={setAutoUpload} label="Upload changes automatically" info="Quizzes that are already in the cloud are uploaded a few seconds after you stop editing them. Uploads within an hour of each other count as one version in the history. A copy that was changed on another device is never replaced without asking." /></span>{/if}
     <button class="btn" disabled={!!busy} onclick={close}>Close</button>
     {#if user}
       <button class="btn btn-primary upload" bind:this={primary} disabled={!!busy || !quizzes || !app.quiz.questions.length} title={app.quiz.questions.length ? uploadLabel : 'This quiz has no questions yet'} onclick={upload}>
@@ -1124,6 +1126,9 @@
     font-weight: 500;
     color: var(--success);
     padding: 0 8px;
+  }
+  .auto {
+    margin-right: auto;
   }
   .progress {
     margin-right: auto;

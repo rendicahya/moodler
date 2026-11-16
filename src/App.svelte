@@ -13,6 +13,7 @@
   import BulkEditDialog from './components/dialogs/BulkEditDialog.svelte';
   import QuizPreviewDialog from './components/dialogs/QuizPreviewDialog.svelte';
   import PrintDialog from './components/dialogs/PrintDialog.svelte';
+  import MarkingDialog from './components/dialogs/MarkingDialog.svelte';
   import FindReplaceDialog from './components/dialogs/FindReplaceDialog.svelte';
   import CopyToQuizDialog from './components/dialogs/CopyToQuizDialog.svelte';
   import AiPromptDialog from './components/dialogs/AiPromptDialog.svelte';
@@ -20,13 +21,14 @@
   import AiQuestionDialog from './components/dialogs/AiQuestionDialog.svelte';
   import CloudDialog from './components/dialogs/CloudDialog.svelte';
   import QuestionBankDialog from './components/dialogs/QuestionBankDialog.svelte';
-  import { editedSinceUpload, uploadChanges } from './lib/cloudsync.svelte.js';
+  import { editedSinceUpload, uploadChanges, startAutoUpload } from './lib/cloudsync.svelte.js';
   import { app, library, switchToTab, closeTab, initPersistence, undo, redo, openModal, notify, selectedQuestion, selectedIndex, addQuestion, deleteQuestion, newQuiz, cycleView, goToQuestion, markReviewed, markUnreviewed, nextUnreviewed, setSidebarWidth, saveLayout, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT } from './lib/store.svelte.js';
   import { QUESTION_TYPES } from './lib/model.js';
   import { looksLikeQuestions } from './lib/formats/index.js';
   import { TYPE_ICONS } from './lib/icons.js';
 
   initPersistence();
+  $effect(() => startAutoUpload());
 
   const q = $derived(selectedQuestion());
   const index = $derived(selectedIndex());
@@ -313,6 +315,8 @@
   <QuizPreviewDialog />
 {:else if app.modal === 'print'}
   <PrintDialog />
+{:else if app.modal === 'marking'}
+  <MarkingDialog />
 {:else if app.modal === 'find'}
   <FindReplaceDialog />
 {:else if app.modal === 'copy-to'}

@@ -3,10 +3,11 @@
   import { Sun, Moon, Maximize, Minimize, Undo2, Redo2, Upload, Download, FilePlus, Settings, CircleQuestionMark, Presentation, Printer, Sparkles, ListChecks, Cloud, CloudUpload } from '@lucide/svelte';
   import QuizTabs from './QuizTabs.svelte';
   import { app, library, history, backup, REMIND_AFTER, undo, redo, toggleTheme, openModal, newQuiz, downloadBackup } from '../lib/store.svelte.js';
-  import { sync, editedSinceUpload, uploadChanges } from '../lib/cloudsync.svelte.js';
+  import { sync, editedSinceUpload, autoBlocked, uploadChanges } from '../lib/cloudsync.svelte.js';
 
   const entry = $derived(library.quizzes.find((q) => q.id === library.activeId));
-  const cloudChanged = $derived(editedSinceUpload(entry));
+  // With automatic uploads on, the button only shows while uploading, or when the changes need a hand.
+  const cloudChanged = $derived(editedSinceUpload(entry) && (!sync.auto || !!sync.error || autoBlocked(entry)));
   const syncText = $derived(sync.busy ? (sync.total > 1 ? `Uploading ${sync.done} / ${sync.total}…` : 'Uploading…') : 'Upload changes');
 
   let fullscreen = $state(false);
@@ -86,7 +87,7 @@
     {#if cloudChanged || sync.busy}
       <button
         class="btn btn-ghost btn-sm cloud-sync"
-        title="This quiz has changed since it was last uploaded. Upload the changes to the cloud (Alt+U)"
+        title={sync.busy && sync.background ? 'Uploading changes to the cloud automatically' : sync.error ? `Automatic upload failed: ${sync.error}\nUpload the changes now (Alt+U)` : 'This quiz has changed since it was last uploaded. Upload the changes to the cloud (Alt+U)'}
         disabled={sync.busy}
         onclick={uploadChanges}><CloudUpload size={16} /><span class="sync-text">{syncText}</span></button
       >

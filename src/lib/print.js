@@ -5,6 +5,7 @@ import { escapeHtml, round, stripHtml } from './model.js';
 import { parseCloze, CLOZE_RE, isChoiceCloze, canonicalClozeType } from './formats/cloze.js';
 import { sanitizeHtml } from './sanitize.js';
 import { substitute, itemValues, tryEvaluate, formatAnswer, toleranceText } from './calc.js';
+import { sheetHtml, sheetItems, SHEET_CSS, VERSION_LABELS } from './exam.js';
 
 const html = (text, format = 'html') => (format === 'html' ? sanitizeHtml(text || '') : escapeHtml(text || '').replace(/\n/g, '<br>'));
 const plain = (text) => escapeHtml(stripHtml(text));
@@ -211,43 +212,60 @@ export const PAPERS = {
 };
 export const PAGE_MARGIN = { x: 15, y: 16 };
 
+/** The printable area of a paper in mm, which an answer sheet fills; a little shorter, so it never runs onto a next page. */
+export function sheetSize(paper) {
+  const size = PAPERS[paper] ?? PAPERS.a4;
+  return { width: size.width - 2 * PAGE_MARGIN.x, height: size.height - 2 * PAGE_MARGIN.y - 2 };
+}
+
 /**
  * Builds a standalone HTML document for printing.
- * options: { answers: 'none' | 'inline' | 'key', marks: boolean, studentFields: boolean, feedback: boolean, paper: keyof PAPERS }
+ * options: { answers: 'none' | 'inline' | 'key', marks: boolean, studentFields: boolean, feedback: boolean,
+ *   paper: keyof PAPERS, versions: [{ label, questions }] (from makeVersions; replaces `questions`),
+ *   sheet: 'none' | 'after' | 'only' (answer sheets after each version's questions, or only those), check: number }
  */
-export function buildPrintHtml(quiz, questions, { answers = 'none', marks = true, studentFields = true, feedback = false, paper = 'a4' } = {}) {
+export function buildPrintHtml(quiz, questions, { answers = 'none', marks = true, studentFields = true, feedback = false, paper = 'a4', versions = null, sheet = 'none', check = 0 } = {}) {
   const show = answers === 'inline';
-  let n = 0;
-  const numbered = questions.map((q) => ({ q, number: q.type === 'description' ? 0 : ++n }));
-  const total = round(questions.reduce((s, q) => s + (q.type === 'description' ? 0 : markOf(q)), 0), 2);
   const markText = (m) => `${round(m, 2)} mark${round(m, 2) === 1 ? '' : 's'}`;
-
-  const items = numbered
-    .map(({ q, number }) => {
-      const text = q.type === 'cloze' ? cloze(q, show) : q.type === 'gapselect' || q.type === 'ddwtos' ? gaps(q, show) : q.type === 'calculated' ? html(substitute(q.questiontext, q, 0), q.questiontextformat) : html(q.questiontext, q.questiontextformat);
-      const fb = show && feedback && stripHtml(q.generalfeedback) ? `<div class="feedback">${html(q.generalfeedback)}</div>` : '';
-      if (!number) return `<section class="q info">${text}</section>`;
-      return `<section class="q"><div class="qhead"><span class="qno">${number}.</span>${marks ? `<span class="qmark">${markText(markOf(q))}</span>` : ''}</div><div class="qbody"><div class="qtext">${text}</div>${body(q, show)}${fb}</div></section>`;
-    })
-    .join('');
-
-  const key =
-    answers === 'key'
-      ? `<section class="answer-key"><h2>Answer key</h2><ol>${numbered
-          .filter((x) => x.number)
-          .map(({ q, number }) => `<li value="${number}">${keyText(q) || '—'}${feedback && stripHtml(q.generalfeedback) ? `<div class="muted">${plain(q.generalfeedback)}</div>` : ''}</li>`)
-          .join('')}</ol></section>`
-      : '';
-
   const title = escapeHtml(quiz.name || 'Quiz');
   const intro = stripHtml(quiz.info) ? `<div class="intro">${html(quiz.info)}</div>` : '';
   const fields = studentFields ? `<div class="student"><span class="name">Name: <span class="blank"></span></span><span>ID: <span class="blank"></span></span><span>Date: <span class="blank"></span></span></div>` : '';
-  const meta = `${n} question${n === 1 ? '' : 's'}${marks ? ` · ${markText(total)}` : ''}${answers === 'inline' ? ' · with answers' : ''}`;
+
+  const parts = (versions ?? [{ label: '', questions }]).map(({ label, questions }) => {
+    let n = 0;
+    const numbered = questions.map((q) => ({ q, number: q.type === 'description' ? 0 : ++n }));
+    const total = round(questions.reduce((s, q) => s + (q.type === 'description' ? 0 : markOf(q)), 0), 2);
+
+    const items = numbered
+      .map(({ q, number }) => {
+        const text = q.type === 'cloze' ? cloze(q, show) : q.type === 'gapselect' || q.type === 'ddwtos' ? gaps(q, show) : q.type === 'calculated' ? html(substitute(q.questiontext, q, 0), q.questiontextformat) : html(q.questiontext, q.questiontextformat);
+        const fb = show && feedback && stripHtml(q.generalfeedback) ? `<div class="feedback">${html(q.generalfeedback)}</div>` : '';
+        if (!number) return `<section class="q info">${text}</section>`;
+        return `<section class="q"><div class="qhead"><span class="qno">${number}.</span>${marks ? `<span class="qmark">${markText(markOf(q))}</span>` : ''}</div><div class="qbody"><div class="qtext">${text}</div>${body(q, show)}${fb}</div></section>`;
+      })
+      .join('');
+
+    const key =
+      answers === 'key'
+        ? `<section class="answer-key"><h2>Answer key${label ? ` · Version ${label}` : ''}</h2><ol>${numbered
+            .filter((x) => x.number)
+            .map(({ q, number }) => `<li value="${number}">${keyText(q) || '—'}${feedback && stripHtml(q.generalfeedback) ? `<div class="muted">${plain(q.generalfeedback)}</div>` : ''}</li>`)
+            .join('')}</ol></section>`
+        : '';
+
+    const meta = `${label ? `Version ${label} · ` : ''}${n} question${n === 1 ? '' : 's'}${marks ? ` · ${markText(total)}` : ''}${answers === 'inline' ? ' · with answers' : ''}`;
+    const paperHtml = sheet === 'only' ? '' : `<header class="top"><div class="title-row"><h1>${title}</h1>${label ? `<span class="ver">Version ${label}</span>` : ''}</div><p class="meta">${meta}</p>${fields}</header>${intro}<main>${items}</main>`;
+    const sheets =
+      sheet === 'none'
+        ? ''
+        : sheetHtml({ title: quiz.name || 'Quiz', label, version: Math.max(0, VERSION_LABELS.indexOf(label)), check, size: sheetSize(paper), items: sheetItems(questions), show });
+    return { body: `<div class="version">${paperHtml}${sheets}</div>`, key };
+  });
 
   const size = PAPERS[paper] ?? PAPERS.a4;
   const page = `@page { size: ${size.width}mm ${size.height}mm; margin: ${PAGE_MARGIN.y}mm ${PAGE_MARGIN.x}mm; }`;
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>${page}${CSS}</style></head><body>
-<header class="top"><h1>${title}</h1><p class="meta">${meta}</p>${fields}</header>${intro}<main>${items}</main>${key}</body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>${page}${CSS}${SHEET_CSS}</style></head><body>
+${parts.map((p) => p.body).join('')}${parts.map((p) => p.key).join('')}</body></html>`;
 }
 
 const CSS = `
@@ -259,6 +277,9 @@ p { margin: 0 0 .4em; }
 h1 { font-size: 17pt; margin: 0; }
 h2 { font-size: 13pt; margin: 0 0 .6em; }
 .top { border-bottom: 1.5pt solid #000; padding-bottom: 8pt; margin-bottom: 12pt; }
+.title-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12pt; }
+.ver { flex: none; font-weight: 700; font-size: 14pt; border: 1pt solid #000; padding: 0 6pt; }
+.version + .version > :first-child { break-before: page; }
 .meta, .muted { color: #555; font-size: 9.5pt; }
 .student { display: flex; flex-wrap: wrap; gap: 6pt 22pt; margin-top: 10pt; }
 .student > span { flex: 1 1 9em; display: flex; align-items: baseline; gap: 4pt; white-space: nowrap; }
@@ -310,6 +331,7 @@ h2 { font-size: 13pt; margin: 0 0 .6em; }
 @media screen {
   html:not(.pdf) body { max-width: 760px; margin: 0 auto; padding: 28px 32px; }
   html:not(.pdf) .answer-key { margin-top: 28px; padding-top: 16px; border-top: 1.5pt dashed #999; }
+  html:not(.pdf) .version + .version { margin-top: 28px; padding-top: 16px; border-top: 1.5pt dashed #999; }
 }
 `;
 

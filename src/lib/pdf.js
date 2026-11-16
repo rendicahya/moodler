@@ -17,11 +17,12 @@ function waitForImages(doc) {
 function pageSlices(doc, pageHeight) {
   const body = doc.body;
   const end = body.scrollHeight;
-  const units = [...doc.querySelectorAll('header.top, .intro, main > section, .answer-key h2, .answer-key li')].map((el) => {
+  const units = [...doc.querySelectorAll('header.top, .intro, main > section, .sheet-page, .answer-key h2, .answer-key li')].map((el) => {
     const r = el.getBoundingClientRect();
     // A page that starts with this unit leaves out its divider line.
     const border = parseFloat(getComputedStyle(el).borderTopWidth) || 0;
-    return { top: r.top, bottom: r.bottom, border, breakBefore: el.matches('.answer-key h2') };
+    // Answer keys, answer sheets and each further exam version start a new page.
+    return { top: r.top, bottom: r.bottom, border, breakBefore: el.matches('.answer-key h2, .sheet-page, .version + .version > :first-child') };
   });
   const slices = [];
   let start = 0;

@@ -44,8 +44,13 @@
     <ul>
       <li>Everything runs in your browser. Your quiz is saved automatically in this browser’s storage, and nothing is uploaded unless you use the <strong>Cloud</strong> button.</li>
       <li>
-        The <strong>Cloud</strong> button signs you in with Google so you can upload the open quiz to your private folders and download it on any device. When an uploaded quiz has changed, <strong>Upload changes</strong> appears at the top
-        (Alt+U). The last 5 uploads of each quiz are kept, and deleted quizzes and folders stay in the trash for 30 days.
+        The <strong>Cloud</strong> button signs you in with Google so you can upload the open quiz to your private folders and download it on any device. Quizzes that are already in the cloud upload their changes automatically a few
+        seconds after you stop editing (this can be turned off in Cloud); otherwise <strong>Upload changes</strong> appears at the top (Alt+U). The last 5 uploads of each quiz are kept, and deleted quizzes and folders stay in the trash
+        for 30 days.
+      </li>
+      <li>
+        <strong>Print</strong> (Ctrl+P) can make up to four exam versions (A–D) with the questions and answers in another order, and a bubble answer sheet. <strong>Mark answer sheets</strong> scores the sheets from typed answers or photos
+        of them.
       </li>
       <li>Export to <strong>Moodle XML</strong> for full fidelity. In Moodle, go to <em>Question bank → Import</em>, choose the same format and upload the file.</li>
       <li><strong>GIFT</strong> and <strong>Aiken</strong> are plain-text formats that only support some question types; unsupported questions are listed when exporting.</li>

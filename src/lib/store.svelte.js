@@ -678,6 +678,20 @@ export function prepareCloudUpload() {
   return { id: library.activeId, text: current, name: app.quiz.name || 'Untitled quiz', count: app.quiz.questions.length, entry };
 }
 
+/** Any quiz in the list as it stands now, for uploading; null when its saved data can't be read. */
+export async function quizForUpload(id) {
+  if (id === library.activeId) {
+    const prepared = prepareCloudUpload();
+    return { ...prepared, updated: prepared.entry.updated };
+  }
+  const entry = library.quizzes.find((q) => q.id === id);
+  // The edit time is read before the quiz, so a newer save is never marked as uploaded.
+  const updated = entry?.updated;
+  const quiz = entry && (await loadQuiz(id));
+  if (!quiz) return null;
+  return { id, text: JSON.stringify(quiz), name: quiz.name || 'Untitled quiz', count: quiz.questions.length, entry, updated };
+}
+
 /** Remembers which cloud copy a quiz matches. `updated` is the entry's edit time at that moment. */
 export function markCloudSynced(id, version, updated) {
   const entry = library.quizzes.find((q) => q.id === id);
