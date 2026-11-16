@@ -31,6 +31,7 @@ Built with [Svelte 5](https://svelte.dev) and [Vite](https://vite.dev), and depl
 - **Exam versions and answer sheets:** print up to four versions (A–D) of a paper exam, each with the questions and the multiple-choice answers in another order (questions stay after the description that introduces them, and answers like "All of the above" keep their place), each with its own answer key. Add a bubble answer sheet for the multiple-choice and true/false questions, after the questions or on its own. **Mark answer sheets** scores filled-in sheets: type each student's answers, or choose photos of the sheets and Moodler reads them (the version and page are printed on each sheet as a code, so photos can be in any order and either way up). Faint marks and double answers are pointed out for a second look, and the marks download as a CSV file with a column per question.
 - **Find and replace:** search and replace text in every question at once (Ctrl+H), with match-case and whole-word options. Only the visible text is changed, never images, links or HTML tags.
 - **Productivity:** undo/redo, validation warnings, search, keyboard shortcuts, and per-quiz defaults.
+- **Computers only:** on a phone, Moodler shows a message to open it on a computer instead of the editor. Tablets and narrow browser windows on a computer still get the app.
 - **UI:** light and dark themes, a fullscreen toggle and a responsive layout. Hide or show the question list with the small tab on its edge, and drag its edge to resize it.
 
 ## Development
