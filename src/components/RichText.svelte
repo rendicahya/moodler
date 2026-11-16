@@ -19,6 +19,7 @@
   import { sanitizeHtml } from '../lib/sanitize.js';
   import { notify } from '../lib/store.svelte.js';
   import { rememberCaret } from '../lib/caret.js';
+  import { imageForEditor, sizeText } from '../lib/images.js';
 
   let { value = $bindable(''), placeholder = '', compact = false, minHeight = compact ? 38 : 120, id, label = 'Rich text editor' } = $props();
 
@@ -100,21 +101,25 @@
     linkOpen = false;
   }
 
-  function readImage(file) {
-    return new Promise((resolve, reject) => {
-      if (file.size > 2 * 1024 * 1024) notify('Large images make exported files big. Consider resizing images before inserting.', 'warning', 6000);
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }
-
   async function insertImages(files) {
     for (const f of files) {
       if (!f.type.startsWith('image/')) continue;
-      const url = await readImage(f);
-      exec('insertHTML', `<img src="${url}" alt="${f.name.replace(/"/g, '')}">`);
+      let image;
+      try {
+        image = await imageForEditor(f);
+      } catch {
+        notify(`Could not read the image “${f.name}”.`, 'error');
+        continue;
+      }
+      exec('insertHTML', `<img src="${image.url}" alt="${f.name.replace(/[<>"&]/g, '')}">`);
+      if (image.original) {
+        const { url, original } = image;
+        // Puts the full-size image back, wherever it is in the text by now.
+        const useOriginal = () => {
+          if (value.includes(url)) value = value.replace(url, () => original);
+        };
+        notify(`Image made smaller: ${sizeText(image.before)} → ${sizeText(image.after)}.`, 'info', 6000, { label: 'Use original', run: useOriginal });
+      } else if (f.size > 2 * 1024 * 1024) notify('Large images make exported files big. Consider resizing images before inserting.', 'warning', 6000);
     }
   }
 

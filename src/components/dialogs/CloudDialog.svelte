@@ -1,15 +1,17 @@
 <script>
   import { onMount, tick } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import { Cloud, CloudUpload, CloudDownload, LogIn, LogOut, Trash2, Folder, FolderPlus, FolderInput, Pencil, ChevronRight, Check, X } from '@lucide/svelte';
+  import { Cloud, CloudUpload, CloudDownload, LogIn, LogOut, Trash2, Folder, FolderPlus, FolderInput, Pencil, ChevronRight, Check, X, History, Undo2, FileText, Search } from '@lucide/svelte';
   import Modal from '../ui/Modal.svelte';
   import { app, library, closeModal, notify, ask, prepareCloudUpload, markCloudSynced, applyCloudQuiz } from '../../lib/store.svelte.js';
+  import { uploadChanges } from '../../lib/cloudsync.svelte.js';
   import {
     watchUser,
     signIn,
     signOut,
     listCloudQuizzes,
     listCloudFolders,
+    listSearchTexts,
     uploadCloudQuiz,
     downloadCloudQuiz,
     deleteCloudQuiz,
@@ -17,19 +19,46 @@
     updateCloudFolder,
     moveCloudQuiz,
     deleteCloudFolders,
+    trashCloudItem,
+    restoreCloudItem,
+    cloudView,
+    quizVersions,
+    daysLeft,
+    matchQuiz,
+    searchText,
     folderPath,
     childFolders,
     folderTreeIds,
     folderOptions,
     cloudErrorMessage,
+    KEEP_VERSIONS,
+    TRASH_DAYS,
   } from '../../lib/cloud.js';
+
+  // The tree's row for the trash; folder IDs never look like this.
+  const TRASH = ':trash';
 
   let ready = $state(false);
   let user = $state(null);
-  let quizzes = $state(null);
-  let folders = $state([]);
-  // The folder selected in the tree; null is the top level.
+  // Everything stored, deleted folders and quizzes included; null until loaded.
+  let stored = $state(null);
+  const view = $derived(stored ? cloudView(stored.folders, stored.quizzes) : null);
+  // What is shown: the folders and quizzes not in the trash.
+  const quizzes = $derived(view?.quizzes ?? null);
+  const folders = $derived(view?.folders ?? []);
+  const trash = $derived(view?.trash ?? []);
+  // The folder selected in the tree; null is the top level and TRASH the trash.
   let current = $state(null);
+  // The quiz whose earlier versions are shown.
+  let historyOf = $state(null);
+  let query = $state('');
+  // Each quiz's searchable text, loaded when searching first starts.
+  let texts = $state(null);
+  let textsLoading = $state(false);
+  // What is being dragged ({ kind, id }) and the tree row it is over.
+  let dragging = $state(null);
+  let dropOn = $state(undefined);
+  let alive = true;
   const expanded = new SvelteSet();
   let tree = $state(null);
   let error = $state('');
@@ -43,28 +72,44 @@
 
   const progressText = $derived(busy ? (busy.total > 1 ? `${busy.label} ${busy.done} / ${busy.total}…` : `${busy.label}…`) : '');
   const openCopy = $derived(quizzes?.find((q) => q.id === library.activeId));
-  const crumbs = $derived(folderPath(folders, current));
+  const inTrash = $derived(current === TRASH);
+  const crumbs = $derived(inTrash ? [] : folderPath(folders, current));
   const selected = $derived(crumbs.at(-1));
-  // The rows the tree shows: the top level, then the folders whose parents are all expanded.
+  // Where an upload of a quiz that isn't in the cloud yet goes.
+  const uploadFolder = $derived(inTrash ? null : current);
+  // The rows the tree shows: the top level, then the folders whose parents are all expanded, then the trash.
   const treeRows = $derived([
     { id: null, name: 'Cloud', parent: null, depth: 0, hasChildren: false },
     ...folderOptions(folders, null, (id) => expanded.has(id)).map((r) => ({ ...r, depth: r.depth + 1 })),
+    { id: TRASH, name: 'Trash', parent: null, depth: 0, hasChildren: false },
   ]);
-  // A quiz whose folder was deleted on another device shows at the top level.
-  const folderOf = (q) => (folders.some((f) => f.id === q.folder) ? q.folder : null);
+  // Quizzes are shown at the top level when their folder is gone.
+  const folderOf = (q) => q.folder ?? null;
   const shownQuizzes = $derived(quizzes?.filter((q) => folderOf(q) === current) ?? []);
   const quizzesPerFolder = $derived.by(() => {
     const counts = new Map();
     for (const q of quizzes ?? []) counts.set(folderOf(q), (counts.get(folderOf(q)) ?? 0) + 1);
+    counts.set(TRASH, trash.length);
     return counts;
   });
   const uploadLabel = $derived(openCopy ? 'Upload again' : selected ? `Upload to ${selected.name}` : 'Upload this quiz');
   const moveOptions = $derived(moving ? folderOptions(folders, moving.kind === 'folder' ? moving.id : null) : []);
+  const searching = $derived(!!query.trim() && !!quizzes);
+  const results = $derived(
+    searching
+      ? quizzes
+          .map((q) => ({ q, match: matchQuiz(q.name, texts?.get(q.id), query) }))
+          .filter((r) => r.match)
+          .sort((a, b) => b.match.byName - a.match.byName || b.match.total - a.match.total)
+      : []
+  );
+  // Quizzes that can only be found by name, because they were uploaded before searching existed.
+  const unindexed = $derived(texts && quizzes ? quizzes.filter((q) => !texts.has(q.id)).length : 0);
 
-  const quizzesIn = (ids) => (quizzes ?? []).filter((q) => ids.includes(folderOf(q)));
   const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
   const quizCount = (n) => (n === 1 ? '1 quiz' : `${n} quizzes`);
   const pathText = (id) => folderPath(folders, id).map((f) => f.name).join(' / ') || 'the top level';
+  const isLive = (id) => id === null || folders.some((f) => f.id === id);
 
   async function run(label, fn) {
     error = '';
@@ -86,10 +131,40 @@
   };
 
   async function refresh() {
-    [quizzes, folders] = await Promise.all([listCloudQuizzes(user.uid), listCloudFolders(user.uid)]);
-    if (current && !folders.some((f) => f.id === current)) current = null;
+    const [q, f] = await Promise.all([listCloudQuizzes(user.uid), listCloudFolders(user.uid)]);
+    stored = { quizzes: q, folders: f };
+    if (!inTrash && !isLive(current)) current = null;
+    if (historyOf && !quizzes.some((x) => x.id === historyOf)) historyOf = null;
     reveal(current);
   }
+
+  /** Deletes for good what has been in the trash for longer than TRASH_DAYS. */
+  async function purgeExpired() {
+    const due = trash.filter((t) => daysLeft(t.deleted) <= 0);
+    if (!due.length) return;
+    try {
+      for (const t of due) await deleteForGood(t);
+    } catch {
+      // Tried again the next time the dialog opens.
+    }
+    await refresh();
+  }
+
+  const deleteForGood = (t) => (t.kind === 'folder' ? deleteCloudFolders(user.uid, t.folderIds, t.quizzes) : deleteCloudQuiz(user.uid, t.item));
+
+  /** Starts loading every quiz's searchable text, the first time something is searched. */
+  function loadTexts() {
+    if (texts || textsLoading || !user) return;
+    textsLoading = true;
+    listSearchTexts(user.uid)
+      .then((m) => alive && (texts = m))
+      .catch((e) => alive && (error = cloudErrorMessage(e)))
+      .finally(() => (textsLoading = false));
+  }
+
+  $effect(() => {
+    if (query.trim()) loadTexts();
+  });
 
   /** Expands the folders above this one, so that it has a row in the tree. */
   function reveal(id) {
@@ -118,14 +193,15 @@
     watchUser((u) => {
       user = u;
       ready = true;
-      quizzes = null;
-      folders = [];
-      current = null;
+      stored = texts = null;
+      current = historyOf = null;
+      query = '';
       expanded.clear();
       naming = moving = null;
       if (u) {
         run('Loading', async () => {
           await refresh();
+          await purgeExpired();
           showOpenCopy();
         });
       }
@@ -136,6 +212,7 @@
         error = cloudErrorMessage(e);
       });
     return () => {
+      alive = false;
       gone = true;
       stop?.();
     };
@@ -150,7 +227,8 @@
     // An upload that is running puts a first copy in the selected folder.
     if (busy) return;
     show(id);
-    naming = moving = null;
+    naming = moving = historyOf = null;
+    query = '';
     error = '';
   }
 
@@ -187,21 +265,27 @@
     return run('Uploading', async () => {
       await refresh();
       const { id, text, name, count, entry } = prepareCloudUpload();
-      const existing = quizzes.find((q) => q.id === id);
+      // Read now: edits made while uploading change it, and those still need uploading afterwards.
+      const updated = entry.updated;
+      const existing = stored.quizzes.find((q) => q.id === id);
       if (existing && existing.version !== entry.cloudVersion) {
         const ok = await ask({
           title: 'Replace the cloud copy?',
-          message: `The cloud copy of “${existing.name}” (uploaded ${when(existing.uploaded)}) isn't the one this browser last synced with, so it may have changes this browser doesn't have. Uploading replaces it.`,
+          message: `The cloud copy of “${existing.name}” (uploaded ${when(existing.uploaded)}) isn't the one this browser last synced with, so it may have changes this browser doesn't have. Uploading replaces it; the earlier copy stays in its version history.`,
           confirmLabel: 'Replace',
           danger: true,
         });
         if (!ok) return;
       }
-      const meta = await uploadCloudQuiz(user.uid, id, text, { name, count, folder: current }, progress);
-      markCloudSynced(id, meta.version, entry.updated);
+      const search = searchText(JSON.parse(text));
+      const meta = await uploadCloudQuiz(user.uid, id, text, { name, count, folder: uploadFolder, search }, progress);
+      // A quiz whose folder is in the trash would vanish with it, so it comes out to the selected folder.
+      if (existing && !existing.deleted && !quizzes.some((q) => q.id === id)) await moveCloudQuiz(user.uid, id, uploadFolder);
+      markCloudSynced(id, meta.version, updated);
+      if (texts) texts = new Map(texts).set(id, search);
       await refresh();
       showOpenCopy();
-      notify(`Uploaded “${name}” to ${pathText(folderOf(meta))}.`, 'success');
+      notify(`Uploaded “${name}” to ${pathText(openCopy ? folderOf(openCopy) : uploadFolder)}.`, 'success');
     });
   }
 
@@ -223,37 +307,155 @@
     });
   }
 
-  async function removeQuiz(meta) {
+  /**
+   * Opens an earlier upload of a quiz in this browser. It then counts as edited since the upload, so that uploading
+   * it makes it the newest version again.
+   */
+  async function restoreVersion(q, v) {
+    const local = library.quizzes.find((x) => x.id === q.id);
     const ok = await ask({
-      title: 'Delete the cloud copy?',
-      message: `“${meta.name}” will be permanently deleted from your cloud list. Copies in your browsers are kept.`,
-      confirmLabel: 'Delete',
+      title: 'Open this version?',
+      message: `${local ? `“${local.name}” in this browser will be replaced by the version` : 'This opens the version'} uploaded ${when(v.uploaded)} (${plural(v.count, 'question')}).${local ? ' You can go back with Undo (Ctrl+Z).' : ''} Upload it afterwards to make it the current cloud copy again.`,
+      confirmLabel: 'Open',
+    });
+    if (!ok) return;
+    await run('Downloading', async () => {
+      const text = await downloadCloudQuiz(user.uid, { id: q.id, ...v }, progress);
+      if (!(await applyCloudQuiz({ id: q.id, version: q.version }, text))) throw new Error('This version could not be read.');
+      markCloudSynced(q.id, q.version, 0);
+      notify(`Opened the version from ${when(v.uploaded)}. Upload it to make it the current cloud copy.`, 'success', 8000, { label: 'Upload', run: uploadChanges });
+      closeModal();
+    });
+  }
+
+  /** Puts a quiz or folder in the trash, with an Undo in the notification. */
+  function remove(kind, id) {
+    const item = kind === 'folder' ? folders.find((f) => f.id === id) : quizzes.find((q) => q.id === id);
+    if (!item) return;
+    const from = kind === 'folder' ? (item.parent ?? null) : folderOf(item);
+    return run('Deleting', async () => {
+      await trashCloudItem(user.uid, kind, id);
+      if (kind === 'folder' && folderTreeIds(folders, id).includes(current)) current = from;
+      await refresh();
+      const undo = async () => {
+        try {
+          await restoreCloudItem(user.uid, kind, id, from);
+          if (alive) await refresh();
+        } catch (e) {
+          notify(cloudErrorMessage(e), 'error', 8000);
+        }
+      };
+      notify(`Moved “${item.name}” to the trash.`, 'success', 8000, { label: 'Undo', run: undo });
+    });
+  }
+
+  /** A name for a folder coming back into `parent` that no other folder there has. */
+  function freeName(name, parent, id) {
+    if (!nameClash(name, parent, id)) return null;
+    for (let n = 2; ; n++) if (!nameClash(`${name} (${n})`, parent, id)) return `${name} (${n})`;
+  }
+
+  /** Takes an item out of the trash, back where it was, or to the top level when that folder is gone. */
+  function restore(t) {
+    const into = isLive(t.from) ? t.from : null;
+    return run('Restoring', async () => {
+      const name = t.kind === 'folder' ? freeName(t.name, into, t.id) : null;
+      await restoreCloudItem(user.uid, t.kind, t.id, into, name);
+      await refresh();
+      notify(`Restored “${name ?? t.name}” to ${pathText(into)}.`, 'success');
+    });
+  }
+
+  async function deleteForever(t) {
+    const what = t.kind === 'folder' ? [t.folderIds.length > 1 && plural(t.folderIds.length - 1, 'subfolder'), t.quizzes.length && quizCount(t.quizzes.length)].filter(Boolean) : [];
+    const ok = await ask({
+      title: 'Delete for good?',
+      message: `“${t.name}”${what.length ? ` and everything in it (${what.join(' and ')})` : ''} will be permanently deleted from the cloud, with every version. Copies in your browsers are kept.`,
+      confirmLabel: 'Delete for good',
       danger: true,
     });
     if (!ok) return;
     await run('Deleting', async () => {
-      await deleteCloudQuiz(user.uid, meta);
+      await deleteForGood(t);
       await refresh();
     });
   }
 
-  async function removeFolder(folder) {
-    const ids = folderTreeIds(folders, folder.id);
-    const inside = quizzesIn(ids);
-    const parts = [ids.length > 1 && plural(ids.length - 1, 'subfolder'), inside.length && quizCount(inside.length)].filter(Boolean);
+  async function emptyTrash() {
     const ok = await ask({
-      title: 'Delete the folder?',
-      message: parts.length
-        ? `“${folder.name}” and everything in it (${parts.join(' and ')}) will be permanently deleted from your cloud list. Copies in your browsers are kept.`
-        : `The empty folder “${folder.name}” will be deleted.`,
-      confirmLabel: 'Delete',
+      title: 'Empty the trash?',
+      message: `${trash.length === 1 ? 'The item' : `All ${trash.length} items`} in the trash will be permanently deleted from the cloud, with everything in them and every version. Copies in your browsers are kept.`,
+      confirmLabel: 'Empty trash',
       danger: true,
     });
     if (!ok) return;
     await run('Deleting', async () => {
-      await deleteCloudFolders(user.uid, ids, inside, progress);
-      current = folder.parent;
+      const all = [...trash];
+      for (let n = 0; n < all.length; n++) {
+        progress(n, all.length);
+        await deleteForGood(all[n]);
+      }
       await refresh();
+    });
+  }
+
+  // ---------------------------------------------------------------- dragging quizzes and folders onto the tree
+
+  let openTimer = null;
+
+  function dragStart(e, kind, id) {
+    if (busy) return e.preventDefault();
+    dragging = { kind, id };
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', kind === 'folder' ? folders.find((f) => f.id === id)?.name : quizzes.find((q) => q.id === id)?.name);
+  }
+
+  function dragEnd() {
+    dragging = null;
+    dropOn = undefined;
+    clearTimeout(openTimer);
+  }
+
+  /** Whether what is being dragged can be dropped on the tree row `target`. */
+  function canDrop(target) {
+    if (!dragging || busy) return false;
+    if (target === TRASH) return true;
+    const { kind, id } = dragging;
+    if (kind === 'quiz') return folderOf(quizzes.find((q) => q.id === id)) !== target;
+    return !folderTreeIds(folders, id).includes(target) && (folders.find((f) => f.id === id)?.parent ?? null) !== target;
+  }
+
+  function dragOver(e, r) {
+    if (!canDrop(r.id)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dropOn === r.id) return;
+    dropOn = r.id;
+    // Holding over a closed folder opens it, to drop further down.
+    clearTimeout(openTimer);
+    if (r.hasChildren && !expanded.has(r.id)) openTimer = setTimeout(() => dropOn === r.id && expanded.add(r.id), 700);
+  }
+
+  function dragLeave(e, r) {
+    if (dropOn === r.id && !e.currentTarget.contains(e.relatedTarget)) dropOn = undefined;
+  }
+
+  function drop(e, target) {
+    e.preventDefault();
+    const what = dragging;
+    dragEnd();
+    if (!what) return;
+    if (target === TRASH) return remove(what.kind, what.id);
+    if (what.kind === 'folder') {
+      const clash = nameClash(folders.find((f) => f.id === what.id).name, target, what.id);
+      if (clash) return void (error = clash);
+    }
+    run('Moving', async () => {
+      if (what.kind === 'folder') await updateCloudFolder(user.uid, what.id, { parent: target });
+      else await moveCloudQuiz(user.uid, what.id, target);
+      await refresh();
+      if (what.kind === 'folder' && current === what.id) reveal(what.id);
+      else if (target) expanded.add(target);
     });
   }
 
@@ -386,6 +588,19 @@
   {:else}
     <div class="account">
       <span class="who" title={user.email}>Signed in as <strong>{user.email}</strong></span>
+      {#if quizzes}
+        <div class="search">
+          <Search size={15} />
+          <input
+            class="input input-sm"
+            type="search"
+            placeholder="Search all quizzes and questions…"
+            aria-label="Search all cloud quizzes"
+            bind:value={query}
+            onkeydown={(e) => e.key === 'Escape' && query && (e.stopPropagation(), (query = ''))}
+          />
+        </div>
+      {/if}
       <button class="btn btn-ghost btn-sm" disabled={!!busy} onclick={logout}><LogOut size={14} /> Sign out</button>
     </div>
 
@@ -394,16 +609,26 @@
         <div class="tree" role="tree" aria-label="Folders" bind:this={tree}>
           {#each treeRows as r (r.id ?? 'top level')}
             {@const count = quizzesPerFolder.get(r.id)}
+            {@const movable = r.depth > 0}
             <div
               class="row"
-              class:selected={r.id === current}
+              class:selected={r.id === current && !searching}
+              class:trash-row={r.id === TRASH}
+              class:drop={dropOn === r.id}
+              class:dragged={dragging?.kind === 'folder' && dragging.id === r.id}
               role="treeitem"
               aria-level={r.depth + 1}
               aria-selected={r.id === current}
               aria-expanded={r.hasChildren ? expanded.has(r.id) : undefined}
               tabindex={r.id === current ? 0 : -1}
-              title={r.name}
+              title={movable ? `${r.name}\nDrag onto another folder to move it` : r.name}
               style:padding-left="{6 + Math.min(r.depth, 8) * 14}px"
+              draggable={movable && !busy}
+              ondragstart={(e) => movable && dragStart(e, 'folder', r.id)}
+              ondragend={dragEnd}
+              ondragover={(e) => dragOver(e, r)}
+              ondragleave={(e) => dragLeave(e, r)}
+              ondrop={(e) => drop(e, r.id)}
               onclick={() => {
                 open(r.id);
                 if (r.hasChildren && !busy) expanded.add(r.id);
@@ -421,17 +646,70 @@
                     e.stopPropagation();
                     toggle(r.id);
                   }}><ChevronRight size={14} /></span>
-              {:else if r.id}
+              {:else if movable}
                 <span class="twist"></span>
               {/if}
-              {#if r.id}<Folder size={15} />{:else}<Cloud size={15} />{/if}
+              {#if r.id === TRASH}<Trash2 size={15} />{:else if r.id}<Folder size={15} />{:else}<Cloud size={15} />{/if}
               <span class="label">{r.name}</span>
-              {#if count}<span class="count" title={quizCount(count)}>{count}</span>{/if}
+              {#if count}<span class="count" title={r.id === TRASH ? plural(count, 'item') : quizCount(count)}>{count}</span>{/if}
             </div>
           {/each}
         </div>
 
-        <section class="files" aria-label="Quizzes in the selected folder">
+        <section class="files" aria-label={searching ? 'Search results' : inTrash ? 'Trash' : 'Quizzes in the selected folder'}>
+          {#if searching}
+            <div class="bar">
+              <span class="heading">{results.length ? `${quizCount(results.length)} found` : 'Search results'}</span>
+              <button class="btn btn-sm" onclick={() => (query = '')}><X size={14} /> Clear search</button>
+            </div>
+            <ul class="list">
+              {#each results as { q, match } (q.id)}
+                <li class="item" class:open={q.id === library.activeId}>
+                  <div class="info">
+                    <span class="name" title={q.name}>{q.name}</span>
+                    <span class="meta">{folderOf(q) ? pathText(folderOf(q)) : 'Cloud'} · {plural(q.count, 'question')} · {when(q.uploaded)}</span>
+                    {#each match.questions as m}
+                      <span class="hit">{#if m.title}<strong>{m.title}</strong> — {/if}{m.excerpt}</span>
+                    {/each}
+                    {#if match.total > match.questions.length}<span class="meta">and {plural(match.total - match.questions.length, 'more question')}</span>{/if}
+                  </div>
+                  <button class="btn btn-ghost btn-icon" title="Show in its folder" aria-label="Show {q.name} in its folder" disabled={!!busy} onclick={() => open(folderOf(q))}><Folder size={15} /></button>
+                  <button class="btn btn-sm" disabled={!!busy} onclick={() => download(q)}><CloudDownload size={15} /> Download</button>
+                </li>
+              {:else}
+                <li class="note empty">{textsLoading ? 'Searching…' : `No quizzes or questions match “${query.trim()}”.`}</li>
+              {/each}
+              {#if results.length && textsLoading}<li class="note small">Searching the questions…</li>{/if}
+              {#if unindexed}
+                <li class="note small">{unindexed === 1 ? 'One quiz was' : `${unindexed} quizzes were`} uploaded before question search existed, so {unindexed === 1 ? 'it is' : 'they are'} only searched by name. Upload {unindexed === 1 ? 'it' : 'them'} again to search the questions too.</li>
+              {/if}
+            </ul>
+          {:else if inTrash}
+            <div class="bar">
+              <span class="heading">Trash</span>
+              <button class="btn btn-sm" disabled={!!busy || !trash.length} onclick={emptyTrash}><Trash2 size={14} /> Empty trash</button>
+            </div>
+            <ul class="list">
+              {#each trash as t (t.id)}
+                {@const left = Math.max(1, daysLeft(t.deleted))}
+                <li class="item">
+                  <span class="kind">{#if t.kind === 'folder'}<Folder size={16} />{:else}<FileText size={16} />{/if}</span>
+                  <div class="info">
+                    <span class="name" title={t.name}>{t.name}</span>
+                    <span class="meta">
+                      {#if t.kind === 'folder'}{[t.folderIds.length > 1 && plural(t.folderIds.length - 1, 'subfolder'), quizCount(t.quizzes.length)].filter(Boolean).join(', ')}{:else}{plural(t.item.count, 'question')}{/if}
+                      · deleted {when(t.deleted)} from {isLive(t.from) ? pathText(t.from) : 'a folder that is gone'}
+                    </span>
+                    <span class="meta">Deleted for good in {plural(left, 'day')}</span>
+                  </div>
+                  <button class="btn btn-sm" disabled={!!busy} title={isLive(t.from) ? `Put it back in ${pathText(t.from)}` : 'Put it back at the top level'} onclick={() => restore(t)}><Undo2 size={15} /> Restore</button>
+                  <button class="btn btn-ghost btn-icon danger" title="Delete for good" aria-label="Delete {t.name} for good" disabled={!!busy} onclick={() => deleteForever(t)}><Trash2 size={15} /></button>
+                </li>
+              {:else}
+                <li class="note empty">The trash is empty. Deleted quizzes and folders stay here for {TRASH_DAYS} days before they are deleted for good.</li>
+              {/each}
+            </ul>
+          {:else}
           <div class="bar">
             <nav class="crumbs" aria-label="Folder path">
               <button class="crumb" aria-current={current ? undefined : 'page'} onclick={() => open(null)}>Cloud</button>
@@ -448,7 +726,7 @@
               {#if selected}
                 <button class="btn btn-ghost btn-icon" title="Rename the folder" aria-label="Rename {selected.name}" disabled={!!busy} onclick={() => startNaming(selected.id, selected.name)}><Pencil size={15} /></button>
                 <button class="btn btn-ghost btn-icon" title="Move the folder" aria-label="Move {selected.name}" disabled={!!busy} onclick={() => startMoving('folder', selected.id, selected.parent)}><FolderInput size={15} /></button>
-                <button class="btn btn-ghost btn-icon danger" title="Delete the folder" aria-label="Delete the folder {selected.name}" disabled={!!busy} onclick={() => removeFolder(selected)}><Trash2 size={15} /></button>
+                <button class="btn btn-ghost btn-icon danger" title="Move the folder to the trash" aria-label="Delete the folder {selected.name}" disabled={!!busy} onclick={() => remove('folder', selected.id)}><Trash2 size={15} /></button>
               {/if}
               <button class="btn btn-sm" disabled={!!busy} onclick={() => startNaming(null, '')}><FolderPlus size={15} /> New folder</button>
             </div>
@@ -460,21 +738,60 @@
 
           <ul class="list">
             {#each shownQuizzes as q (q.id)}
-              <li class="item" class:open={q.id === library.activeId}>
+              {@const versions = quizVersions(q)}
+              <li
+                class="item"
+                class:open={q.id === library.activeId}
+                class:dragged={dragging?.kind === 'quiz' && dragging.id === q.id}
+                draggable={!busy}
+                title="Drag onto a folder in the tree to move it there"
+                ondragstart={(e) => dragStart(e, 'quiz', q.id)}
+                ondragend={dragEnd}
+              >
                 <div class="info">
                   <span class="name" title={q.name}>{q.name}</span>
                   <span class="meta">{plural(q.count, 'question')} · {sizeText(q.size)} · {when(q.uploaded)}</span>
                   <span class="state {statusOf(q)}">{STATUS[statusOf(q)]}</span>
                 </div>
                 <button class="btn btn-sm" disabled={!!busy} onclick={() => download(q)}><CloudDownload size={15} /> Download</button>
+                <button
+                  class="btn btn-ghost btn-icon"
+                  class:on={historyOf === q.id}
+                  title="Version history: earlier uploads of this quiz"
+                  aria-label="Version history of {q.name}"
+                  aria-expanded={historyOf === q.id}
+                  disabled={!!busy}
+                  onclick={() => (historyOf = historyOf === q.id ? null : q.id)}><History size={15} /></button
+                >
                 <button class="btn btn-ghost btn-icon" title="Move to another folder" aria-label="Move {q.name}" disabled={!!busy} onclick={() => startMoving('quiz', q.id, folderOf(q))}><FolderInput size={15} /></button>
-                <button class="btn btn-ghost btn-icon danger" title="Delete the cloud copy" aria-label="Delete the cloud copy of {q.name}" disabled={!!busy} onclick={() => removeQuiz(q)}><Trash2 size={15} /></button>
+                <button class="btn btn-ghost btn-icon danger" title="Move to the trash" aria-label="Delete the cloud copy of {q.name}" disabled={!!busy} onclick={() => remove('quiz', q.id)}><Trash2 size={15} /></button>
                 {#if moving?.id === q.id}{@render moveRow()}{/if}
+                {#if historyOf === q.id}
+                  <div class="versions">
+                    <ol aria-label="Versions of {q.name}">
+                      {#each versions as v, i (v.version)}
+                        <li class="version">
+                          <span class="v-when">{when(v.uploaded)}</span>
+                          <span class="meta">{plural(v.count, 'question')} · {sizeText(v.size)}{v.name !== q.name ? ` · named “${v.name}”` : ''}</span>
+                          {#if i === 0}
+                            <span class="current">Current</span>
+                          {:else}
+                            <button class="btn btn-sm" disabled={!!busy} title="Open this version in this browser" onclick={() => restoreVersion(q, v)}>Open</button>
+                          {/if}
+                        </li>
+                      {/each}
+                    </ol>
+                    <p class="note small">
+                      {versions.length === 1 ? 'There are no earlier uploads yet.' : ''} The last {KEEP_VERSIONS} uploads are kept.
+                    </p>
+                  </div>
+                {/if}
               </li>
             {:else}
               <li class="note empty">{quizzes.length || folders.length ? 'No quizzes in this folder.' : 'Nothing uploaded yet. Upload the open quiz to see it here.'}</li>
             {/each}
           </ul>
+          {/if}
         </section>
       </div>
     {/if}
@@ -710,6 +1027,104 @@
     margin: 12px 0 0;
     color: var(--danger);
   }
+  .small {
+    font-size: 12px;
+    padding: 4px;
+  }
+  .search {
+    flex: 0 1 320px;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    color: var(--text-3);
+  }
+  .search .input {
+    flex: 1;
+    min-width: 0;
+  }
+  .heading {
+    font-weight: 600;
+    padding: 3px 6px;
+  }
+  .hit {
+    font-size: 12.5px;
+    color: var(--text-2);
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow-wrap: anywhere;
+  }
+  .hit strong {
+    font-weight: 500;
+    color: var(--text);
+  }
+  .kind {
+    flex: none;
+    display: inline-flex;
+    color: var(--text-3);
+  }
+  .trash-row {
+    margin-top: 6px;
+    border-top: 1px solid var(--border);
+    border-radius: 0 0 6px 6px;
+  }
+  .row.drop {
+    background: var(--accent-soft);
+    outline: 2px dashed var(--accent);
+    outline-offset: -2px;
+    color: var(--accent);
+  }
+  .dragged {
+    opacity: 0.45;
+  }
+  .item[draggable='true'] {
+    cursor: grab;
+  }
+  .item .btn {
+    cursor: pointer;
+  }
+  .btn.on {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .versions {
+    flex: 1 0 100%;
+    padding-top: 6px;
+    border-top: 1px dashed var(--border);
+  }
+  .versions ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .version {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    min-height: 32px;
+  }
+  .v-when {
+    font-size: 13px;
+    color: var(--text);
+  }
+  .version .meta {
+    flex: 1;
+    min-width: 0;
+  }
+  .current {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--success);
+    padding: 0 8px;
+  }
   .progress {
     margin-right: auto;
     font-size: 13px;
@@ -735,6 +1150,13 @@
     }
     .crumbs,
     .info {
+      flex: 1 0 100%;
+    }
+    .account {
+      flex-wrap: wrap;
+    }
+    .search {
+      order: 3;
       flex: 1 0 100%;
     }
   }

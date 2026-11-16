@@ -908,6 +908,22 @@ export async function transferQuestions(fromId, toId, ids, { at = Infinity, copy
   notify(`${copy ? 'Copied' : 'Moved'} ${plural(picked.length)} to “${target.name || 'Untitled quiz'}”.`, 'success', 8000, { label: 'Undo', run: undo });
 }
 
+/**
+ * Adds copies of questions from other quizzes (the question bank) after the open question, or at the end, as one undo
+ * step. The copies are opened and, when there are several, ticked.
+ */
+export function addFromBank(questions) {
+  if (!questions.length) return;
+  const copies = questions.map(cloneQuestion);
+  const at = selectedIndex() + 1 || app.quiz.questions.length;
+  app.quiz.questions.splice(at, 0, ...copies);
+  app.search = '';
+  app.tab = 'edit';
+  app.selectedId = copies[0].id;
+  app.checked = copies.length > 1 ? copies.map((q) => q.id) : [];
+  notify(`Added ${plural(copies.length)} from the question bank. Undo with Ctrl+Z.`, 'success', 4000);
+}
+
 /** Adds every quiz from a full backup as separate quizzes, without opening them. */
 function importQuizzes(quizzes) {
   let n = 0;

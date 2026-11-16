@@ -1,14 +1,27 @@
 // Private cloud copies of quizzes in Firebase: the user signs in with Google and each quiz is stored under their own
 // account (see firestore.rules). Firebase's free plan has Firestore but no file storage, and a Firestore document
 // holds at most 1 MiB, so a quiz's JSON (with its embedded images) is split over several documents:
-//   users/{uid}/quizzes/{quizId}                  name, count, size, uploaded, version, chunks, folder
+//   users/{uid}/quizzes/{quizId}                  name, count, size, uploaded, version, chunks, folder, history, deleted
 //   users/{uid}/quizzes/{quizId}/chunks/{version}-{n}  data
-//   users/{uid}/folders/{folderId}                name, parent
+//   users/{uid}/folders/{folderId}                name, parent, deleted
+//   users/{uid}/search/{quizId}                   text: the questions as plain text, for searching
 // Folders point at their parent, and a null or absent folder or parent means the top level, so renaming or moving a
-// folder is a single write however much it holds. A new upload writes its chunks first and only then points the quiz at them, so a failed upload leaves the previous
-// copy intact. The SDK is loaded only when the cloud dialog opens.
+// folder is a single write however much it holds. A new upload writes its chunks first and only then points the quiz
+// at them, so a failed upload leaves the previous copy intact. The previous copies stay as `history` (newest first),
+// up to KEEP_VERSIONS in all. Deleting puts a quiz or folder in the trash by setting `deleted` (a time); what is inside
+// a deleted folder stays where it is, hidden with it, and comes back with it. The SDK is loaded only when needed.
 
-import { uid } from './model.js';
+import { uid, questionTitle } from './model.js';
+import { questionContent } from './quality.js';
+
+/** How many uploads of a quiz are kept, the current one included. */
+export const KEEP_VERSIONS = 5;
+/** Days a deleted quiz or folder stays in the trash. */
+export const TRASH_DAYS = 30;
+const DAY = 24 * 60 * 60 * 1000;
+// Plain text of a quiz kept for searching; a Firestore document must stay under 1 MiB, which this does at 3 bytes per unit.
+const SEARCH_LIMIT = 300_000;
+const QUESTION_LIMIT = 2000;
 
 // The web config identifies the project and is public by design; firestore.rules is what protects the data.
 const CONFIG = {
@@ -89,6 +102,101 @@ export function folderOptions(folders, skip = null, isExpanded = () => true) {
   return options;
 }
 
+/**
+ * Splits the stored folders and quizzes into what is shown and what is in the trash. A folder or quiz is hidden when it,
+ * or a folder above it, is deleted; the trash lists the ones deleted themselves, newest first, each with what it holds:
+ *   { folders, quizzes, trash: [{ kind: 'folder' | 'quiz', id, name, deleted, from, item, folderIds, quizzes }] }
+ * where `from` is the folder it was in (null for the top level) and, for a folder, `folderIds` and `quizzes` are
+ * everything below it, deleted or not, which goes when it is deleted for good.
+ */
+export function cloudView(allFolders, allQuizzes) {
+  const folders = normalizeFolders(allFolders);
+  const byId = new Map(folders.map((f) => [f.id, f]));
+  const hidden = new Set();
+  for (const f of folders) {
+    for (let at = f; at; at = byId.get(at.parent)) {
+      if (at.deleted) {
+        hidden.add(f.id);
+        break;
+      }
+    }
+  }
+  // A quiz whose folder is gone (deleted for good on another device) is at the top level.
+  const folderOf = (q) => (byId.has(q.folder) ? q.folder : null);
+  const trash = [];
+  for (const f of folders) {
+    if (!f.deleted) continue;
+    const folderIds = folderTreeIds(folders, f.id);
+    const quizzes = allQuizzes.filter((q) => folderIds.includes(folderOf(q)));
+    trash.push({ kind: 'folder', id: f.id, name: f.name, deleted: f.deleted, from: f.parent ?? null, item: f, folderIds, quizzes });
+  }
+  for (const q of allQuizzes) if (q.deleted) trash.push({ kind: 'quiz', id: q.id, name: q.name, deleted: q.deleted, from: folderOf(q), item: q });
+  trash.sort((a, b) => b.deleted - a.deleted);
+  return {
+    folders: folders.filter((f) => !hidden.has(f.id)),
+    quizzes: allQuizzes.filter((q) => !q.deleted && !hidden.has(q.folder)).map((q) => ({ ...q, folder: folderOf(q) })),
+    trash,
+  };
+}
+
+/** Whole days until a trash entry is deleted for good; 0 or less means it is due. */
+export const daysLeft = (deleted, now = Date.now()) => Math.ceil((deleted + TRASH_DAYS * DAY - now) / DAY);
+
+/** Lower case without accents, so that "é" finds "e" and the other way round. */
+export const foldText = (s) =>
+  String(s ?? '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+/** A quiz's questions as plain text for searching: one line per question, its title then its text and answers. */
+export function searchText(quiz) {
+  let text = '';
+  for (const q of quiz.questions ?? []) {
+    const title = questionTitle(q).replace(/\s+/g, ' ');
+    const content = questionContent(q).replace(/\s+/g, ' ').trim();
+    const line = `${title}\t${content === title ? '' : content}`.slice(0, QUESTION_LIMIT).replace(/[\uD800-\uDBFF]$/, '');
+    if (text.length + line.length + 1 > SEARCH_LIMIT) break;
+    text += line + '\n';
+  }
+  return text;
+}
+
+/**
+ * How a quiz matches a search: every word of the query must be in its name, or all in the same question.
+ * Returns null when it doesn't match, else { byName, questions: [{ title, excerpt }] } with up to `max` questions.
+ */
+export function matchQuiz(name, text, query, max = 3) {
+  const terms = foldText(query).split(' ').filter(Boolean);
+  if (!terms.length) return null;
+  const byName = terms.every((t) => foldText(name).includes(t));
+  const questions = [];
+  let total = 0;
+  for (const line of (text ?? '').split('\n')) {
+    if (!line) continue;
+    const folded = foldText(line);
+    if (!terms.every((t) => folded.includes(t))) continue;
+    total++;
+    if (questions.length >= max) continue;
+    const [title, content = ''] = line.split('\t');
+    // A question without a name is titled by the start of its text, which the excerpt already shows.
+    const named = content && !content.startsWith(title.replace(/…$/, ''));
+    questions.push({ title: named ? title : '', excerpt: excerpt(content || title, terms[0]) });
+  }
+  return byName || total ? { byName, questions, total } : null;
+}
+
+/** About 120 characters of `text` around the first place `term` (folded) appears. */
+function excerpt(text, term) {
+  // Folding keeps the length for nearly all text, so the position found in the folded text is close enough.
+  const at = Math.max(0, foldText(text).indexOf(term));
+  const start = Math.max(0, at - 50);
+  const end = Math.min(text.length, start + 120);
+  return (start ? '…' : '') + text.slice(start, end).trim() + (end < text.length ? '…' : '');
+}
+
 let services = null;
 
 function load() {
@@ -115,6 +223,13 @@ export async function watchUser(callback) {
   return authSdk.onAuthStateChanged(auth, callback);
 }
 
+/** The signed-in user, or null, once Firebase has restored the last session. */
+export async function currentUser() {
+  const { auth } = await load();
+  await auth.authStateReady();
+  return auth.currentUser;
+}
+
 /** Opens Google's sign-in window. Resolves to false when the user closes it. */
 export async function signIn() {
   const { auth, authSdk } = await load();
@@ -134,15 +249,30 @@ export async function signOut() {
 
 const quizPath = (userId, id) => `users/${userId}/quizzes/${id}`;
 const chunkPath = (userId, id, version, n) => `${quizPath(userId, id)}/chunks/${version}-${n}`;
+const searchPath = (userId, id) => `users/${userId}/search/${id}`;
 
-/** The user's uploaded quizzes, most recently uploaded first. */
+/** One uploaded quiz's description, or null when there is none. */
+export async function getCloudQuiz(userId, id) {
+  const { db, store } = await load();
+  const snap = await store.getDoc(store.doc(db, quizPath(userId, id)));
+  return snap.exists() ? { id, ...snap.data() } : null;
+}
+
+/** The searchable text of every uploaded quiz, as a Map from quiz ID. Quizzes uploaded before searching existed have none. */
+export async function listSearchTexts(userId) {
+  const { db, store } = await load();
+  const snap = await store.getDocs(store.collection(db, `users/${userId}/search`));
+  return new Map(snap.docs.map((d) => [d.id, d.data().text ?? '']));
+}
+
+/** The user's uploaded quizzes, deleted ones included, most recently uploaded first. */
 export async function listCloudQuizzes(userId) {
   const { db, store } = await load();
   const snap = await store.getDocs(store.collection(db, `users/${userId}/quizzes`));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => b.uploaded - a.uploaded);
 }
 
-/** The user's folders, with every parent usable. */
+/** The user's folders, deleted ones included, with every parent usable. */
 export async function listCloudFolders(userId) {
   const { db, store } = await load();
   const snap = await store.getDocs(store.collection(db, `users/${userId}/folders`));
@@ -180,9 +310,31 @@ async function deleteDocs(paths) {
 
 const deleteChunks = (userId, id, version, count) => deleteDocs(Array.from({ length: count }, (_, n) => chunkPath(userId, id, version, n)));
 
+/** Every upload of a quiz still stored: the current one first, then the older ones, newest first. */
+export const quizVersions = (meta) => [
+  { version: meta.version, chunks: meta.chunks, size: meta.size, count: meta.count, uploaded: meta.uploaded, name: meta.name },
+  ...(meta.history ?? []),
+];
+
+/** Puts a quiz or folder in the trash. */
+export async function trashCloudItem(userId, kind, id) {
+  const { db, store } = await load();
+  await store.updateDoc(store.doc(db, kind === 'folder' ? folderDocPath(userId, id) : quizPath(userId, id)), { deleted: Date.now() });
+}
+
 /**
- * Deletes folders and the given quizzes in them. The quizzes go first, so that a failure part way leaves the rest
- * still in their folders.
+ * Takes a quiz or folder out of the trash, into folder `into` (null for the top level). `name` renames a folder
+ * whose name is taken there by now.
+ */
+export async function restoreCloudItem(userId, kind, id, into, name = null) {
+  const { db, store } = await load();
+  const changes = kind === 'folder' ? { parent: into, ...(name ? { name } : {}) } : { folder: into };
+  await store.updateDoc(store.doc(db, kind === 'folder' ? folderDocPath(userId, id) : quizPath(userId, id)), { ...changes, deleted: store.deleteField() });
+}
+
+/**
+ * Deletes folders and the given quizzes in them for good. The quizzes go first, so that a failure part way leaves the
+ * rest still in their folders.
  */
 export async function deleteCloudFolders(userId, ids, quizzes, onProgress = () => {}) {
   for (let n = 0; n < quizzes.length; n++) {
@@ -193,18 +345,21 @@ export async function deleteCloudFolders(userId, ids, quizzes, onProgress = () =
 }
 
 /**
- * Uploads a quiz, replacing the user's earlier copy of it, which keeps its folder.
+ * Uploads a quiz as its newest version. The earlier upload is kept in its history and keeps its folder; one in the
+ * trash comes out of it, into `info.folder`.
  * @param {string} userId
  * @param {string} id the quiz's ID, which stays the same on every device
  * @param {string} text the quiz as JSON
- * @param {{ name: string, count: number, folder: string | null }} info `folder` is used for a first upload
+ * @param {{ name: string, count: number, folder: string | null, search?: string }} info `folder` is used for a first
+ *   upload, and `search` is the quiz's searchable text (see searchText)
  * @param {(done: number, total: number) => void} [onProgress]
  * @returns {Promise<object>} the stored description of the quiz
  */
 export async function uploadCloudQuiz(userId, id, text, info, onProgress = () => {}) {
   const { db, store } = await load();
   const ref = store.doc(db, quizPath(userId, id));
-  const previous = await store.getDoc(ref);
+  const snap = await store.getDoc(ref);
+  const previous = snap.exists() ? snap.data() : null;
   const chunks = splitChunks(text);
   const version = uid();
   let written = 0;
@@ -213,11 +368,14 @@ export async function uploadCloudQuiz(userId, id, text, info, onProgress = () =>
       onProgress(written, chunks.length);
       await store.setDoc(store.doc(db, chunkPath(userId, id, version, written)), { data: chunks[written] });
     }
-    const folder = previous.exists() ? (previous.data().folder ?? null) : info.folder;
-    const meta = { name: info.name, count: info.count, size: text.length, uploaded: Date.now(), version, chunks: chunks.length, folder };
+    const folder = previous && !previous.deleted ? (previous.folder ?? null) : info.folder;
+    const older = previous ? quizVersions(previous) : [];
+    const meta = { name: info.name, count: info.count, size: text.length, uploaded: Date.now(), version, chunks: chunks.length, folder, history: older.slice(0, KEEP_VERSIONS - 1) };
     await store.setDoc(ref, meta);
     onProgress(chunks.length, chunks.length);
-    if (previous.exists()) await deleteChunks(userId, id, previous.data().version, previous.data().chunks).catch(() => {});
+    for (const old of older.slice(KEEP_VERSIONS - 1)) await deleteChunks(userId, id, old.version, old.chunks).catch(() => {});
+    // Searching is a convenience: the upload has succeeded even if this fails.
+    if (info.search != null) await store.setDoc(store.doc(db, searchPath(userId, id)), { text: info.search }).catch(() => {});
     return { id, ...meta };
   } catch (e) {
     // The earlier copy is untouched; clear what this attempt wrote.
@@ -226,7 +384,10 @@ export async function uploadCloudQuiz(userId, id, text, info, onProgress = () =>
   }
 }
 
-/** Reads an uploaded quiz back as JSON. `meta` is an entry from listCloudQuizzes. */
+/**
+ * Reads an uploaded quiz back as JSON. `meta` is an entry from listCloudQuizzes, or one of its versions with the
+ * quiz's `id` added.
+ */
 export async function downloadCloudQuiz(userId, meta, onProgress = () => {}) {
   const { db, store } = await load();
   let text = '';
@@ -240,10 +401,12 @@ export async function downloadCloudQuiz(userId, meta, onProgress = () => {}) {
   return text;
 }
 
+/** Deletes a quiz for good, with every version of it. */
 export async function deleteCloudQuiz(userId, meta) {
   const { db, store } = await load();
   await store.deleteDoc(store.doc(db, quizPath(userId, meta.id)));
-  await deleteChunks(userId, meta.id, meta.version, meta.chunks).catch(() => {});
+  await store.deleteDoc(store.doc(db, searchPath(userId, meta.id))).catch(() => {});
+  for (const v of quizVersions(meta)) await deleteChunks(userId, meta.id, v.version, v.chunks).catch(() => {});
 }
 
 /** A sentence for the user about a failed Firebase call. */

@@ -1,8 +1,13 @@
 <script>
   import { onMount } from 'svelte';
-  import { Sun, Moon, Maximize, Minimize, Undo2, Redo2, Upload, Download, FilePlus, Settings, CircleQuestionMark, Presentation, Printer, Sparkles, ListChecks, Cloud } from '@lucide/svelte';
+  import { Sun, Moon, Maximize, Minimize, Undo2, Redo2, Upload, Download, FilePlus, Settings, CircleQuestionMark, Presentation, Printer, Sparkles, ListChecks, Cloud, CloudUpload } from '@lucide/svelte';
   import QuizTabs from './QuizTabs.svelte';
-  import { app, history, backup, REMIND_AFTER, undo, redo, toggleTheme, openModal, newQuiz, downloadBackup } from '../lib/store.svelte.js';
+  import { app, library, history, backup, REMIND_AFTER, undo, redo, toggleTheme, openModal, newQuiz, downloadBackup } from '../lib/store.svelte.js';
+  import { sync, editedSinceUpload, uploadChanges } from '../lib/cloudsync.svelte.js';
+
+  const entry = $derived(library.quizzes.find((q) => q.id === library.activeId));
+  const cloudChanged = $derived(editedSinceUpload(entry));
+  const syncText = $derived(sync.busy ? (sync.total > 1 ? `Uploading ${sync.done} / ${sync.total}…` : 'Uploading…') : 'Upload changes');
 
   let fullscreen = $state(false);
   const canFullscreen = typeof document !== 'undefined' && !!document.documentElement.requestFullscreen;
@@ -78,6 +83,14 @@
     <button class="btn btn-ghost btn-icon hide-xs" title="Check questions: review progress, answer key and repeated questions (Alt+C)" aria-label="Check questions" disabled={!app.quiz.questions.length} onclick={() => openModal('check')}><ListChecks size={17} /></button>
     <button class="btn btn-ghost btn-icon hide-xs" title="Print or save as PDF (Ctrl+P)" aria-label="Print" disabled={!app.quiz.questions.length} onclick={() => openModal('print')}><Printer size={17} /></button>
     <button class="btn btn-ghost btn-icon hide-xs" title="Generate questions with AI: write a prompt for an AI chatbot (Alt+G)" aria-label="Generate questions with AI" onclick={() => openModal('ai-prompt')}><Sparkles size={17} /></button>
+    {#if cloudChanged || sync.busy}
+      <button
+        class="btn btn-ghost btn-sm cloud-sync"
+        title="This quiz has changed since it was last uploaded. Upload the changes to the cloud (Alt+U)"
+        disabled={sync.busy}
+        onclick={uploadChanges}><CloudUpload size={16} /><span class="sync-text">{syncText}</span></button
+      >
+    {/if}
     <button class="btn btn-ghost btn-icon hide-xs" title="Cloud: upload this quiz to Firebase, or download your uploaded quizzes" aria-label="Cloud" onclick={() => openModal('cloud')}><Cloud size={17} /></button>
     <button class="btn" title="Import questions (Ctrl+O)" onclick={() => openModal('import')}><Download size={16} /><span class="btn-text">Import</span></button>
     <button class="btn btn-primary" title="Export questions (Ctrl+S)" onclick={() => openModal('export')}><Upload size={16} /><span class="btn-text">Export</span></button>
@@ -172,6 +185,11 @@
   .status.error .dot {
     background: var(--danger);
   }
+  .cloud-sync {
+    gap: 6px;
+    color: var(--accent);
+    font-weight: 500;
+  }
   .divider {
     width: 1px;
     height: 22px;
@@ -179,8 +197,14 @@
     margin: 0 4px;
   }
   @media (max-width: 1240px) {
-    .status:not(.due):not(.error) .status-text {
+    .status:not(.due):not(.error) .status-text,
+    .sync-text {
       display: none;
+    }
+    .cloud-sync {
+      width: 34px;
+      padding: 0;
+      justify-content: center;
     }
   }
   /* Leave the room to the quiz tabs. */

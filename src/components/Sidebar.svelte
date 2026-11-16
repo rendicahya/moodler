@@ -4,7 +4,7 @@
 </script>
 
 <script>
-  import { Plus, Search, GripVertical, Copy, Trash, TriangleAlert, X, Upload, EyeOff, SquarePen, ArrowUpToLine, ArrowDownToLine, Replace, FolderInput, CircleDot, CircleCheck } from '@lucide/svelte';
+  import { Plus, Search, GripVertical, Copy, Trash, TriangleAlert, X, Upload, EyeOff, SquarePen, ArrowUpToLine, ArrowDownToLine, Replace, FolderInput, CircleDot, CircleCheck, Library } from '@lucide/svelte';
   import {
     app,
     select,
@@ -228,7 +228,10 @@
         </span>
       </div>
     {/if}
-    <button class="btn btn-primary add" onclick={() => openModal('add')}><Plus size={16} /> Add question</button>
+    <div class="add-row">
+      <button class="btn btn-primary add" onclick={() => openModal('add')}><Plus size={16} /> Add question</button>
+      <button class="btn btn-icon" title="Question bank: copy questions from your other quizzes (Alt+B)" aria-label="Question bank" onclick={() => openModal('bank')}><Library size={16} /></button>
+    </div>
     {#if app.quiz.questions.length}
       <div class="search-row">
         <div class="search">
@@ -426,8 +429,12 @@
   .type-num {
     font-variant-numeric: tabular-nums;
   }
+  .add-row {
+    display: flex;
+    gap: 6px;
+  }
   .add {
-    width: 100%;
+    flex: 1;
   }
   .search-row {
     display: flex;

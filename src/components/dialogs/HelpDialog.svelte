@@ -26,6 +26,8 @@
     [['Alt', 'R'], 'Mark the question reviewed and open the next one to review'],
     [['Alt', 'Shift', 'R'], 'Mark the question as not reviewed'],
     [['Alt', 'C'], 'Check questions: review progress, answer key, repeats'],
+    [['Alt', 'B'], 'Question bank: copy questions from your other quizzes'],
+    [['Alt', 'U'], 'Upload the changes to the cloud copy (or open Cloud)'],
     [[mod, 'V'], 'Import pasted questions (outside text fields)'],
     [['↑', '↓'], 'Select previous / next question (in the list)'],
     [['Alt', '↑ / ↓'], 'Move the selected question (in the list)'],
@@ -41,10 +43,14 @@
     <h3>How it works</h3>
     <ul>
       <li>Everything runs in your browser. Your quiz is saved automatically in this browser’s storage, and nothing is uploaded unless you use the <strong>Cloud</strong> button.</li>
-      <li>The <strong>Cloud</strong> button signs you in with Google so you can upload the open quiz to your private folders and download it on any device.</li>
+      <li>
+        The <strong>Cloud</strong> button signs you in with Google so you can upload the open quiz to your private folders and download it on any device. When an uploaded quiz has changed, <strong>Upload changes</strong> appears at the top
+        (Alt+U). The last 5 uploads of each quiz are kept, and deleted quizzes and folders stay in the trash for 30 days.
+      </li>
       <li>Export to <strong>Moodle XML</strong> for full fidelity. In Moodle, go to <em>Question bank → Import</em>, choose the same format and upload the file.</li>
       <li><strong>GIFT</strong> and <strong>Aiken</strong> are plain-text formats that only support some question types; unsupported questions are listed when exporting.</li>
-      <li>Images pasted or inserted into the editor are embedded in Moodle XML exports.</li>
+      <li>Images pasted or inserted into the editor are embedded in Moodle XML exports. Large images are made smaller automatically; the notification has a button to keep the original.</li>
+      <li>The <strong>question bank</strong> button next to <em>Add question</em> (Alt+B) copies questions from your other quizzes into this one.</li>
       <li>Drag the <span class="grip">⠿</span> handle to reorder questions, answers and items.</li>
       <li>Drag a question onto another quiz's tab to move it there (hold Ctrl to copy), or hold it over the tab until it opens to drop it at a chosen place.</li>
       <li>Tick questions in the list (hover a number, or Ctrl+click) to export, edit, move, duplicate or delete several at once.</li>

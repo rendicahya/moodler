@@ -19,6 +19,8 @@
   import CheckDialog from './components/dialogs/CheckDialog.svelte';
   import AiQuestionDialog from './components/dialogs/AiQuestionDialog.svelte';
   import CloudDialog from './components/dialogs/CloudDialog.svelte';
+  import QuestionBankDialog from './components/dialogs/QuestionBankDialog.svelte';
+  import { editedSinceUpload, uploadChanges } from './lib/cloudsync.svelte.js';
   import { app, library, switchToTab, closeTab, initPersistence, undo, redo, openModal, notify, selectedQuestion, selectedIndex, addQuestion, deleteQuestion, newQuiz, cycleView, goToQuestion, markReviewed, markUnreviewed, nextUnreviewed, setSidebarWidth, saveLayout, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT } from './lib/store.svelte.js';
   import { QUESTION_TYPES } from './lib/model.js';
   import { looksLikeQuestions } from './lib/formats/index.js';
@@ -195,6 +197,13 @@
     } else if (e.altKey && key === 'q' && app.quiz.questions.length) {
       e.preventDefault();
       openModal('quiz-preview');
+    } else if (e.altKey && !mod && key === 'u') {
+      e.preventDefault();
+      if (editedSinceUpload(library.quizzes.find((x) => x.id === library.activeId))) uploadChanges();
+      else openModal('cloud');
+    } else if (e.altKey && !mod && key === 'b') {
+      e.preventDefault();
+      openModal('bank');
     } else if (e.altKey && !mod && key === 'c' && app.quiz.questions.length) {
       e.preventDefault();
       openModal('check');
@@ -316,6 +325,8 @@
   <AiQuestionDialog />
 {:else if app.modal === 'cloud'}
   <CloudDialog />
+{:else if app.modal === 'bank'}
+  <QuestionBankDialog />
 {/if}
 
 {#if app.confirm}
