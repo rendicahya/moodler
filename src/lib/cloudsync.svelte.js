@@ -61,7 +61,7 @@ export async function uploadChanges() {
     markCloudSynced(id, meta.version, updated);
     delete sync.blocked[id];
     sync.error = '';
-    notify(`Uploaded the changes to “${name}”.`, 'success', 3000);
+    notify(`Saved the changes to “${name}” in the cloud.`, 'success', 3000);
   } catch (e) {
     notify(cloud ? cloud.cloudErrorMessage(e) : 'Could not load the cloud features. Check your connection and try again.', 'error', 8000);
   } finally {

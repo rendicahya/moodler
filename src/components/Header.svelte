@@ -1,15 +1,28 @@
 <script>
   import { onMount } from 'svelte';
-  import { Sun, Moon, Maximize, Minimize, Undo2, Redo2, Upload, Download, FilePlus, Settings, CircleQuestionMark, Presentation, Printer, Sparkles, ListChecks, Cloud, CloudUpload, RefreshCw } from '@lucide/svelte';
+  import { Sun, Moon, Maximize, Minimize, Undo2, Redo2, Upload, Download, FilePlus, Settings, CircleQuestionMark, Presentation, Printer, Sparkles, ListChecks, Cloud, CloudUpload, CloudCheck, RefreshCw } from '@lucide/svelte';
   import QuizTabs from './QuizTabs.svelte';
   import { app, library, history, backup, REMIND_AFTER, undo, redo, toggleTheme, openModal, newQuiz, downloadBackup } from '../lib/store.svelte.js';
   import { sync, editedSinceUpload, autoBlocked, uploadChanges } from '../lib/cloudsync.svelte.js';
   import { appUpdate, applyUpdate } from '../lib/pwa.svelte.js';
 
   const entry = $derived(library.quizzes.find((q) => q.id === library.activeId));
-  // Changes upload automatically, so the button only shows while uploading, or when the changes need a hand.
-  const cloudChanged = $derived(editedSinceUpload(entry) && (!!sync.error || autoBlocked(entry)));
-  const syncText = $derived(sync.busy ? (sync.total > 1 ? `Uploading ${sync.done} / ${sync.total}…` : 'Uploading…') : 'Upload changes');
+  // A quiz in the cloud has a Save button. Its changes also upload by themselves a few seconds after editing stops.
+  const inCloud = $derived(!!entry?.cloudVersion);
+  const unsaved = $derived(editedSinceUpload(entry));
+  const needsHand = $derived(unsaved && (!!sync.error || autoBlocked(entry)));
+  const saveText = $derived(sync.busy ? (sync.total > 1 ? `Saving ${sync.done} / ${sync.total}…` : 'Saving…') : unsaved ? 'Save' : 'Saved');
+  const saveTitle = $derived(
+    sync.busy
+      ? 'Saving to the cloud…'
+      : !unsaved
+        ? 'All changes are saved to the cloud'
+        : sync.error
+          ? `Automatic upload failed: ${sync.error}\nSave the changes to the cloud now (Ctrl+S)`
+          : needsHand
+            ? 'This quiz has changed since it was last saved to the cloud. Save the changes now (Ctrl+S)'
+            : 'Save the changes to the cloud now (Ctrl+S). They are also saved automatically a few seconds after you stop editing.'
+  );
 
   let fullscreen = $state(false);
   const canFullscreen = typeof document !== 'undefined' && !!document.documentElement.requestFullscreen;
@@ -90,12 +103,15 @@
     <button class="btn btn-ghost btn-icon hide-xs" title="Check questions: review progress, answer key and repeated questions (Alt+C)" aria-label="Check questions" disabled={!app.quiz.questions.length} onclick={() => openModal('check')}><ListChecks size={17} /></button>
     <button class="btn btn-ghost btn-icon hide-xs" title="Print or save as PDF (Ctrl+P)" aria-label="Print" disabled={!app.quiz.questions.length} onclick={() => openModal('print')}><Printer size={17} /></button>
     <button class="btn btn-ghost hide-xs" title="Generate questions with AI: write a prompt for an AI chatbot (Alt+G)" aria-label="Generate questions with AI" onclick={() => openModal('ai-prompt')}><Sparkles size={16} /><span class="btn-text">AI</span></button>
-    {#if cloudChanged || sync.busy}
+    {#if inCloud || sync.busy}
       <button
-        class="btn btn-ghost btn-sm cloud-sync"
-        title={sync.busy && sync.background ? 'Uploading changes to the cloud automatically' : sync.error ? `Automatic upload failed: ${sync.error}\nUpload the changes now (Alt+U)` : 'This quiz has changed since it was last uploaded. Upload the changes to the cloud (Alt+U)'}
-        disabled={sync.busy}
-        onclick={uploadChanges}><CloudUpload size={16} /><span class="sync-text">{syncText}</span></button
+        class="btn btn-sm cloud-sync"
+        class:unsaved={unsaved && !sync.busy}
+        class:warn={needsHand && !sync.busy}
+        title={saveTitle}
+        aria-label={saveText === 'Save' ? 'Save to the cloud' : saveText}
+        disabled={sync.busy || !unsaved}
+        onclick={uploadChanges}>{#if unsaved || sync.busy}<CloudUpload size={16} />{:else}<CloudCheck size={16} />{/if}<span class="sync-text">{saveText}</span></button
       >
     {/if}
     <button class="btn btn-ghost hide-xs" title="Cloud: keep your quizzes in your private cloud folders and open them on any device" aria-label="Cloud" onclick={() => openModal('cloud')}><Cloud size={16} /><span class="btn-text">Cloud</span></button>
@@ -201,8 +217,22 @@
   }
   .cloud-sync {
     gap: 6px;
-    color: var(--accent);
     font-weight: 500;
+  }
+  .cloud-sync:disabled {
+    opacity: 1;
+    color: var(--text-3);
+    cursor: default;
+  }
+  .cloud-sync.unsaved {
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .cloud-sync.warn {
+    border-color: color-mix(in srgb, var(--warning) 50%, transparent);
+    color: var(--warning);
   }
   .divider {
     width: 1px;

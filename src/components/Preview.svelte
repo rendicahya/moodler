@@ -1,5 +1,6 @@
 <script>
-  import { Flag, Eye, EyeOff, Dices } from '@lucide/svelte';
+  import { tick } from 'svelte';
+  import { Flag, Eye, EyeOff, Dices, Bold, Italic, Underline, Strikethrough, RemoveFormatting } from '@lucide/svelte';
   import { TYPE_MAP, escapeHtml, round, stripHtml } from '../lib/model.js';
   import { parseCloze, CLOZE_RE, isChoiceCloze, canonicalClozeType } from '../lib/formats/cloze.js';
   import { sanitizeHtml } from '../lib/sanitize.js';
@@ -64,6 +65,138 @@
     });
   }
 
+  // ---------------------------------------------------------------- formatting selected text in the preview
+
+  // Text shown just as it is stored can be formatted from the preview pane (not the whole-quiz preview).
+  const formattable = $derived(showAnswers === null);
+  const plainText = $derived(formattable && !['cloze', 'gapselect', 'ddwtos', 'calculated'].includes(q.type) && (q.questiontextformat ?? 'html') === 'html');
+  const editKey = (key) => (formattable ? key : undefined);
+
+  let wrapEl = $state();
+  let probe = $state();
+  // Where the toolbar shows, in viewport pixels ({ x, y, below, on }), or null when hidden.
+  let bubble = $state(null);
+  const BUBBLE_TOOLS = [
+    { cmd: 'bold', icon: Bold, title: 'Bold', tags: 'b, strong' },
+    { cmd: 'italic', icon: Italic, title: 'Italic', tags: 'i, em' },
+    { cmd: 'underline', icon: Underline, title: 'Underline', tags: 'u' },
+    { cmd: 'strikeThrough', icon: Strikethrough, title: 'Strikethrough', tags: 's, strike, del' },
+    { cmd: 'removeFormat', icon: RemoveFormatting, title: 'Clear formatting' },
+  ];
+
+  /** The selection and the stored text it is in, or null when no formattable text is selected. */
+  function selected() {
+    const sel = getSelection();
+    if (!wrapEl || !sel.rangeCount || sel.isCollapsed || !sel.toString().trim()) return null;
+    const range = sel.getRangeAt(0);
+    const node = range.commonAncestorContainer;
+    const el = (node.nodeType === 1 ? node : node.parentElement)?.closest('[data-edit]');
+    return el && wrapEl.contains(el) ? { range, el } : null;
+  }
+
+  function placeBubble() {
+    const s = selected();
+    if (!s) return void (bubble = null);
+    const r = s.range.getBoundingClientRect();
+    if (!r.width && !r.height) return void (bubble = null);
+    const x = Math.min(Math.max(r.left + r.width / 2, 110), window.innerWidth - 110);
+    const below = r.top < 56;
+    // Inside a frame of fixed elements (such as a dialog with a backdrop filter) the origin isn't the window's.
+    const o = probe?.getBoundingClientRect() ?? { left: 0, top: 0 };
+    const start = s.range.startContainer.nodeType === 1 ? s.range.startContainer : s.range.startContainer.parentElement;
+    const on = Object.fromEntries(BUBBLE_TOOLS.filter((t) => t.tags).map((t) => [t.cmd, !!start.closest(t.tags) && s.el.contains(start.closest(t.tags))]));
+    bubble = { x: x - o.left, y: (below ? r.bottom + 8 : r.top - 8) - o.top, below, on };
+  }
+
+  function onpointerup(e) {
+    if (e.button === 0 && formattable) setTimeout(placeBubble, 0);
+  }
+
+  // Character offsets of the selection in the text, so that it can be selected again once the text is shown anew.
+  function offsets(el, range) {
+    const before = document.createRange();
+    before.selectNodeContents(el);
+    before.setEnd(range.startContainer, range.startOffset);
+    const start = before.toString().length;
+    return [start, start + range.toString().length];
+  }
+
+  function selectOffsets(el, start, end) {
+    const range = document.createRange();
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let pos = 0;
+    let begun = false;
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const len = n.data.length;
+      if (!begun && start <= pos + len) {
+        range.setStart(n, start - pos);
+        begun = true;
+      }
+      if (begun && end <= pos + len) {
+        range.setEnd(n, end - pos);
+        const sel = getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        return true;
+      }
+      pos += len;
+    }
+    return false;
+  }
+
+  function storeText(key, html) {
+    const [kind, id] = key.split(':');
+    if (kind === 'questiontext' || kind === 'generalfeedback') return void (q[kind] = html);
+    const list = { answer: q.answers, subq: q.subquestions, item: q.items }[kind];
+    const it = list?.find((x) => String(x.id) === id);
+    if (it) it.text = html;
+  }
+
+  async function format(cmd) {
+    const s = selected();
+    if (!s) return void (bubble = null);
+    const { el, range } = s;
+    const key = el.dataset.edit;
+    const [start, end] = offsets(el, range);
+    // The browser formats only editable text, so a hidden editable copy of the shown text is formatted instead.
+    const copy = document.createElement('div');
+    copy.contentEditable = 'true';
+    copy.style.cssText = 'position:fixed;left:-10000px;top:0;width:600px;opacity:0;pointer-events:none';
+    copy.innerHTML = el.innerHTML.replace(/<!---->/g, '');
+    wrapEl.append(copy);
+    copy.focus({ preventScroll: true });
+    if (selectOffsets(copy, start, end)) {
+      document.execCommand('styleWithCSS', false, false);
+      document.execCommand(cmd);
+    }
+    const html = copy.innerHTML.trim();
+    copy.remove();
+    storeText(key, html === '<br>' ? '' : html);
+    await tick();
+    const shown = wrapEl?.querySelector(`[data-edit="${CSS.escape(key)}"]`);
+    if (shown && selectOffsets(shown, start, end)) placeBubble();
+    else bubble = null;
+  }
+
+  function onselection() {
+    if (bubble && !selected()) bubble = null;
+  }
+
+  // Scrolling, resizing or Escape put it away until the next selection.
+  $effect(() => {
+    if (!bubble) return;
+    const hide = () => (bubble = null);
+    const key = (e) => e.key === 'Escape' && (e.stopPropagation(), hide());
+    document.addEventListener('scroll', hide, true);
+    window.addEventListener('resize', hide);
+    document.addEventListener('keydown', key, true);
+    return () => {
+      document.removeEventListener('scroll', hide, true);
+      window.removeEventListener('resize', hide);
+      document.removeEventListener('keydown', key, true);
+    };
+  });
+
   function gapHtml(html, show) {
     return toHtml(html).replace(/\[\[(\d+)\]\]/g, (m, num) => {
       const c = q.choices[Number(num) - 1];
@@ -80,7 +213,11 @@
   }
 </script>
 
-<div class="wrap">
+<svelte:document onselectionchange={onselection} />
+
+<!-- The pointer handlers only show and hide the toolbar over selected text. -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="wrap" bind:this={wrapEl} {onpointerup} onpointerdown={() => (bubble = null)}>
   {#if showAnswers === null}
     <div class="bar">
       <span class="hint">Student view preview — options are shown in their original order.</span>
@@ -112,7 +249,7 @@
     </div>
 
     <div class="formulation">
-      <div class="qtext rendered">
+      <div class="qtext rendered" data-edit={plainText ? 'questiontext' : undefined}>
         {#if q.type === 'cloze'}
           {@html clozeHtml(q.questiontext, reveal)}
         {:else if q.type === 'gapselect' || q.type === 'ddwtos'}
@@ -131,7 +268,7 @@
             <label class="choice" class:correct={reveal && a.fraction > 0}>
               <input type={q.single ? 'radio' : 'checkbox'} name="mc-{q.id}" checked={reveal && a.fraction > 0} />
               <span class="num">{numberLabel(i, q.answernumbering)}</span>
-              <span class="rendered">{@html toHtml(a.text)}</span>
+              <span class="rendered" data-edit={editKey(`answer:${a.id}`)}>{@html toHtml(a.text)}</span>
               {#if reveal && a.fraction !== 0 && a.fraction !== 100}<span class="badge {a.fraction > 0 ? 'success' : 'danger'}">{round(a.fraction, 2)}%</span>{/if}
             </label>
           {/each}
@@ -204,7 +341,7 @@
           <tbody>
             {#each q.subquestions.filter((s) => stripHtml(s.text) || /<img/i.test(s.text)) as s (s.id)}
               <tr>
-                <td class="rendered">{@html toHtml(s.text)}</td>
+                <td class="rendered" data-edit={editKey(`subq:${s.id}`)}>{@html toHtml(s.text)}</td>
                 <td>
                   <select class="p-select" class:ok={reveal}>
                     <option>Choose…</option>
@@ -225,16 +362,36 @@
         <div class="prompt">Drag the items into the correct order.</div>
         <ol class="order" class:horizontal={q.layouttype === 'HORIZONTAL'}>
           {#each reveal ? q.items : [...q.items].reverse() as it (it.id)}
-            <li class="rendered">{@html toHtml(it.text)}</li>
+            <li class="rendered" data-edit={editKey(`item:${it.id}`)}>{@html toHtml(it.text)}</li>
           {/each}
         </ol>
       {/if}
     </div>
 
     {#if reveal && q.generalfeedback}
-      <div class="feedback rendered">{@html toHtml(q.generalfeedback)}</div>
+      <div class="feedback rendered" data-edit={editKey('generalfeedback')}>{@html toHtml(q.generalfeedback)}</div>
     {/if}
   </div>
+  <span class="probe" aria-hidden="true" bind:this={probe}></span>
+  {#if bubble}
+    <div class="bubble" class:below={bubble.below} role="toolbar" aria-label="Format the selected text" style:left="{bubble.x}px" style:top="{bubble.y}px">
+      {#each BUBBLE_TOOLS as t (t.cmd)}
+        <button
+          type="button"
+          class="tb"
+          class:on={bubble.on[t.cmd]}
+          title={t.title}
+          aria-label={t.title}
+          aria-pressed={t.tags ? !!bubble.on[t.cmd] : undefined}
+          tabindex="-1"
+          onpointerdown={(e) => (e.preventDefault(), e.stopPropagation())}
+          onmousedown={(e) => e.preventDefault()}
+          onclick={() => format(t.cmd)}><t.icon size={15} /></button
+        >
+        {#if t.cmd === 'strikeThrough'}<span class="sep"></span>{/if}
+      {/each}
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -467,6 +624,66 @@
   .wrap :global(.p-missing) {
     color: var(--danger);
     font-family: var(--mono);
+  }
+  .bubble {
+    position: fixed;
+    z-index: 150;
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    padding: 3px;
+    transform: translate(-50%, -100%);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    box-shadow: var(--shadow-lg, 0 8px 24px rgb(0 0 0 / 0.15));
+    animation: bubble-in 0.1s ease-out;
+  }
+  .bubble.below {
+    transform: translate(-50%, 0);
+  }
+  @keyframes bubble-in {
+    from {
+      opacity: 0;
+    }
+  }
+  .tb {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 26px;
+    border: none;
+    background: none;
+    border-radius: 5px;
+    color: var(--text-2);
+    cursor: pointer;
+  }
+  .tb:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+  .tb.on {
+    background: var(--accent-soft);
+    color: var(--accent-text);
+  }
+  .sep {
+    width: 1px;
+    height: 16px;
+    margin: 0 4px;
+    background: var(--border);
+  }
+  .probe {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .wrap [data-edit] {
+    outline: none;
   }
   @container (max-width: 520px) {
     .formulation {

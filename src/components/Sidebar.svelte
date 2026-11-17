@@ -296,6 +296,8 @@
         class="row"
         class:selected={q.id === app.selectedId}
         class:ticked
+        class:to-review={q.unreviewed}
+        class:reviewed={reviewCount > 0 && !q.unreviewed}
         class:dragging={!foreign && sort.dragging === i}
         class:drop-before={ind === 'before'}
         class:drop-after={ind === 'after'}
@@ -333,7 +335,9 @@
             {#if q.type !== 'description'}· {Number(q.defaultgrade)} mark{Number(q.defaultgrade) === 1 ? '' : 's'}{/if}
           </span>
         </span>
-        {#if q.unreviewed}<span class="flag review" title="Not reviewed yet"><CircleDot size={14} /></span>{/if}
+        <!-- While a quiz has questions to review, the reviewed ones carry a check, so the two kinds stand apart. -->
+        {#if q.unreviewed}<span class="flag review" title="Not reviewed yet: open it and click Mark reviewed (Alt+R)">To review</span>
+        {:else if reviewCount > 0}<span class="flag done" title="Reviewed"><CircleCheck size={15} /></span>{/if}
         {#if q.hidden}<span class="flag" title="Hidden"><EyeOff size={14} /></span>{/if}
         {#if issues.length}<span class="flag warn" title={issues.join('\n')}><TriangleAlert size={14} /></span>{/if}
         <span class="actions">
@@ -607,7 +611,34 @@
     color: var(--warning);
   }
   .flag.review {
-    color: var(--accent);
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent-text, var(--accent));
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+    white-space: nowrap;
+  }
+  .flag.done {
+    color: var(--success);
+  }
+  /* A bar on the left edge marks the questions still to review. */
+  .row.to-review::before {
+    content: '';
+    position: absolute;
+    left: -1px;
+    top: 6px;
+    bottom: 6px;
+    width: 3px;
+    border-radius: 2px;
+    background: var(--accent);
+  }
+  .row.to-review .name {
+    font-weight: 600;
+  }
+  .row.reviewed:not(.selected) .name {
+    color: var(--text-2);
   }
   .actions {
     display: none;

@@ -45,7 +45,7 @@
       <li>Everything runs in your browser. Your quiz is saved automatically in this browser’s storage, and nothing is uploaded unless you use the <strong>Cloud</strong> button.</li>
       <li>
         The <strong>Cloud</strong> button signs you in with Google so you can upload the open quiz to your private folders, create new quizzes there, and open them on any device. Quizzes that are in the cloud upload their changes
-        automatically a few seconds after you stop editing, or straight away with Ctrl+S; if an upload needs a hand, <strong>Upload changes</strong> appears at the top (Alt+U). The last 5 uploads of each quiz are kept, and deleted quizzes and folders stay in the trash
+        automatically a few seconds after you stop editing, or straight away with the <strong>Save</strong> button at the top (Ctrl+S). The last 5 uploads of each quiz are kept, and deleted quizzes and folders stay in the trash
         for 30 days.
       </li>
       <li>
@@ -57,6 +57,8 @@
       <li>Images pasted or inserted into the editor are embedded in Moodle XML exports. Large images are made smaller automatically; the notification has a button to keep the original.</li>
       <li>The <strong>question bank</strong> button next to <em>Add question</em> (Alt+B) copies questions from your other quizzes into this one.</li>
       <li>Right-click a question in the list, or the editor outside a text field, for its actions.</li>
+      <li>Select text in the live preview to make it bold, italic, underlined or struck through, or to clear its formatting.</li>
+      <li>In the question list, questions still to review have a bar on the left and a <em>To review</em> label; once a quiz has questions to review, the reviewed ones show a green check.</li>
       <li>Drag the <span class="grip">⠿</span> handle to reorder questions, answers and items.</li>
       <li>Drag a question onto another quiz's tab to move it there (hold Ctrl to copy), or hold it over the tab until it opens to drop it at a chosen place.</li>
       <li>Tick questions in the list (hover a number, or Ctrl+click) to export, edit, move, duplicate or delete several at once.</li>
