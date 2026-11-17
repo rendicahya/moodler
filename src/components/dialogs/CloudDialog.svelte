@@ -3,7 +3,7 @@
   import { SvelteSet } from 'svelte/reactivity';
   import { Cloud, CloudUpload, CloudDownload, LogIn, LogOut, Trash2, Folder, FolderPlus, FolderInput, Pencil, ChevronRight, Check, X, History, Undo2, FileText, Search } from '@lucide/svelte';
   import Modal from '../ui/Modal.svelte';
-  import { app, library, closeModal, notify, ask, prepareCloudUpload, markCloudSynced, applyCloudQuiz } from '../../lib/store.svelte.js';
+  import { app, library, closeModal, notify, ask, prepareCloudUpload, markCloudSynced, applyCloudQuiz, quizFromXmlFile } from '../../lib/store.svelte.js';
   import { uploadChanges, sync, setAutoUpload } from '../../lib/cloudsync.svelte.js';
   import Switch from '../ui/Switch.svelte';
   import ContextMenu from '../ui/ContextMenu.svelte';
@@ -551,6 +551,85 @@
     edited: 'Edited here since upload',
   };
 
+  // ---------------------------------------------------------------- dropping Moodle XML files to upload them
+
+  // Whether files are being dragged over the dialog, and how many elements deep.
+  let fileDrag = $state(false);
+  let fileDepth = 0;
+  const hasFiles = (e) => [...(e.dataTransfer?.types ?? [])].includes('Files');
+  const canTakeFiles = () => !!user && !!quizzes && !busy;
+  const isXml = (f) => /\.xml$/i.test(f.name) || f.type === 'text/xml' || f.type === 'application/xml';
+
+  // These run on the document, before the app's own window handlers, which would open the import dialog.
+  function fileEnter(e) {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    fileDepth++;
+    fileDrag = canTakeFiles();
+  }
+  function fileLeave(e) {
+    if (!hasFiles(e)) return;
+    e.stopPropagation();
+    if (--fileDepth <= 0) {
+      fileDepth = 0;
+      fileDrag = false;
+    }
+  }
+  function fileOver(e) {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = canTakeFiles() ? 'copy' : 'none';
+  }
+  function fileDrop(e) {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    fileDepth = 0;
+    fileDrag = false;
+    if (canTakeFiles()) uploadFiles([...e.dataTransfer.files]);
+  }
+
+  /** Uploads Moodle XML files as new cloud quizzes in the selected folder, without opening them here. */
+  function uploadFiles(files) {
+    const xml = files.filter(isXml);
+    if (!xml.length) {
+      error = 'Only Moodle XML files (.xml) can be uploaded by dropping them here.';
+      return;
+    }
+    const skipped = files.filter((f) => !isXml(f)).map((f) => f.name);
+    const folder = uploadFolder;
+    const problems = [];
+    return run('Uploading', async () => {
+      const done = [];
+      for (const [n, file] of xml.entries()) {
+        busy.label = xml.length > 1 ? `Uploading ${n + 1} of ${xml.length}: ${file.name}` : `Uploading ${file.name}`;
+        let prepared;
+        try {
+          prepared = quizFromXmlFile(await file.text(), file.name);
+        } catch (e) {
+          problems.push(`${file.name} could not be read${e?.message ? `: ${e.message}` : '.'}`);
+          continue;
+        }
+        const { id, quiz, text, name, count } = prepared;
+        const search = searchText(quiz);
+        await uploadCloudQuiz(user.uid, id, text, { name, count, folder, search }, progress);
+        if (texts) texts = new Map(texts).set(id, search);
+        done.push(name);
+      }
+      await refresh();
+      if (done.length) {
+        query = '';
+        show(folder);
+        notify(`Uploaded ${done.length === 1 ? `“${done[0]}”` : quizCount(done.length)} to ${pathText(folder)}.`, 'success');
+      }
+    }).then(() => {
+      if (skipped.length) problems.push(`Skipped ${skipped.join(', ')}: only Moodle XML files (.xml) can be uploaded here.`);
+      if (problems.length) error = [error, ...problems].filter(Boolean).join('\n');
+    });
+  }
+
   // ---------------------------------------------------------------- right-click menus
 
   // The open menu: { x, y, items }.
@@ -625,7 +704,9 @@
   const folderMenu = () => [
     { label: selected ? `New folder in ${selected.name}` : 'New folder', icon: FolderPlus, run: () => startNaming(null, '') },
     { label: uploadLabel, icon: CloudUpload, disabled: !app.quiz.questions.length, run: upload },
+    { label: 'Upload Moodle XML files…', icon: FileText, run: () => filePicker?.click() },
   ];
+  let filePicker = $state(null);
 
   const when = (t) => new Date(t).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   const sizeText = (n) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
@@ -658,7 +739,9 @@
   </form>
 {/snippet}
 
-<Modal title="Cloud" subtitle="Upload quizzes to your private Firebase folders and download them on any device." width="920px" onclose={close}>
+<svelte:document ondragenter={fileEnter} ondragleave={fileLeave} ondragover={fileOver} ondrop={fileDrop} />
+
+<Modal title="Cloud" width="1140px" onclose={close}>
   {#if !ready}
     <p class="note">Connecting…</p>
   {:else if !user}
@@ -684,6 +767,13 @@
 
     {#if quizzes}
       <div class="panes">
+        {#if fileDrag}
+          <div class="drop-overlay" aria-hidden="true">
+            <CloudUpload size={28} />
+            <strong>Drop Moodle XML files to upload them</strong>
+            <span>They go to {uploadFolder ? pathText(uploadFolder) : 'the top level'} as new quizzes.</span>
+          </div>
+        {/if}
         <div class="tree" role="tree" aria-label="Folders" bind:this={tree}>
           {#each treeRows as r (r.id ?? 'top level')}
             {@const count = quizzesPerFolder.get(r.id)}
@@ -868,7 +958,7 @@
                 {/if}
               </li>
             {:else}
-              <li class="note empty">{quizzes.length || folders.length ? 'No quizzes in this folder.' : 'Nothing uploaded yet. Upload the open quiz to see it here.'}</li>
+              <li class="note empty">{quizzes.length || folders.length ? 'No quizzes in this folder.' : 'Nothing uploaded yet. Upload the open quiz to see it here.'} Moodle XML files dropped here are uploaded to this folder.</li>
             {/each}
           </ul>
           {/if}
@@ -880,6 +970,19 @@
   {#if error}
     <p class="error" role="alert">{error}</p>
   {/if}
+
+  <input
+    type="file"
+    accept=".xml,text/xml,application/xml"
+    multiple
+    hidden
+    bind:this={filePicker}
+    onchange={(e) => {
+      const files = [...e.currentTarget.files];
+      e.currentTarget.value = '';
+      if (files.length) uploadFiles(files);
+    }}
+  />
 
   {#if menu}<ContextMenu x={menu.x} y={menu.y} items={menu.items} onclose={closeMenu} />{/if}
 
@@ -1109,6 +1212,30 @@
   .error {
     margin: 12px 0 0;
     color: var(--danger);
+    white-space: pre-line;
+  }
+  .panes {
+    position: relative;
+  }
+  .drop-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 16px;
+    border: 2px dashed var(--accent);
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--surface) 88%, var(--accent));
+    color: var(--accent);
+    text-align: center;
+    pointer-events: none;
+  }
+  .drop-overlay span {
+    color: var(--text-2);
   }
   .small {
     font-size: 12px;
