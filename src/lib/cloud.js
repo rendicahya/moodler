@@ -433,10 +433,16 @@ export async function deleteCloudQuiz(userId, meta) {
 /** A sentence for the user about a failed Firebase call. */
 export function cloudErrorMessage(e) {
   const code = String(e?.code ?? '');
-  if (code === 'auth/unauthorized-domain') return `Sign-in isn't allowed from ${location.hostname} yet: add it under Authentication → Settings → Authorized domains in the Firebase console.`;
+  // The app never names the service behind the cloud to its users.
+  if (code === 'auth/unauthorized-domain') return `Sign-in isn't allowed from ${location.hostname} yet.`;
   if (code === 'auth/popup-blocked') return 'Your browser blocked the sign-in window. Allow pop-ups for this site and try again.';
-  if (code === 'auth/network-request-failed' || code.includes('unavailable') || code.includes('deadline-exceeded')) return 'Could not reach Firebase. Check your connection and try again.';
-  if (code.includes('resource-exhausted')) return "Firebase's free daily limit has been reached. Try again tomorrow.";
-  if (code.includes('permission-denied') || code.includes('unauthenticated')) return 'Firebase refused the request. Sign out, sign in again and retry.';
-  return e?.message || 'Something went wrong with Firebase.';
+  if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return 'The sign-in window was closed before signing in finished.';
+  if (code === 'auth/network-request-failed' || code.includes('unavailable') || code.includes('deadline-exceeded')) return 'Could not reach the cloud. Check your connection and try again.';
+  if (code.includes('resource-exhausted')) return "The cloud's daily limit has been reached. Try again tomorrow.";
+  if (code.includes('permission-denied') || code.includes('unauthenticated')) return 'The cloud refused the request. Sign out, sign in again and retry.';
+  const message = String(e?.message ?? '')
+    .replace(/\bFirebase(Error)?:?\s*/gi, '')
+    .replace(/\s*\((auth|firestore)\/[^)]*\)\.?/g, '')
+    .trim();
+  return message && !/^error\.?$/i.test(message) ? message : 'Something went wrong in the cloud. Try again.';
 }

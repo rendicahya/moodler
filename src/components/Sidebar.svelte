@@ -25,6 +25,7 @@
     nextUnreviewed,
     setReviewed,
   } from '../lib/store.svelte.js';
+  import { showMenu, questionMenu, checkedMenu } from '../lib/questionmenu.svelte.js';
   import { questionTitle, validateQuestion, TYPE_MAP, QUESTION_TYPES, stripHtml } from '../lib/model.js';
   import { TYPE_ICONS } from '../lib/icons.js';
   import { createSortable } from '../lib/sortable.svelte.js';
@@ -305,6 +306,7 @@
         onclick={(e) => onrowclick(e, q.id)}
         onmousedown={(e) => e.shiftKey && e.preventDefault()}
         onkeydown={(e) => onkeydown(e, i)}
+        oncontextmenu={(e) => showMenu(e, ticked && app.checked.length > 1 ? checkedMenu() : questionMenu(q.id))}
         {...rowDrop(i)}
       >
         {#if !query}

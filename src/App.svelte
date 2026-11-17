@@ -4,6 +4,8 @@
   import Sidebar from './components/Sidebar.svelte';
   import QuestionEditor from './components/QuestionEditor.svelte';
   import Toasts from './components/ui/Toasts.svelte';
+  import ContextMenu from './components/ui/ContextMenu.svelte';
+  import { contextMenu, closeMenu } from './lib/questionmenu.svelte.js';
   import ConfirmDialog from './components/ui/ConfirmDialog.svelte';
   import AddQuestionDialog from './components/dialogs/AddQuestionDialog.svelte';
   import ImportDialog from './components/dialogs/ImportDialog.svelte';
@@ -342,6 +344,10 @@
 {/if}
 
 <Toasts />
+
+{#if contextMenu.open}
+  <ContextMenu x={contextMenu.open.x} y={contextMenu.open.y} items={contextMenu.open.items} onclose={closeMenu} />
+{/if}
 
 <!-- Small tab on the list's right edge (or the window's left edge when hidden) that shows or hides the question list. -->
 {#snippet edgeToggle()}

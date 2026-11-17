@@ -2,8 +2,65 @@
   import { X } from '@lucide/svelte';
   import { onMount } from 'svelte';
 
-  let { title, subtitle = '', width = '560px', onclose, children, footer, headerExtra } = $props();
+  // `resizable` is a name under which the size a dialog is resized to is remembered in this browser.
+  let { title, subtitle = '', width = '560px', onclose, children, footer, headerExtra, resizable = '' } = $props();
   let dialog;
+
+  const sizeKey = () => `moodler-dialog-size-${resizable}`;
+  let size = $state(
+    (() => {
+      if (!resizable) return null;
+      try {
+        const s = JSON.parse(localStorage.getItem(sizeKey()));
+        return s?.w > 0 && s?.h > 0 ? s : null;
+      } catch {
+        return null;
+      }
+    })()
+  );
+  let resizing = $state(false);
+  const MIN_W = 560;
+  const MIN_H = 400;
+
+  function saveSize() {
+    try {
+      if (size) localStorage.setItem(sizeKey(), JSON.stringify(size));
+      else localStorage.removeItem(sizeKey());
+    } catch {
+      // Remembering the size is a convenience only.
+    }
+  }
+
+  // The dialog stays centred, so it grows on both sides: twice the pointer's movement.
+  function resizeStart(e) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const handle = e.currentTarget;
+    handle.setPointerCapture(e.pointerId);
+    const r = dialog.getBoundingClientRect();
+    const start = { x: e.clientX, y: e.clientY, w: r.width, h: r.height };
+    resizing = true;
+    const move = (ev) => {
+      const w = Math.min(Math.max(start.w + 2 * (ev.clientX - start.x), MIN_W), window.innerWidth - 48);
+      const h = Math.min(Math.max(start.h + 2 * (ev.clientY - start.y), MIN_H), window.innerHeight - 48);
+      size = { w: Math.round(w), h: Math.round(h) };
+    };
+    const end = () => {
+      resizing = false;
+      saveSize();
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', end);
+      handle.removeEventListener('pointercancel', end);
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
+  }
+
+  function resetSize() {
+    size = null;
+    saveSize();
+  }
 
   onMount(() => {
     const prev = document.activeElement;
@@ -39,7 +96,19 @@
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="backdrop" onmousedown={(e) => e.target === e.currentTarget && onclose?.()} {onkeydown}>
-  <div class="modal" role="dialog" aria-modal="true" aria-label={title} tabindex="-1" style:max-width={width} bind:this={dialog}>
+  <div
+    class="modal"
+    class:resizing
+    class:sized={!!size}
+    role="dialog"
+    aria-modal="true"
+    aria-label={title}
+    tabindex="-1"
+    style:max-width={size ? 'calc(100vw - 48px)' : width}
+    style:width={size ? `${size.w}px` : null}
+    style:height={size ? `${size.h}px` : null}
+    bind:this={dialog}
+  >
     <header>
       <div>
         <h2>{title}</h2>
@@ -53,6 +122,10 @@
     </div>
     {#if footer}
       <footer>{@render footer()}</footer>
+    {/if}
+    {#if resizable}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="resize-handle" title="Drag to resize (double-click for the default size)" onpointerdown={resizeStart} ondblclick={resetSize}></div>
     {/if}
   </div>
 </div>
@@ -84,6 +157,32 @@
   .modal:focus {
     outline: none;
   }
+  .modal {
+    position: relative;
+  }
+  .modal.sized {
+    max-height: calc(100vh - 48px);
+    animation: none;
+  }
+  .modal.resizing {
+    user-select: none;
+  }
+  .resize-handle {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 18px;
+    height: 18px;
+    cursor: nwse-resize;
+    touch-action: none;
+    border-radius: 0 0 14px 0;
+    background: linear-gradient(135deg, transparent 50%, var(--text-3) 50%, var(--text-3) 56%, transparent 56%, transparent 68%, var(--text-3) 68%, var(--text-3) 74%, transparent 74%);
+    opacity: 0.55;
+  }
+  .resize-handle:hover,
+  .resizing .resize-handle {
+    opacity: 1;
+  }
   header {
     display: flex;
     align-items: flex-start;
@@ -110,6 +209,8 @@
     color: var(--text-3);
   }
   .content {
+    flex: 1 1 auto;
+    min-height: 0;
     padding: 18px 20px;
     overflow: auto;
     display: flex;

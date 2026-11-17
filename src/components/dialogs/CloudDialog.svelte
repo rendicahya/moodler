@@ -734,9 +734,9 @@
         { label: 'Empty trash', icon: Trash2, danger: true, disabled: !trash.length, run: emptyTrash },
       ];
     }
-    const newQuiz = { label: 'New quiz here…', icon: FilePlus, run: () => (open(r.id), startNewQuiz()) };
-    const newFolder = { label: 'New folder inside', icon: FolderPlus, run: () => (open(r.id), startNaming(null, '')) };
-    if (!r.id) return [newQuiz, { ...newFolder, label: 'New folder' }];
+    const newQuiz = { label: 'New quiz', icon: FilePlus, run: () => (open(r.id), startNewQuiz()) };
+    const newFolder = { label: 'New folder', icon: FolderPlus, run: () => (open(r.id), startNaming(null, '')) };
+    if (!r.id) return [newQuiz, newFolder];
     return [
       newQuiz,
       newFolder,
@@ -754,8 +754,8 @@
 
   // The empty part of a folder's list.
   const folderMenu = () => [
-    { label: selected ? `New quiz in ${selected.name}…` : 'New quiz…', icon: FilePlus, run: startNewQuiz },
-    { label: selected ? `New folder in ${selected.name}` : 'New folder', icon: FolderPlus, run: () => startNaming(null, '') },
+    { label: 'New quiz', icon: FilePlus, run: startNewQuiz },
+    { label: 'New folder', icon: FolderPlus, run: () => startNaming(null, '') },
     { label: openCopy ? 'Upload the open quiz again' : 'Upload the open quiz here', icon: CloudUpload, disabled: !app.quiz.questions.length, run: upload },
     { label: 'Upload Moodle XML files…', icon: FileText, run: () => filePicker?.click() },
   ];
@@ -887,7 +887,7 @@
 
 <svelte:document ondragenter={fileEnter} ondragleave={fileLeave} ondragover={fileOver} ondrop={fileDrop} />
 
-<Modal title="Cloud" width="1140px" onclose={close}>
+<Modal title="Cloud" width="1360px" resizable="cloud" onclose={close}>
   {#snippet headerExtra()}
     {#if user}
       {#if quizzes}
@@ -1067,9 +1067,9 @@
               <button class="btn btn-sm" disabled={!!busy} onclick={() => startNaming(null, '')}><FolderPlus size={15} /> New folder</button>
             </div>
             {#if naming?.quiz}
-              {@render nameRow('New quiz name', `New quiz in ${selected?.name ?? 'Cloud'}`)}
+              {@render nameRow('New quiz name', 'New quiz')}
             {:else if naming}
-              {@render nameRow(naming.id ? `New name for ${selected.name}` : 'New folder name', naming.id ? 'Folder name' : `New folder in ${selected?.name ?? 'Cloud'}`)}
+              {@render nameRow(naming.id ? `New name for ${selected.name}` : 'New folder name', naming.id ? 'Folder name' : 'New folder')}
             {/if}
           </div>
 
@@ -1191,7 +1191,9 @@
   .panes {
     display: grid;
     grid-template-columns: var(--tree-w, 250px) minmax(0, 1fr);
-    height: min(58vh, 520px);
+    /* Fills the dialog, which is tall by default and can be resized from its corner. */
+    flex: 1 1 min(68vh, 720px);
+    min-height: 240px;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     overflow: hidden;

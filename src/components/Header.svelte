@@ -98,7 +98,7 @@
         onclick={uploadChanges}><CloudUpload size={16} /><span class="sync-text">{syncText}</span></button
       >
     {/if}
-    <button class="btn btn-ghost hide-xs" title="Cloud: upload this quiz to Firebase, or download your uploaded quizzes" aria-label="Cloud" onclick={() => openModal('cloud')}><Cloud size={16} /><span class="btn-text">Cloud</span></button>
+    <button class="btn btn-ghost hide-xs" title="Cloud: keep your quizzes in your private cloud folders and open them on any device" aria-label="Cloud" onclick={() => openModal('cloud')}><Cloud size={16} /><span class="btn-text">Cloud</span></button>
     <button class="btn" title="Import questions (Ctrl+O)" onclick={() => openModal('import')}><Download size={16} /><span class="btn-text">Import</span></button>
     <button class="btn btn-primary" title={entry?.cloudVersion ? 'Export questions' : 'Export questions (Ctrl+S)'} onclick={() => openModal('export')}><Upload size={16} /><span class="btn-text">Export</span></button>
     <span class="divider"></span>
