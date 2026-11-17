@@ -297,6 +297,12 @@ export async function updateCloudFolder(userId, id, changes) {
   await store.updateDoc(store.doc(db, folderDocPath(userId, id)), changes);
 }
 
+/** Renames an uploaded quiz. The quiz inside keeps its old name until it is uploaded again; opening it uses this one. */
+export async function renameCloudQuiz(userId, id, name) {
+  const { db, store } = await load();
+  await store.updateDoc(store.doc(db, quizPath(userId, id)), { name });
+}
+
 export async function moveCloudQuiz(userId, id, folder) {
   const { db, store } = await load();
   await store.updateDoc(store.doc(db, quizPath(userId, id)), { folder });

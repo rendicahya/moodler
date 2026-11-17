@@ -6,7 +6,7 @@
   const shortcuts = [
     [[mod, 'Z'], 'Undo'],
     [[mod, 'Shift', 'Z'], 'Redo (also ' + mod + '+Y)'],
-    [[mod, 'S'], 'Export'],
+    [[mod, 'S'], 'Export, or upload the changes of a quiz from the cloud'],
     [[mod, 'O'], 'Import'],
     [[mod, 'P'], 'Print or save as PDF'],
     [[mod, 'H'], 'Find and replace'],

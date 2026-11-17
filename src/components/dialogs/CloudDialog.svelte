@@ -3,7 +3,7 @@
   import { SvelteSet } from 'svelte/reactivity';
   import { Cloud, CloudUpload, CloudDownload, LogIn, LogOut, Trash2, Folder, FolderPlus, FolderInput, Pencil, ChevronRight, Check, X, History, Undo2, FileText, Search } from '@lucide/svelte';
   import Modal from '../ui/Modal.svelte';
-  import { app, library, closeModal, notify, ask, prepareCloudUpload, markCloudSynced, applyCloudQuiz, quizFromXmlFile } from '../../lib/store.svelte.js';
+  import { app, library, closeModal, notify, ask, prepareCloudUpload, markCloudSynced, applyCloudQuiz, quizFromXmlFile, renameCloudCopy } from '../../lib/store.svelte.js';
   import { uploadChanges, sync, setAutoUpload } from '../../lib/cloudsync.svelte.js';
   import Switch from '../ui/Switch.svelte';
   import ContextMenu from '../ui/ContextMenu.svelte';
@@ -20,6 +20,7 @@
     createCloudFolder,
     updateCloudFolder,
     moveCloudQuiz,
+    renameCloudQuiz,
     deleteCloudFolders,
     trashCloudItem,
     restoreCloudItem,
@@ -189,6 +190,35 @@
     if (openCopy) show(folderOf(openCopy));
   }
 
+  // The folder last opened is remembered per account in this browser, and the dialog opens there next time.
+  const folderKey = () => `moodler-cloud-folder-${user.uid}`;
+  let restored = false;
+
+  /** Opens the folder that was open last time; false when there is none, or it is gone. */
+  function showLastFolder() {
+    let id;
+    try {
+      id = localStorage.getItem(folderKey());
+    } catch {
+      return false;
+    }
+    if (id === null) return false;
+    const target = id === '' ? null : id;
+    if (target !== TRASH && !isLive(target)) return false;
+    show(target);
+    return true;
+  }
+
+  $effect(() => {
+    const id = current;
+    if (!user || !restored) return;
+    try {
+      localStorage.setItem(folderKey(), id ?? '');
+    } catch {
+      // Remembering the folder is a convenience only.
+    }
+  });
+
   onMount(() => {
     let stop = null;
     let gone = false;
@@ -200,11 +230,13 @@
       query = '';
       expanded.clear();
       naming = moving = null;
+      restored = false;
       if (u) {
         run('Loading', async () => {
           await refresh();
           await purgeExpired();
-          showOpenCopy();
+          if (!showLastFolder()) showOpenCopy();
+          restored = true;
         });
       }
     })
@@ -229,7 +261,7 @@
     // An upload that is running puts a first copy in the selected folder.
     if (busy) return;
     show(id);
-    naming = moving = historyOf = null;
+    naming = moving = historyOf = quizNaming = null;
     query = '';
     error = '';
   }
@@ -292,7 +324,7 @@
   }
 
   function download(meta) {
-    return run('Downloading', async () => {
+    return run('Opening', async () => {
       const local = library.quizzes.find((q) => q.id === meta.id);
       if (local && statusOf(meta) !== 'same') {
         const ok = await ask({
@@ -304,7 +336,7 @@
       }
       const text = await downloadCloudQuiz(user.uid, meta, progress);
       if (!(await applyCloudQuiz(meta, text))) throw new Error('This cloud copy could not be read.');
-      notify(`Downloaded “${meta.name}”.`, 'success');
+      notify(`Opened “${meta.name}” from the cloud.`, 'success');
       closeModal();
     });
   }
@@ -664,9 +696,10 @@
       fn();
     };
     return [
-      { label: 'Download', icon: CloudDownload, run: () => download(q) },
+      { label: 'Open', icon: CloudDownload, run: () => download(q) },
       { label: historyOf === q.id && !fromSearch ? 'Hide version history' : 'Version history', icon: History, run: inFolder(() => (historyOf = historyOf === q.id && !fromSearch ? null : q.id)) },
       fromSearch && { label: 'Show in its folder', icon: Folder, run: () => open(folderOf(q)) },
+      { label: 'Rename…', icon: Pencil, run: inFolder(() => startQuizNaming(q)) },
       { label: 'Move to another folder…', icon: FolderInput, run: inFolder(() => startMoving('quiz', q.id, folderOf(q))) },
       '-',
       { label: 'Move to the trash', icon: Trash2, danger: true, run: () => remove('quiz', q.id) },
@@ -709,6 +742,57 @@
   let filePicker = $state(null);
 
   const when = (t) => new Date(t).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+
+  // "5 minutes ago", kept current while the dialog is open; the exact time is in the tooltip.
+  let now = $state(Date.now());
+  onMount(() => {
+    const tick = setInterval(() => (now = Date.now()), 30_000);
+    return () => clearInterval(tick);
+  });
+  const relative = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+  const UNITS = [
+    ['year', 365 * 24 * 3600],
+    ['month', 30 * 24 * 3600],
+    ['week', 7 * 24 * 3600],
+    ['day', 24 * 3600],
+    ['hour', 3600],
+    ['minute', 60],
+  ];
+  function ago(t) {
+    const seconds = Math.max(0, (now - t) / 1000);
+    if (seconds < 45) return 'just now';
+    const [unit, size] = UNITS.find(([, size]) => seconds >= size) ?? UNITS.at(-1);
+    return relative.format(-Math.max(1, Math.round(seconds / size)), unit);
+  }
+
+  // ---------------------------------------------------------------- renaming quizzes
+
+  // The quiz whose name is being typed: { id, name }.
+  let quizNaming = $state(null);
+
+  function startQuizNaming(q) {
+    if (busy) return;
+    quizNaming = { id: q.id, name: q.name };
+    naming = moving = null;
+    error = '';
+  }
+
+  function saveQuizName(e) {
+    e.preventDefault();
+    const { id } = quizNaming;
+    const name = quizNaming.name.trim();
+    const q = quizzes.find((x) => x.id === id);
+    if (!name || !q) return;
+    if (name === q.name) return void (quizNaming = null);
+    run('Renaming', async () => {
+      await renameCloudQuiz(user.uid, id, name);
+      // This browser's copy takes the new name too.
+      await renameCloudCopy(id, name);
+      await refresh();
+      quizNaming = null;
+    });
+  }
+
   const sizeText = (n) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
   const focusOnMount = (el) => {
     el.focus();
@@ -836,14 +920,14 @@
                 <li class="item" class:open={q.id === library.activeId} oncontextmenu={(e) => openMenu(e, quizMenu(q, true))}>
                   <div class="info">
                     <span class="name" title={q.name}>{q.name}</span>
-                    <span class="meta">{folderOf(q) ? pathText(folderOf(q)) : 'Cloud'} · {plural(q.count, 'question')} · {when(q.uploaded)}</span>
+                    <span class="meta">{folderOf(q) ? pathText(folderOf(q)) : 'Cloud'} · {plural(q.count, 'question')} · <span title={when(q.uploaded)}>{ago(q.uploaded)}</span></span>
                     {#each match.questions as m}
                       <span class="hit">{#if m.title}<strong>{m.title}</strong> — {/if}{m.excerpt}</span>
                     {/each}
                     {#if match.total > match.questions.length}<span class="meta">and {plural(match.total - match.questions.length, 'more question')}</span>{/if}
                   </div>
                   <button class="btn btn-ghost btn-icon" title="Show in its folder" aria-label="Show {q.name} in its folder" disabled={!!busy} onclick={() => open(folderOf(q))}><Folder size={15} /></button>
-                  <button class="btn btn-sm" disabled={!!busy} onclick={() => download(q)}><CloudDownload size={15} /> Download</button>
+                  <button class="btn btn-sm" disabled={!!busy} onclick={() => download(q)}><CloudDownload size={15} /> Open</button>
                 </li>
               {:else}
                 <li class="note empty">{textsLoading ? 'Searching…' : `No quizzes or questions match “${query.trim()}”.`}</li>
@@ -867,7 +951,7 @@
                     <span class="name" title={t.name}>{t.name}</span>
                     <span class="meta">
                       {#if t.kind === 'folder'}{[t.folderIds.length > 1 && plural(t.folderIds.length - 1, 'subfolder'), quizCount(t.quizzes.length)].filter(Boolean).join(', ')}{:else}{plural(t.item.count, 'question')}{/if}
-                      · deleted {when(t.deleted)} from {isLive(t.from) ? pathText(t.from) : 'a folder that is gone'}
+                      · deleted <span title={when(t.deleted)}>{ago(t.deleted)}</span> from {isLive(t.from) ? pathText(t.from) : 'a folder that is gone'}
                     </span>
                     <span class="meta">Deleted for good in {plural(left, 'day')}</span>
                   </div>
@@ -912,18 +996,27 @@
                 class="item"
                 class:open={q.id === library.activeId}
                 class:dragged={dragging?.kind === 'quiz' && dragging.id === q.id}
-                draggable={!busy}
+                draggable={!busy && quizNaming?.id !== q.id}
                 title="Drag onto a folder in the tree to move it there"
                 ondragstart={(e) => dragStart(e, 'quiz', q.id)}
                 ondragend={dragEnd}
                 oncontextmenu={(e) => openMenu(e, quizMenu(q, false))}
               >
                 <div class="info">
-                  <span class="name" title={q.name}>{q.name}</span>
-                  <span class="meta">{plural(q.count, 'question')} · {sizeText(q.size)} · {when(q.uploaded)}</span>
-                  <span class="state {statusOf(q)}">{STATUS[statusOf(q)]}</span>
+                  {#if quizNaming?.id === q.id}
+                    <form class="inline" onsubmit={saveQuizName} onkeydown={(e) => cancelOnEscape(e, () => (quizNaming = null))}>
+                      <input class="input input-sm" aria-label="New name for {q.name}" maxlength="200" bind:value={quizNaming.name} use:focusOnMount />
+                      <button class="btn btn-ghost btn-icon" type="submit" title="Save" aria-label="Save" disabled={!!busy || !quizNaming.name.trim()}><Check size={16} /></button>
+                      <button class="btn btn-ghost btn-icon" type="button" title="Cancel" aria-label="Cancel" disabled={!!busy} onclick={() => (quizNaming = null)}><X size={16} /></button>
+                    </form>
+                  {:else}
+                    <span class="name" title="{q.name}{'\n'}Double-click to rename" ondblclick={() => startQuizNaming(q)} role="presentation">{q.name}</span>
+                  {/if}
+                  <span class="meta">{plural(q.count, 'question')} · {sizeText(q.size)} · <span title={when(q.uploaded)}>{ago(q.uploaded)}</span></span>
+                  {#if statusOf(q) !== 'absent'}<span class="state {statusOf(q)}">{STATUS[statusOf(q)]}</span>{/if}
                 </div>
-                <button class="btn btn-sm" disabled={!!busy} onclick={() => download(q)}><CloudDownload size={15} /> Download</button>
+                <button class="btn btn-sm" disabled={!!busy} onclick={() => download(q)}><CloudDownload size={15} /> Open</button>
+                <button class="btn btn-ghost btn-icon" title="Rename" aria-label="Rename {q.name}" disabled={!!busy} onclick={() => startQuizNaming(q)}><Pencil size={15} /></button>
                 <button
                   class="btn btn-ghost btn-icon"
                   class:on={historyOf === q.id}
@@ -941,7 +1034,7 @@
                     <ol aria-label="Versions of {q.name}">
                       {#each versions as v, i (v.version)}
                         <li class="version">
-                          <span class="v-when">{when(v.uploaded)}</span>
+                          <span class="v-when" title={when(v.uploaded)}>{ago(v.uploaded)}</span>
                           <span class="meta">{plural(v.count, 'question')} · {sizeText(v.size)}{v.name !== q.name ? ` · named “${v.name}”` : ''}</span>
                           {#if i === 0}
                             <span class="current">Current</span>

@@ -721,6 +721,8 @@ export function markCloudSynced(id, version, updated) {
 export async function applyCloudQuiz(meta, text) {
   const quiz = parseQuiz(text);
   if (!quiz) return false;
+  // A cloud copy renamed in the cloud dialog keeps its old name inside until it is uploaded again.
+  if (meta.name) quiz.name = meta.name;
   const snapshot = JSON.stringify(quiz);
   if (library.quizzes.some((q) => q.id === meta.id)) {
     if (!(await switchQuiz(meta.id))) return false;
@@ -790,6 +792,25 @@ export async function renameQuiz(id, name) {
 }
 
 /**
+ * Renames this browser's copy of a quiz after its cloud copy was renamed. A copy that matched the cloud still does,
+ * so the new name alone doesn't count as a change to upload.
+ */
+export async function renameCloudCopy(id, name) {
+  const entry = library.quizzes.find((q) => q.id === id);
+  if (!entry) return;
+  // Edits waiting to be saved are saved first, so they still count as changes.
+  if (id === library.activeId) commit(JSON.stringify($state.snapshot(app.quiz)));
+  const synced = !!entry.cloudVersion && entry.updated === entry.cloudUpdated;
+  if (id === library.activeId) {
+    app.quiz.name = name;
+    commit(JSON.stringify($state.snapshot(app.quiz)));
+  } else {
+    await renameQuiz(id, name);
+  }
+  if (synced) markCloudSynced(id, entry.cloudVersion, entry.updated);
+}
+
+/**
  * Closes a quiz's tab, which removes the quiz from the app: every quiz in the app has a tab.
  * Empty quizzes go straight away; others are confirmed first and can be brought back from the notification.
  */
@@ -800,7 +821,12 @@ export async function closeTab(id) {
   const count = countOf(entry);
   // Closing the only tab would just replace an empty quiz with another empty one.
   if (!count && library.quizzes.length < 2) return;
-  if (count) {
+  // Edits still waiting to be saved count as changes.
+  if (id === library.activeId) commit(JSON.stringify($state.snapshot(app.quiz)));
+  // A quiz that is unchanged since it came from (or went to) the cloud can be opened again from there, so it closes
+  // without asking; Undo still brings it back.
+  const inCloud = !!entry.cloudVersion && entry.updated === entry.cloudUpdated;
+  if (count && !inCloud) {
     const name = id === library.activeId ? app.quiz.name || 'Untitled quiz' : entry.name;
     const ok = await ask({
       title: `Close “${name}”?`,

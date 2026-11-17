@@ -22,7 +22,7 @@
   import CloudDialog from './components/dialogs/CloudDialog.svelte';
   import QuestionBankDialog from './components/dialogs/QuestionBankDialog.svelte';
   import { editedSinceUpload, uploadChanges, startAutoUpload } from './lib/cloudsync.svelte.js';
-  import { app, library, switchToTab, closeTab, initPersistence, undo, redo, openModal, notify, selectedQuestion, selectedIndex, addQuestion, deleteQuestion, newQuiz, cycleView, goToQuestion, markReviewed, markUnreviewed, nextUnreviewed, setSidebarWidth, saveLayout, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT } from './lib/store.svelte.js';
+  import { app, library, history, switchToTab, closeTab, initPersistence, undo, redo, openModal, notify, selectedQuestion, selectedIndex, addQuestion, deleteQuestion, newQuiz, cycleView, goToQuestion, markReviewed, markUnreviewed, nextUnreviewed, setSidebarWidth, saveLayout, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT } from './lib/store.svelte.js';
   import { QUESTION_TYPES } from './lib/model.js';
   import { looksLikeQuestions } from './lib/formats/index.js';
   import { TYPE_ICONS } from './lib/icons.js';
@@ -152,7 +152,11 @@
       redo();
     } else if (mod && key === 's') {
       e.preventDefault();
-      openModal('export');
+      // A quiz opened from (or uploaded to) the cloud is saved back there; others open the export dialog.
+      const entry = library.quizzes.find((q) => q.id === library.activeId);
+      if (!entry?.cloudVersion) openModal('export');
+      else if (editedSinceUpload(entry) || history.pending) uploadChanges();
+      else notify(`No changes to upload: “${entry.name}” is up to date in the cloud.`, 'info', 3000);
     } else if (mod && key === 'o') {
       e.preventDefault();
       openModal('import');

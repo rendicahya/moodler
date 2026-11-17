@@ -1,9 +1,10 @@
 <script>
   import { onMount } from 'svelte';
-  import { Sun, Moon, Maximize, Minimize, Undo2, Redo2, Upload, Download, FilePlus, Settings, CircleQuestionMark, Presentation, Printer, Sparkles, ListChecks, Cloud, CloudUpload } from '@lucide/svelte';
+  import { Sun, Moon, Maximize, Minimize, Undo2, Redo2, Upload, Download, FilePlus, Settings, CircleQuestionMark, Presentation, Printer, Sparkles, ListChecks, Cloud, CloudUpload, RefreshCw } from '@lucide/svelte';
   import QuizTabs from './QuizTabs.svelte';
   import { app, library, history, backup, REMIND_AFTER, undo, redo, toggleTheme, openModal, newQuiz, downloadBackup } from '../lib/store.svelte.js';
   import { sync, editedSinceUpload, autoBlocked, uploadChanges } from '../lib/cloudsync.svelte.js';
+  import { appUpdate, applyUpdate } from '../lib/pwa.svelte.js';
 
   const entry = $derived(library.quizzes.find((q) => q.id === library.activeId));
   // With automatic uploads on, the button only shows while uploading, or when the changes need a hand.
@@ -62,6 +63,11 @@
   <QuizTabs />
 
   <div class="right">
+    {#if appUpdate.ready}
+      <button class="btn btn-sm update" title="A new version of Moodler is available. Click to reload into it; your work is saved." onclick={applyUpdate}>
+        <RefreshCw size={14} /><span>Update</span>
+      </button>
+    {/if}
     {#if actionable}
       <button class="btn btn-ghost btn-sm status {status}" title={statusTitle} aria-label="{STATUS_TEXT[status]}. Download a backup" onclick={downloadBackup}>
         <span class="dot"></span><span class="status-text">{STATUS_TEXT[status]}</span>
@@ -94,7 +100,7 @@
     {/if}
     <button class="btn btn-ghost hide-xs" title="Cloud: upload this quiz to Firebase, or download your uploaded quizzes" aria-label="Cloud" onclick={() => openModal('cloud')}><Cloud size={16} /><span class="btn-text">Cloud</span></button>
     <button class="btn" title="Import questions (Ctrl+O)" onclick={() => openModal('import')}><Download size={16} /><span class="btn-text">Import</span></button>
-    <button class="btn btn-primary" title="Export questions (Ctrl+S)" onclick={() => openModal('export')}><Upload size={16} /><span class="btn-text">Export</span></button>
+    <button class="btn btn-primary" title={entry?.cloudVersion ? 'Export questions' : 'Export questions (Ctrl+S)'} onclick={() => openModal('export')}><Upload size={16} /><span class="btn-text">Export</span></button>
     <span class="divider"></span>
     <button class="btn btn-ghost btn-icon" title="Help & shortcuts" aria-label="Help" onclick={() => openModal('help')}><CircleQuestionMark size={17} /></button>
     <button
@@ -185,6 +191,13 @@
   }
   .status.error .dot {
     background: var(--danger);
+  }
+  .update {
+    gap: 6px;
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
   }
   .cloud-sync {
     gap: 6px;

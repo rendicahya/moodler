@@ -3,7 +3,7 @@ import '@fontsource-variable/inter';
 import './app.css';
 import App from './App.svelte';
 import PhoneNotice from './components/PhoneNotice.svelte';
-import { registerServiceWorker } from './lib/pwa.js';
+import { registerServiceWorker } from './lib/pwa.svelte.js';
 import { loadSavedQuiz } from './lib/store.svelte.js';
 import { isPhone } from './lib/device.js';
 

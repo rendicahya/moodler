@@ -9,6 +9,9 @@
     const prev = document.activeElement;
     const first = dialog.querySelector('[data-autofocus]') || dialog.querySelector('input, textarea, select, button:not(.modal-close):not(.info)');
     first?.focus();
+    // When nothing inside can take the focus yet (say, every button is disabled while loading), the dialog takes it,
+    // so that Escape and Tab work straight away.
+    if (!dialog.contains(document.activeElement)) dialog.focus();
     return () => prev?.focus?.();
   });
 
@@ -36,7 +39,7 @@
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="backdrop" onmousedown={(e) => e.target === e.currentTarget && onclose?.()} {onkeydown}>
-  <div class="modal" role="dialog" aria-modal="true" aria-label={title} style:max-width={width} bind:this={dialog}>
+  <div class="modal" role="dialog" aria-modal="true" aria-label={title} tabindex="-1" style:max-width={width} bind:this={dialog}>
     <header>
       <div>
         <h2>{title}</h2>
@@ -76,6 +79,9 @@
     border-radius: 14px;
     box-shadow: var(--shadow-lg);
     animation: pop 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  }
+  .modal:focus {
+    outline: none;
   }
   header {
     display: flex;
