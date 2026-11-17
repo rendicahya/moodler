@@ -87,7 +87,7 @@ const EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'imag
 export function questionXml(q) {
   const images = {};
   let n = 0;
-  const { unreviewed, ...rest } = q;
+  const { unreviewed, reviewed, ...rest } = q;
   const plain = mapStrings(rest, (s) =>
     s.replace(/data:([\w/+.-]+);base64,[A-Za-z0-9+/=\s]+/g, (uri, mime) => {
       const name = `image${++n}.${EXT[mime] || 'bin'}`;

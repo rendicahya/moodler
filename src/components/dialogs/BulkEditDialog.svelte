@@ -50,8 +50,13 @@
       if (categoryMode === 'set') q.category = category.trim();
       else if (categoryMode === 'clear') q.category = '';
       if (visibility !== 'keep') q.hidden = visibility === 'hidden';
-      if (review === 'done') delete q.unreviewed;
-      else if (review === 'todo') q.unreviewed = true;
+      if (review === 'done' && q.unreviewed) {
+        delete q.unreviewed;
+        q.reviewed = true;
+      } else if (review === 'todo') {
+        q.unreviewed = true;
+        delete q.reviewed;
+      }
     }
     closeModal();
     notify(`Updated ${n} question${n === 1 ? '' : 's'}. Undo with Ctrl+Z.`, 'success');

@@ -524,6 +524,7 @@ export function markReviewed(id) {
   const q = app.quiz.questions.find((x) => x.id === id);
   if (!q?.unreviewed) return;
   delete q.unreviewed;
+  q.reviewed = true;
   if (!nextUnreviewed()) notify('All questions are reviewed.', 'success', 3000);
 }
 
@@ -532,6 +533,7 @@ export function markUnreviewed(id) {
   const q = app.quiz.questions.find((x) => x.id === id);
   if (!q || q.unreviewed) return;
   q.unreviewed = true;
+  delete q.reviewed;
   notify('Marked as not reviewed.', 'info', 2500);
 }
 
@@ -539,8 +541,13 @@ export function markUnreviewed(id) {
 export function setReviewed(on, ids = null) {
   for (const q of app.quiz.questions) {
     if (ids && !ids.includes(q.id)) continue;
-    if (on) delete q.unreviewed;
-    else q.unreviewed = true;
+    if (on && q.unreviewed) {
+      delete q.unreviewed;
+      q.reviewed = true;
+    } else if (!on) {
+      q.unreviewed = true;
+      delete q.reviewed;
+    }
   }
 }
 

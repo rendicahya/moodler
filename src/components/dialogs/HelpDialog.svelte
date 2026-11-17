@@ -57,8 +57,8 @@
       <li>Images pasted or inserted into the editor are embedded in Moodle XML exports. Large images are made smaller automatically; the notification has a button to keep the original.</li>
       <li>The <strong>question bank</strong> button next to <em>Add question</em> (Alt+B) copies questions from your other quizzes into this one.</li>
       <li>Right-click a question in the list, or the editor outside a text field, for its actions.</li>
-      <li>Select text in the live preview to make it bold, italic, underlined or struck through, or to clear its formatting.</li>
-      <li>In the question list, questions still to review have a bar on the left and a <em>To review</em> label; once a quiz has questions to review, the reviewed ones show a green check.</li>
+      <li>Select text in the live preview to make it bold, italic, underlined, struck through or code, or to clear its formatting.</li>
+      <li>In the question list, questions marked reviewed show a green check.</li>
       <li>Drag the <span class="grip">⠿</span> handle to reorder questions, answers and items.</li>
       <li>Drag a question onto another quiz's tab to move it there (hold Ctrl to copy), or hold it over the tab until it opens to drop it at a chosen place.</li>
       <li>Tick questions in the list (hover a number, or Ctrl+click) to export, edit, move, duplicate or delete several at once.</li>

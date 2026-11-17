@@ -1,6 +1,6 @@
 <script>
   import { tick } from 'svelte';
-  import { Flag, Eye, EyeOff, Dices, Bold, Italic, Underline, Strikethrough, RemoveFormatting } from '@lucide/svelte';
+  import { Flag, Eye, EyeOff, Dices, Bold, Italic, Underline, Strikethrough, Code, RemoveFormatting } from '@lucide/svelte';
   import { TYPE_MAP, escapeHtml, round, stripHtml } from '../lib/model.js';
   import { parseCloze, CLOZE_RE, isChoiceCloze, canonicalClozeType } from '../lib/formats/cloze.js';
   import { sanitizeHtml } from '../lib/sanitize.js';
@@ -81,6 +81,7 @@
     { cmd: 'italic', icon: Italic, title: 'Italic', tags: 'i, em' },
     { cmd: 'underline', icon: Underline, title: 'Underline', tags: 'u' },
     { cmd: 'strikeThrough', icon: Strikethrough, title: 'Strikethrough', tags: 's, strike, del' },
+    { cmd: 'code', icon: Code, title: 'Code', tags: 'code' },
     { cmd: 'removeFormat', icon: RemoveFormatting, title: 'Clear formatting' },
   ];
 
@@ -152,6 +153,25 @@
     if (it) it.text = html;
   }
 
+  const unwrap = (el) => el.replaceWith(...el.childNodes);
+
+  // The browser has no command for code, so the selection is wrapped in <code>, or taken out of it when it is in code already.
+  function toggleCode(root, range) {
+    const start = range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement;
+    const inCode = start.closest('code');
+    if (inCode && root.contains(inCode)) {
+      unwrap(inCode);
+      for (const c of [...root.querySelectorAll('code')]) if (range.intersectsNode(c)) unwrap(c);
+      return;
+    }
+    const frag = range.extractContents();
+    frag.querySelectorAll('code').forEach(unwrap);
+    const code = document.createElement('code');
+    code.append(frag);
+    range.insertNode(code);
+    root.querySelectorAll('code').forEach((c) => !c.textContent && c.remove());
+  }
+
   async function format(cmd) {
     const s = selected();
     if (!s) return void (bubble = null);
@@ -166,8 +186,11 @@
     wrapEl.append(copy);
     copy.focus({ preventScroll: true });
     if (selectOffsets(copy, start, end)) {
-      document.execCommand('styleWithCSS', false, false);
-      document.execCommand(cmd);
+      if (cmd === 'code') toggleCode(copy, getSelection().getRangeAt(0));
+      else {
+        document.execCommand('styleWithCSS', false, false);
+        document.execCommand(cmd);
+      }
     }
     const html = copy.innerHTML.trim();
     copy.remove();
@@ -388,7 +411,7 @@
           onmousedown={(e) => e.preventDefault()}
           onclick={() => format(t.cmd)}><t.icon size={15} /></button
         >
-        {#if t.cmd === 'strikeThrough'}<span class="sep"></span>{/if}
+        {#if t.cmd === 'code'}<span class="sep"></span>{/if}
       {/each}
     </div>
   {/if}
