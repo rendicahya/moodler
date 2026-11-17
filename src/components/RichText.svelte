@@ -161,6 +161,68 @@
     source = !source;
   }
 
+  // ---------------------------------------------------------------- the small toolbar over selected text
+
+  // Where it shows, in viewport pixels ({ x, y, below }), or null when hidden.
+  let bubble = $state(null);
+  let probe = $state(null);
+  const BUBBLE_TOOLS = [
+    { cmd: 'bold', icon: Bold, title: 'Bold (Ctrl+B)' },
+    { cmd: 'italic', icon: Italic, title: 'Italic (Ctrl+I)' },
+    { cmd: 'underline', icon: Underline, title: 'Underline (Ctrl+U)' },
+    { cmd: 'strikeThrough', icon: Strikethrough, title: 'Strikethrough' },
+    { cmd: 'removeFormat', icon: RemoveFormatting, title: 'Clear formatting' },
+  ];
+
+  /** The selected range inside this editor, or null when nothing in it is selected. */
+  function selectedRange() {
+    const sel = getSelection();
+    if (!el || !sel.rangeCount || sel.isCollapsed) return null;
+    const range = sel.getRangeAt(0);
+    return el.contains(range.commonAncestorContainer) && sel.toString().trim() ? range : null;
+  }
+
+  function placeBubble() {
+    const range = selectedRange();
+    if (!range) return void (bubble = null);
+    const r = range.getBoundingClientRect();
+    if (!r.width && !r.height) return void (bubble = null);
+    const x = Math.min(Math.max(r.left + r.width / 2, 110), window.innerWidth - 110);
+    // Above the selection, or below it when there's no room at the top.
+    const below = r.top < 56;
+    // Inside a dialog, whose backdrop filter makes it the frame of fixed elements, the origin isn't the window's.
+    const o = probe?.getBoundingClientRect() ?? { left: 0, top: 0 };
+    bubble = { x: x - o.left, y: (below ? r.bottom + 8 : r.top - 8) - o.top, below };
+  }
+
+  // Shown when the mouse button is released over a selection; it waits a moment so that the selection is final.
+  function onpointerup(e) {
+    if (e.button !== 0) return;
+    setTimeout(placeBubble, 0);
+  }
+
+  function bubbleExec(cmd) {
+    exec(cmd);
+    placeBubble();
+  }
+
+  function onselection() {
+    refreshState();
+    if (bubble && !selectedRange()) bubble = null;
+  }
+
+  // Scrolling or resizing would leave it behind, so it goes until the next selection.
+  $effect(() => {
+    if (!bubble) return;
+    const hide = () => (bubble = null);
+    document.addEventListener('scroll', hide, true);
+    window.addEventListener('resize', hide);
+    return () => {
+      document.removeEventListener('scroll', hide, true);
+      window.removeEventListener('resize', hide);
+    };
+  });
+
   const tools = [
     { cmd: 'bold', icon: Bold, title: 'Bold (Ctrl+B)' },
     { cmd: 'italic', icon: Italic, title: 'Italic (Ctrl+I)' },
@@ -175,7 +237,7 @@
   ];
 </script>
 
-<svelte:document onselectionchange={refreshState} />
+<svelte:document onselectionchange={onselection} />
 
 <div class="rte" class:compact class:focused class:source onfocusin={() => (focused = true)} onfocusout={onblur}>
   <div class="toolbar" role="toolbar" aria-label="Formatting">
@@ -251,7 +313,29 @@
       {onpaste}
       {ondrop}
       onkeyup={refreshState}
+      onpointerdown={() => (bubble = null)}
+      {onpointerup}
+      onkeydown={(e) => e.key === 'Escape' && bubble && (e.stopPropagation(), (bubble = null))}
     ></div>
+  {/if}
+
+  <span class="probe" aria-hidden="true" bind:this={probe}></span>
+  {#if bubble && focused && !source}
+    <div class="bubble" class:below={bubble.below} role="toolbar" aria-label="Format the selected text" style:left="{bubble.x}px" style:top="{bubble.y}px">
+      {#each BUBBLE_TOOLS as t (t.cmd)}
+        <button
+          type="button"
+          class="tb"
+          class:on={active[t.cmd]}
+          title={t.title}
+          aria-label={t.title}
+          tabindex="-1"
+          onmousedown={(e) => e.preventDefault()}
+          onclick={() => bubbleExec(t.cmd)}><t.icon size={15} /></button
+        >
+        {#if t.cmd === 'strikeThrough'}<span class="sep"></span>{/if}
+      {/each}
+    </div>
   {/if}
 </div>
 
@@ -320,6 +404,37 @@
   }
   .spacer {
     flex: 1;
+  }
+  .bubble {
+    position: fixed;
+    z-index: 150;
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    padding: 3px;
+    transform: translate(-50%, -100%);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    box-shadow: var(--shadow-lg, 0 8px 24px rgb(0 0 0 / 0.15));
+    animation: bubble-in 0.1s ease-out;
+  }
+  .probe {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .bubble.below {
+    transform: translate(-50%, 0);
+  }
+  @keyframes bubble-in {
+    from {
+      opacity: 0;
+    }
   }
   .linkbar {
     display: flex;

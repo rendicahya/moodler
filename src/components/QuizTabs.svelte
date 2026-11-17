@@ -28,7 +28,8 @@
   // An empty quiz that is the only tab has nothing to close.
   const closable = (t) => library.quizzes.length > 1 || countOf(t) > 0;
   // With nothing in the app but one empty quiz, there is no tab to show, only the New quiz button.
-  const blank = $derived(library.quizzes.length === 1 && countOf(library.quizzes[0]) === 0);
+  // A quiz from the cloud keeps its tab even while empty, so that its name shows.
+  const blank = $derived(library.quizzes.length === 1 && countOf(library.quizzes[0]) === 0 && !library.quizzes[0].cloudVersion);
 
   // Keep the open tab in view when switching with the keyboard.
   $effect(() => {

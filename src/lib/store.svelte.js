@@ -740,13 +740,33 @@ export async function applyCloudQuiz(meta, text) {
       restore(snapshot);
     }
   } else {
+    // An empty, unnamed quiz left open (such as the one the app starts with) is replaced rather than kept as a tab.
+    const blank = isBlankQuiz() ? library.activeId : null;
     library.quizzes.push(entryFor(meta.id, quiz));
     activate(meta.id, quiz);
     save(current, meta.id);
+    if (blank) dropQuiz(blank);
   }
   const entry = library.quizzes.find((q) => q.id === meta.id);
   markCloudSynced(meta.id, meta.version, entry.updated);
   return true;
+}
+
+/** Whether the open quiz is an untouched placeholder: no questions, no name of its own and not in the cloud. */
+function isBlankQuiz() {
+  const entry = library.quizzes.find((q) => q.id === library.activeId);
+  const name = (app.quiz.name || '').trim();
+  return !!entry && !entry.cloudVersion && !app.quiz.questions.length && (!name || name === 'Untitled quiz');
+}
+
+/** Removes a quiz that isn't open from the app, without asking. */
+function dropQuiz(id) {
+  if (id === library.activeId) return;
+  library.quizzes = library.quizzes.filter((q) => q.id !== id);
+  stacks.delete(id);
+  views.delete(id);
+  saveLibrary();
+  enqueue(() => removeStored(quizKey(id)));
 }
 
 /** Number of questions in a quiz, using the live copy for the open one. */
