@@ -27,6 +27,8 @@
   const countOf = (t) => (t.id === library.activeId ? app.quiz.questions.length : t.count);
   // An empty quiz that is the only tab has nothing to close.
   const closable = (t) => library.quizzes.length > 1 || countOf(t) > 0;
+  // With nothing in the app but one empty quiz, there is no tab to show, only the New quiz button.
+  const blank = $derived(library.quizzes.length === 1 && countOf(library.quizzes[0]) === 0);
 
   // Keep the open tab in view when switching with the keyboard.
   $effect(() => {
@@ -135,7 +137,7 @@
 
 <nav class="tabbar" aria-label="Quizzes">
   <div class="strip" role="tablist" bind:this={strip} {onwheel}>
-    {#each library.quizzes as t, i (t.id)}
+    {#each blank ? [] : library.quizzes as t, i (t.id)}
       {@const active = t.id === library.activeId}
       {@const count = countOf(t)}
       <div

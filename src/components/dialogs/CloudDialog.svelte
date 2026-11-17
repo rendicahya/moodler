@@ -6,6 +6,7 @@
   import { app, library, closeModal, notify, ask, prepareCloudUpload, markCloudSynced, applyCloudQuiz } from '../../lib/store.svelte.js';
   import { uploadChanges, sync, setAutoUpload } from '../../lib/cloudsync.svelte.js';
   import Switch from '../ui/Switch.svelte';
+  import ContextMenu from '../ui/ContextMenu.svelte';
   import {
     watchUser,
     signIn,
@@ -550,6 +551,82 @@
     edited: 'Edited here since upload',
   };
 
+  // ---------------------------------------------------------------- right-click menus
+
+  // The open menu: { x, y, items }.
+  let menu = $state(null);
+
+  /** Opens a menu at the pointer, or under the element when opened from the keyboard. */
+  function openMenu(e, items) {
+    // Text fields keep the browser's own menu.
+    if (e.target.closest?.('input, select, textarea')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (busy) return;
+    let { clientX: x, clientY: y } = e;
+    if (!x && !y) {
+      const r = e.currentTarget.getBoundingClientRect();
+      x = r.left + 16;
+      y = r.top + Math.min(r.height, 28);
+    }
+    menu = { x, y, items };
+  }
+
+  async function closeMenu() {
+    menu = null;
+    // Without the focus inside the dialog, Escape would no longer close it.
+    await tick();
+    if (document.activeElement === document.body) primary?.focus();
+  }
+
+  function quizMenu(q, fromSearch) {
+    const inFolder = (fn) => () => {
+      if (fromSearch) open(folderOf(q));
+      fn();
+    };
+    return [
+      { label: 'Download', icon: CloudDownload, run: () => download(q) },
+      { label: historyOf === q.id && !fromSearch ? 'Hide version history' : 'Version history', icon: History, run: inFolder(() => (historyOf = historyOf === q.id && !fromSearch ? null : q.id)) },
+      fromSearch && { label: 'Show in its folder', icon: Folder, run: () => open(folderOf(q)) },
+      { label: 'Move to another folder…', icon: FolderInput, run: inFolder(() => startMoving('quiz', q.id, folderOf(q))) },
+      '-',
+      { label: 'Move to the trash', icon: Trash2, danger: true, run: () => remove('quiz', q.id) },
+    ].filter(Boolean);
+  }
+
+  function rowMenu(r) {
+    if (r.id === TRASH) {
+      return [
+        { label: 'Open', icon: Trash2, run: () => open(TRASH) },
+        '-',
+        { label: 'Empty trash', icon: Trash2, danger: true, disabled: !trash.length, run: emptyTrash },
+      ];
+    }
+    const newFolder = { label: 'New folder inside', icon: FolderPlus, run: () => (open(r.id), startNaming(null, '')) };
+    if (!r.id) return [{ label: 'Open', icon: Cloud, run: () => open(null) }, { ...newFolder, label: 'New folder' }];
+    const parent = folders.find((f) => f.id === r.id)?.parent ?? null;
+    return [
+      { label: 'Open', icon: Folder, run: () => open(r.id) },
+      newFolder,
+      { label: 'Rename…', icon: Pencil, run: () => (open(r.id), startNaming(r.id, r.name)) },
+      { label: 'Move to another folder…', icon: FolderInput, run: () => (open(r.id), startMoving('folder', r.id, parent)) },
+      '-',
+      { label: 'Move to the trash', icon: Trash2, danger: true, run: () => remove('folder', r.id) },
+    ];
+  }
+
+  const trashMenu = (t) => [
+    { label: isLive(t.from) ? `Restore to ${pathText(t.from)}` : 'Restore to the top level', icon: Undo2, run: () => restore(t) },
+    '-',
+    { label: 'Delete for good…', icon: Trash2, danger: true, run: () => deleteForever(t) },
+  ];
+
+  // The empty part of a folder's list.
+  const folderMenu = () => [
+    { label: selected ? `New folder in ${selected.name}` : 'New folder', icon: FolderPlus, run: () => startNaming(null, '') },
+    { label: uploadLabel, icon: CloudUpload, disabled: !app.quiz.questions.length, run: upload },
+  ];
+
   const when = (t) => new Date(t).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   const sizeText = (n) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
   const focusOnMount = (el) => {
@@ -635,6 +712,7 @@
                 if (r.hasChildren && !busy) expanded.add(r.id);
               }}
               onkeydown={treeKey}
+              oncontextmenu={(e) => openMenu(e, rowMenu(r))}
             >
               {#if r.hasChildren}
                 <!-- The arrow keys do this from the keyboard. -->
@@ -665,7 +743,7 @@
             </div>
             <ul class="list">
               {#each results as { q, match } (q.id)}
-                <li class="item" class:open={q.id === library.activeId}>
+                <li class="item" class:open={q.id === library.activeId} oncontextmenu={(e) => openMenu(e, quizMenu(q, true))}>
                   <div class="info">
                     <span class="name" title={q.name}>{q.name}</span>
                     <span class="meta">{folderOf(q) ? pathText(folderOf(q)) : 'Cloud'} · {plural(q.count, 'question')} · {when(q.uploaded)}</span>
@@ -693,7 +771,7 @@
             <ul class="list">
               {#each trash as t (t.id)}
                 {@const left = Math.max(1, daysLeft(t.deleted))}
-                <li class="item">
+                <li class="item" oncontextmenu={(e) => openMenu(e, trashMenu(t))}>
                   <span class="kind">{#if t.kind === 'folder'}<Folder size={16} />{:else}<FileText size={16} />{/if}</span>
                   <div class="info">
                     <span class="name" title={t.name}>{t.name}</span>
@@ -737,7 +815,7 @@
             {#if moving?.kind === 'folder'}{@render moveRow()}{/if}
           </div>
 
-          <ul class="list">
+          <ul class="list" oncontextmenu={(e) => openMenu(e, folderMenu())}>
             {#each shownQuizzes as q (q.id)}
               {@const versions = quizVersions(q)}
               <li
@@ -748,6 +826,7 @@
                 title="Drag onto a folder in the tree to move it there"
                 ondragstart={(e) => dragStart(e, 'quiz', q.id)}
                 ondragend={dragEnd}
+                oncontextmenu={(e) => openMenu(e, quizMenu(q, false))}
               >
                 <div class="info">
                   <span class="name" title={q.name}>{q.name}</span>
@@ -801,6 +880,8 @@
   {#if error}
     <p class="error" role="alert">{error}</p>
   {/if}
+
+  {#if menu}<ContextMenu x={menu.x} y={menu.y} items={menu.items} onclose={closeMenu} />{/if}
 
   {#snippet footer()}
     {#if progressText}<span class="progress" role="status">{progressText}</span>

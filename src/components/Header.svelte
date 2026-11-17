@@ -83,7 +83,7 @@
     </button>
     <button class="btn btn-ghost btn-icon hide-xs" title="Check questions: review progress, answer key and repeated questions (Alt+C)" aria-label="Check questions" disabled={!app.quiz.questions.length} onclick={() => openModal('check')}><ListChecks size={17} /></button>
     <button class="btn btn-ghost btn-icon hide-xs" title="Print or save as PDF (Ctrl+P)" aria-label="Print" disabled={!app.quiz.questions.length} onclick={() => openModal('print')}><Printer size={17} /></button>
-    <button class="btn btn-ghost btn-icon hide-xs" title="Generate questions with AI: write a prompt for an AI chatbot (Alt+G)" aria-label="Generate questions with AI" onclick={() => openModal('ai-prompt')}><Sparkles size={17} /></button>
+    <button class="btn btn-ghost hide-xs" title="Generate questions with AI: write a prompt for an AI chatbot (Alt+G)" aria-label="Generate questions with AI" onclick={() => openModal('ai-prompt')}><Sparkles size={16} /><span class="btn-text">AI</span></button>
     {#if cloudChanged || sync.busy}
       <button
         class="btn btn-ghost btn-sm cloud-sync"
@@ -92,7 +92,7 @@
         onclick={uploadChanges}><CloudUpload size={16} /><span class="sync-text">{syncText}</span></button
       >
     {/if}
-    <button class="btn btn-ghost btn-icon hide-xs" title="Cloud: upload this quiz to Firebase, or download your uploaded quizzes" aria-label="Cloud" onclick={() => openModal('cloud')}><Cloud size={17} /></button>
+    <button class="btn btn-ghost hide-xs" title="Cloud: upload this quiz to Firebase, or download your uploaded quizzes" aria-label="Cloud" onclick={() => openModal('cloud')}><Cloud size={16} /><span class="btn-text">Cloud</span></button>
     <button class="btn" title="Import questions (Ctrl+O)" onclick={() => openModal('import')}><Download size={16} /><span class="btn-text">Import</span></button>
     <button class="btn btn-primary" title="Export questions (Ctrl+S)" onclick={() => openModal('export')}><Upload size={16} /><span class="btn-text">Export</span></button>
     <span class="divider"></span>
