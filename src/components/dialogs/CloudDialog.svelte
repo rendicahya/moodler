@@ -1,11 +1,10 @@
 <script>
   import { onMount, tick } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import { Cloud, CloudUpload, CloudDownload, LogIn, LogOut, Trash2, Folder, FolderPlus, FolderInput, Pencil, ChevronRight, Check, X, History, Undo2, FileText, Search } from '@lucide/svelte';
+  import { Cloud, CloudUpload, CloudDownload, LogIn, LogOut, Trash2, Folder, FolderPlus, FilePlus, Pencil, ChevronRight, Check, X, History, Undo2, FileText, Search } from '@lucide/svelte';
   import Modal from '../ui/Modal.svelte';
-  import { app, library, closeModal, notify, ask, prepareCloudUpload, markCloudSynced, applyCloudQuiz, quizFromXmlFile, renameCloudCopy } from '../../lib/store.svelte.js';
-  import { uploadChanges, sync, setAutoUpload } from '../../lib/cloudsync.svelte.js';
-  import Switch from '../ui/Switch.svelte';
+  import { app, library, closeModal, notify, ask, prepareCloudUpload, markCloudSynced, applyCloudQuiz, quizFromXmlFile, renameCloudCopy, blankQuizForCloud } from '../../lib/store.svelte.js';
+  import { uploadChanges } from '../../lib/cloudsync.svelte.js';
   import ContextMenu from '../ui/ContextMenu.svelte';
   import {
     watchUser,
@@ -68,10 +67,8 @@
   // What is running: { label, done, total }, where total is 0 until the number of parts is known.
   let busy = $state(null);
   let primary = $state(null);
-  // The name being typed: { id, name }, with id null for a new folder.
+  // The name being typed: { id, name, quiz }, with id null for a new folder, or a new quiz when quiz is true.
   let naming = $state(null);
-  // The item being moved: { kind: 'quiz' | 'folder', id, target }, with target '' for the top level.
-  let moving = $state(null);
 
   const progressText = $derived(busy ? (busy.total > 1 ? `${busy.label} ${busy.done} / ${busy.total}…` : `${busy.label}…`) : '');
   const openCopy = $derived(quizzes?.find((q) => q.id === library.activeId));
@@ -96,7 +93,6 @@
     return counts;
   });
   const uploadLabel = $derived(openCopy ? 'Upload again' : selected ? `Upload to ${selected.name}` : 'Upload this quiz');
-  const moveOptions = $derived(moving ? folderOptions(folders, moving.kind === 'folder' ? moving.id : null) : []);
   const searching = $derived(!!query.trim() && !!quizzes);
   const results = $derived(
     searching
@@ -229,7 +225,7 @@
       current = historyOf = null;
       query = '';
       expanded.clear();
-      naming = moving = null;
+      naming = null;
       restored = false;
       if (u) {
         run('Loading', async () => {
@@ -255,13 +251,20 @@
   const close = () => !busy && closeModal();
 
   const login = () => run('Signing in', signIn);
-  const logout = () => run('Signing out', signOut);
+  async function logout() {
+    const ok = await ask({
+      title: 'Sign out?',
+      message: `You will be signed out of ${user?.email ?? 'your Google account'} in Moodler. Your quizzes stay in the cloud and in this browser, and changes are no longer uploaded until you sign in again.`,
+      confirmLabel: 'Sign out',
+    });
+    if (ok) await run('Signing out', signOut);
+  }
 
   function open(id) {
     // An upload that is running puts a first copy in the selected folder.
     if (busy) return;
     show(id);
-    naming = moving = historyOf = quizNaming = null;
+    naming = historyOf = quizNaming = null;
     query = '';
     error = '';
   }
@@ -504,6 +507,7 @@
     const { id, name: typed } = naming;
     const name = typed.trim();
     if (!name) return;
+    if (naming.quiz) return createQuiz(name);
     const parent = id ? folders.find((f) => f.id === id).parent : current;
     const clash = nameClash(name, parent, id);
     if (clash) {
@@ -519,45 +523,34 @@
     });
   }
 
-  function saveMove() {
-    const { kind, id, target } = moving;
-    const parent = target || null;
-    if (kind === 'folder') {
-      const clash = nameClash(folders.find((f) => f.id === id).name, parent, id);
-      if (clash) {
-        error = clash;
-        return;
-      }
-    }
-    run('Moving', async () => {
-      if (kind === 'folder') await updateCloudFolder(user.uid, id, { parent });
-      else await moveCloudQuiz(user.uid, id, parent);
-      await refresh();
-      moving = null;
+  /**
+   * Creates an empty quiz in the selected folder and opens it here. As it is in the cloud, the questions added to it
+   * are uploaded automatically (or with Ctrl+S).
+   */
+  function createQuiz(name) {
+    const folder = uploadFolder;
+    run('Creating quiz', async () => {
+      const { id, quiz, text } = blankQuizForCloud(name);
+      const search = searchText(quiz);
+      const meta = await uploadCloudQuiz(user.uid, id, text, { name, count: 0, folder, search }, progress);
+      if (texts) texts = new Map(texts).set(id, search);
+      if (!(await applyCloudQuiz(meta, text))) throw new Error('The new quiz could not be opened.');
+      naming = null;
+      notify(`Created “${name}” in ${folder ? pathText(folder) : 'Cloud'}. Questions you add are uploaded automatically.`, 'success', 5000);
+      closeModal();
     });
   }
 
-  function startNaming(id, name) {
-    naming = { id, name };
-    moving = null;
+  function startNaming(id, name, quiz = false) {
+    naming = { id, name, quiz };
+    quizNaming = null;
     error = '';
   }
 
-  function startMoving(kind, id, from) {
-    moving = { kind, id, target: from ?? '' };
-    naming = null;
-    error = '';
-  }
-
-  const movingFrom = () => (moving.kind === 'folder' ? folders.find((f) => f.id === moving.id)?.parent : folderOf(quizzes.find((q) => q.id === moving.id))) ?? '';
+  const startNewQuiz = () => startNaming(null, '', true);
 
   function cancelNaming() {
     naming = null;
-    error = '';
-  }
-
-  function cancelMoving() {
-    moving = null;
     error = '';
   }
 
@@ -700,7 +693,6 @@
       { label: historyOf === q.id && !fromSearch ? 'Hide version history' : 'Version history', icon: History, run: inFolder(() => (historyOf = historyOf === q.id && !fromSearch ? null : q.id)) },
       fromSearch && { label: 'Show in its folder', icon: Folder, run: () => open(folderOf(q)) },
       { label: 'Rename…', icon: Pencil, run: inFolder(() => startQuizNaming(q)) },
-      { label: 'Move to another folder…', icon: FolderInput, run: inFolder(() => startMoving('quiz', q.id, folderOf(q))) },
       '-',
       { label: 'Move to the trash', icon: Trash2, danger: true, run: () => remove('quiz', q.id) },
     ].filter(Boolean);
@@ -714,14 +706,14 @@
         { label: 'Empty trash', icon: Trash2, danger: true, disabled: !trash.length, run: emptyTrash },
       ];
     }
+    const newQuiz = { label: 'New quiz here…', icon: FilePlus, run: () => (open(r.id), startNewQuiz()) };
     const newFolder = { label: 'New folder inside', icon: FolderPlus, run: () => (open(r.id), startNaming(null, '')) };
-    if (!r.id) return [{ label: 'Open', icon: Cloud, run: () => open(null) }, { ...newFolder, label: 'New folder' }];
-    const parent = folders.find((f) => f.id === r.id)?.parent ?? null;
+    if (!r.id) return [{ label: 'Open', icon: Cloud, run: () => open(null) }, newQuiz, { ...newFolder, label: 'New folder' }];
     return [
       { label: 'Open', icon: Folder, run: () => open(r.id) },
+      newQuiz,
       newFolder,
       { label: 'Rename…', icon: Pencil, run: () => (open(r.id), startNaming(r.id, r.name)) },
-      { label: 'Move to another folder…', icon: FolderInput, run: () => (open(r.id), startMoving('folder', r.id, parent)) },
       '-',
       { label: 'Move to the trash', icon: Trash2, danger: true, run: () => remove('folder', r.id) },
     ];
@@ -735,6 +727,7 @@
 
   // The empty part of a folder's list.
   const folderMenu = () => [
+    { label: selected ? `New quiz in ${selected.name}…` : 'New quiz…', icon: FilePlus, run: startNewQuiz },
     { label: selected ? `New folder in ${selected.name}` : 'New folder', icon: FolderPlus, run: () => startNaming(null, '') },
     { label: uploadLabel, icon: CloudUpload, disabled: !app.quiz.questions.length, run: upload },
     { label: 'Upload Moodle XML files…', icon: FileText, run: () => filePicker?.click() },
@@ -773,7 +766,7 @@
   function startQuizNaming(q) {
     if (busy) return;
     quizNaming = { id: q.id, name: q.name };
-    naming = moving = null;
+    naming = null;
     error = '';
   }
 
@@ -793,27 +786,69 @@
     });
   }
 
+  // ---------------------------------------------------------------- resizing the folder tree
+
+  const TREE_KEY = 'moodler-cloud-tree-width';
+  const TREE_MIN = 160;
+  let panes = $state(null);
+  let treeWidth = $state(
+    (() => {
+      try {
+        return Number(localStorage.getItem(TREE_KEY)) || 250;
+      } catch {
+        return 250;
+      }
+    })()
+  );
+  let resizing = $state(false);
+  // The list keeps at least this much room.
+  const treeMax = () => Math.max(TREE_MIN, (panes?.clientWidth ?? 900) - 320);
+  const shownTreeWidth = $derived(Math.min(Math.max(treeWidth, TREE_MIN), treeMax()));
+
+  function setTreeWidth(w) {
+    treeWidth = Math.round(Math.min(Math.max(w, TREE_MIN), treeMax()));
+    try {
+      localStorage.setItem(TREE_KEY, String(treeWidth));
+    } catch {
+      // Remembering the width is a convenience only.
+    }
+  }
+
+  function resizeStart(e) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const handle = e.currentTarget;
+    handle.setPointerCapture(e.pointerId);
+    resizing = true;
+    const left = panes.getBoundingClientRect().left;
+    const move = (ev) => setTreeWidth(ev.clientX - left);
+    const end = () => {
+      resizing = false;
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', end);
+      handle.removeEventListener('pointercancel', end);
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
+  }
+
+  function resizeKey(e) {
+    const step = e.shiftKey ? 50 : 16;
+    if (e.key === 'ArrowLeft') setTreeWidth(shownTreeWidth - step);
+    else if (e.key === 'ArrowRight') setTreeWidth(shownTreeWidth + step);
+    else if (e.key === 'Home') setTreeWidth(TREE_MIN);
+    else if (e.key === 'End') setTreeWidth(treeMax());
+    else return;
+    e.preventDefault();
+  }
+
   const sizeText = (n) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
   const focusOnMount = (el) => {
     el.focus();
     el.select?.();
   };
 </script>
-
-{#snippet moveRow()}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="inline" onkeydown={(e) => cancelOnEscape(e, cancelMoving)}>
-    <label class="move-label" for="cloud-move-target">Move to</label>
-    <select id="cloud-move-target" class="input" bind:value={moving.target} use:focusOnMount>
-      <option value="">Cloud (top level)</option>
-      {#each moveOptions as o (o.id)}
-        <option value={o.id}>{'   '.repeat(o.depth + 1)}{o.name}</option>
-      {/each}
-    </select>
-    <button class="btn btn-sm btn-primary" disabled={!!busy || moving.target === movingFrom()} onclick={saveMove}>Move</button>
-    <button class="btn btn-sm" disabled={!!busy} onclick={cancelMoving}>Cancel</button>
-  </div>
-{/snippet}
 
 {#snippet nameRow(label, placeholder)}
   <form class="inline" onsubmit={saveName} onkeydown={(e) => cancelOnEscape(e, cancelNaming)}>
@@ -850,7 +885,21 @@
     </div>
 
     {#if quizzes}
-      <div class="panes">
+      <div class="panes" class:resizing bind:this={panes} style:--tree-w="{shownTreeWidth}px">
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+        <div
+          class="splitter"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize the folder list"
+          aria-valuenow={shownTreeWidth}
+          aria-valuemin={TREE_MIN}
+          tabindex="0"
+          title="Drag to resize the folder list (double-click to reset)"
+          onpointerdown={resizeStart}
+          onkeydown={resizeKey}
+          ondblclick={() => setTreeWidth(250)}
+        ></div>
         {#if fileDrag}
           <div class="drop-overlay" aria-hidden="true">
             <CloudUpload size={28} />
@@ -978,15 +1027,16 @@
             <div class="actions">
               {#if selected}
                 <button class="btn btn-ghost btn-icon" title="Rename the folder" aria-label="Rename {selected.name}" disabled={!!busy} onclick={() => startNaming(selected.id, selected.name)}><Pencil size={15} /></button>
-                <button class="btn btn-ghost btn-icon" title="Move the folder" aria-label="Move {selected.name}" disabled={!!busy} onclick={() => startMoving('folder', selected.id, selected.parent)}><FolderInput size={15} /></button>
                 <button class="btn btn-ghost btn-icon danger" title="Move the folder to the trash" aria-label="Delete the folder {selected.name}" disabled={!!busy} onclick={() => remove('folder', selected.id)}><Trash2 size={15} /></button>
               {/if}
+              <button class="btn btn-sm" disabled={!!busy} onclick={startNewQuiz}><FilePlus size={15} /> New quiz</button>
               <button class="btn btn-sm" disabled={!!busy} onclick={() => startNaming(null, '')}><FolderPlus size={15} /> New folder</button>
             </div>
-            {#if naming}
+            {#if naming?.quiz}
+              {@render nameRow('New quiz name', `New quiz in ${selected?.name ?? 'Cloud'}`)}
+            {:else if naming}
               {@render nameRow(naming.id ? `New name for ${selected.name}` : 'New folder name', naming.id ? 'Folder name' : `New folder in ${selected?.name ?? 'Cloud'}`)}
             {/if}
-            {#if moving?.kind === 'folder'}{@render moveRow()}{/if}
           </div>
 
           <ul class="list" oncontextmenu={(e) => openMenu(e, folderMenu())}>
@@ -1026,9 +1076,7 @@
                   disabled={!!busy}
                   onclick={() => (historyOf = historyOf === q.id ? null : q.id)}><History size={15} /></button
                 >
-                <button class="btn btn-ghost btn-icon" title="Move to another folder" aria-label="Move {q.name}" disabled={!!busy} onclick={() => startMoving('quiz', q.id, folderOf(q))}><FolderInput size={15} /></button>
                 <button class="btn btn-ghost btn-icon danger" title="Move to the trash" aria-label="Delete the cloud copy of {q.name}" disabled={!!busy} onclick={() => remove('quiz', q.id)}><Trash2 size={15} /></button>
-                {#if moving?.id === q.id}{@render moveRow()}{/if}
                 {#if historyOf === q.id}
                   <div class="versions">
                     <ol aria-label="Versions of {q.name}">
@@ -1051,7 +1099,7 @@
                 {/if}
               </li>
             {:else}
-              <li class="note empty">{quizzes.length || folders.length ? 'No quizzes in this folder.' : 'Nothing uploaded yet. Upload the open quiz to see it here.'} Moodle XML files dropped here are uploaded to this folder.</li>
+              <li class="note empty">{quizzes.length || folders.length ? 'No quizzes in this folder.' : 'Nothing uploaded yet. Upload the open quiz, or create a new one with New quiz.'} Moodle XML files dropped here are uploaded to this folder.</li>
             {/each}
           </ul>
           {/if}
@@ -1080,8 +1128,7 @@
   {#if menu}<ContextMenu x={menu.x} y={menu.y} items={menu.items} onclose={closeMenu} />{/if}
 
   {#snippet footer()}
-    {#if progressText}<span class="progress" role="status">{progressText}</span>
-    {:else if user}<span class="auto"><Switch checked={sync.auto} onchange={setAutoUpload} label="Upload changes automatically" info="Quizzes that are already in the cloud are uploaded a few seconds after you stop editing them. Uploads within an hour of each other count as one version in the history. A copy that was changed on another device is never replaced without asking." /></span>{/if}
+    <span class="progress" role="status">{progressText}</span>
     <button class="btn" disabled={!!busy} onclick={close}>Close</button>
     {#if user}
       <button class="btn btn-primary upload" bind:this={primary} disabled={!!busy || !quizzes || !app.quiz.questions.length} title={app.quiz.questions.length ? uploadLabel : 'This quiz has no questions yet'} onclick={upload}>
@@ -1113,7 +1160,7 @@
   }
   .panes {
     display: grid;
-    grid-template-columns: 250px minmax(0, 1fr);
+    grid-template-columns: var(--tree-w, 250px) minmax(0, 1fr);
     height: min(58vh, 520px);
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -1297,10 +1344,37 @@
     flex: 1;
     min-width: 0;
   }
-  .move-label {
-    flex: none;
-    font-size: 13px;
-    color: var(--text-2);
+  .splitter {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(var(--tree-w, 250px) - 4px);
+    z-index: 2;
+    width: 8px;
+    cursor: col-resize;
+    touch-action: none;
+  }
+  .splitter::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 3px;
+    width: 2px;
+    background: transparent;
+    transition: background 0.12s;
+  }
+  .splitter:hover::after,
+  .splitter:focus-visible::after,
+  .resizing .splitter::after {
+    background: var(--accent);
+  }
+  .splitter:focus-visible {
+    outline: none;
+  }
+  .resizing {
+    cursor: col-resize;
+    user-select: none;
   }
   .error {
     margin: 12px 0 0;
@@ -1428,9 +1502,6 @@
     color: var(--success);
     padding: 0 8px;
   }
-  .auto {
-    margin-right: auto;
-  }
   .progress {
     margin-right: auto;
     font-size: 13px;
@@ -1453,6 +1524,9 @@
     .tree {
       border-right: 0;
       border-bottom: 1px solid var(--border);
+    }
+    .splitter {
+      display: none;
     }
     .crumbs,
     .info {

@@ -3,24 +3,13 @@
 
 import { library, notify, ask, openModal, quizForUpload, markCloudSynced } from './store.svelte.js';
 
-const AUTO_KEY = 'mqe.autoUpload';
 /** How long editing must pause before an automatic upload. */
 export const AUTO_DELAY = 8000;
-
-function loadAuto() {
-  try {
-    return localStorage.getItem(AUTO_KEY) !== 'off';
-  } catch {
-    return true;
-  }
-}
 
 export const sync = $state({
   busy: false,
   done: 0,
   total: 0,
-  // Whether quizzes in the cloud are uploaded automatically after changes.
-  auto: loadAuto(),
   // Whether the running upload is an automatic one.
   background: false,
   // Quizzes that can't be uploaded automatically until they are uploaded by hand: { [id]: cloudVersion }.
@@ -28,16 +17,6 @@ export const sync = $state({
   // The last automatic upload's error, shown until one succeeds.
   error: '',
 });
-
-export function setAutoUpload(on) {
-  sync.auto = on;
-  try {
-    localStorage.setItem(AUTO_KEY, on ? 'on' : 'off');
-  } catch {
-    /* ignore */
-  }
-  if (on) schedule();
-}
 
 /** Whether a quiz in this browser has been edited since it was last uploaded or downloaded. */
 export const editedSinceUpload = (entry) => !!entry?.cloudVersion && entry.updated !== entry.cloudUpdated;
@@ -100,12 +79,11 @@ const waiting = () => library.quizzes.filter((q) => editedSinceUpload(q) && !aut
 function schedule(delay = AUTO_DELAY) {
   clearTimeout(timer);
   timer = null;
-  if (sync.auto && waiting().length) timer = setTimeout(runAuto, delay);
+  if (waiting().length) timer = setTimeout(runAuto, delay);
 }
 
 async function runAuto(now = false) {
   timer = null;
-  if (!sync.auto) return;
   // Offline: try again when the connection is back.
   if (!navigator.onLine) return;
   if (sync.busy) return schedule();
@@ -150,9 +128,9 @@ async function autoUpload(cloud, user, entry) {
 export function startAutoUpload() {
   const stop = $effect.root(() => {
     $effect(() => {
-      // Runs again whenever a quiz in the cloud is edited or uploaded, or the setting changes.
+      // Runs again whenever a quiz in the cloud is edited or uploaded.
       for (const q of library.quizzes) void (q.updated, q.cloudUpdated, q.cloudVersion);
-      void (sync.auto, Object.keys(sync.blocked).length);
+      void Object.keys(sync.blocked).length;
       schedule();
     });
   });

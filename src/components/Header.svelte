@@ -7,8 +7,8 @@
   import { appUpdate, applyUpdate } from '../lib/pwa.svelte.js';
 
   const entry = $derived(library.quizzes.find((q) => q.id === library.activeId));
-  // With automatic uploads on, the button only shows while uploading, or when the changes need a hand.
-  const cloudChanged = $derived(editedSinceUpload(entry) && (!sync.auto || !!sync.error || autoBlocked(entry)));
+  // Changes upload automatically, so the button only shows while uploading, or when the changes need a hand.
+  const cloudChanged = $derived(editedSinceUpload(entry) && (!!sync.error || autoBlocked(entry)));
   const syncText = $derived(sync.busy ? (sync.total > 1 ? `Uploading ${sync.done} / ${sync.total}…` : 'Uploading…') : 'Upload changes');
 
   let fullscreen = $state(false);

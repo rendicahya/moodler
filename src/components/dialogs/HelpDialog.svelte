@@ -44,8 +44,8 @@
     <ul>
       <li>Everything runs in your browser. Your quiz is saved automatically in this browser’s storage, and nothing is uploaded unless you use the <strong>Cloud</strong> button.</li>
       <li>
-        The <strong>Cloud</strong> button signs you in with Google so you can upload the open quiz to your private folders and download it on any device. Quizzes that are already in the cloud upload their changes automatically a few
-        seconds after you stop editing (this can be turned off in Cloud); otherwise <strong>Upload changes</strong> appears at the top (Alt+U). The last 5 uploads of each quiz are kept, and deleted quizzes and folders stay in the trash
+        The <strong>Cloud</strong> button signs you in with Google so you can upload the open quiz to your private folders, create new quizzes there, and open them on any device. Quizzes that are in the cloud upload their changes
+        automatically a few seconds after you stop editing, or straight away with Ctrl+S; if an upload needs a hand, <strong>Upload changes</strong> appears at the top (Alt+U). The last 5 uploads of each quiz are kept, and deleted quizzes and folders stay in the trash
         for 30 days.
       </li>
       <li>

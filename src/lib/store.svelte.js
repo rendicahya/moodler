@@ -705,6 +705,12 @@ export function quizFromXmlFile(text, fileName = '') {
   return { id: uid(), quiz, text: JSON.stringify(quiz), name: quiz.name || 'Untitled quiz', count: quiz.questions.length };
 }
 
+/** A new empty quiz named `name`, for creating it in the cloud before it is opened here. */
+export function blankQuizForCloud(name) {
+  const quiz = normalizeQuiz({ ...createQuiz(), name });
+  return { id: uid(), quiz, text: JSON.stringify(quiz), name, count: 0 };
+}
+
 /** Remembers which cloud copy a quiz matches. `updated` is the entry's edit time at that moment. */
 export function markCloudSynced(id, version, updated) {
   const entry = library.quizzes.find((q) => q.id === id);
