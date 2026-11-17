@@ -17,7 +17,8 @@
     const r = menu.getBoundingClientRect();
     left = Math.max(4, Math.min(x, window.innerWidth - r.width - 4));
     top = Math.max(4, y + r.height > window.innerHeight - 4 ? y - r.height : y);
-    buttons()[0]?.focus();
+    // With every item disabled the menu itself takes the focus, so that Escape closes the menu and not what is under it.
+    (buttons()[0] ?? menu).focus();
   });
 
   function choose(item) {

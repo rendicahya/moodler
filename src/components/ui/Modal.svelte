@@ -2,7 +2,7 @@
   import { X } from '@lucide/svelte';
   import { onMount } from 'svelte';
 
-  let { title, subtitle = '', width = '560px', onclose, children, footer } = $props();
+  let { title, subtitle = '', width = '560px', onclose, children, footer, headerExtra } = $props();
   let dialog;
 
   onMount(() => {
@@ -45,6 +45,7 @@
         <h2>{title}</h2>
         {#if subtitle}<p class="subtitle">{subtitle}</p>{/if}
       </div>
+      {#if headerExtra}<div class="header-extra">{@render headerExtra()}</div>{/if}
       <button class="btn btn-ghost btn-icon btn-sm modal-close" onclick={onclose} aria-label="Close"><X size={18} /></button>
     </header>
     <div class="content">
@@ -93,6 +94,15 @@
   }
   h2 {
     font-size: 16px;
+  }
+  .header-extra {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    margin: -4px 0;
   }
   .subtitle {
     margin-top: 3px;

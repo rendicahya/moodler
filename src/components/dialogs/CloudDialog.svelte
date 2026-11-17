@@ -85,14 +85,44 @@
   ]);
   // Quizzes are shown at the top level when their folder is gone.
   const folderOf = (q) => q.folder ?? null;
-  const shownQuizzes = $derived(quizzes?.filter((q) => folderOf(q) === current) ?? []);
+  // How the selected folder's quizzes are sorted, remembered in this browser.
+  const SORTS = {
+    newest: { label: 'Newest first', compare: (a, b) => b.uploaded - a.uploaded },
+    oldest: { label: 'Oldest first', compare: (a, b) => a.uploaded - b.uploaded },
+    name: { label: 'Name (A–Z)', compare: (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }) },
+    'name-desc': { label: 'Name (Z–A)', compare: (a, b) => b.name.localeCompare(a.name, undefined, { numeric: true, sensitivity: 'base' }) },
+    questions: { label: 'Most questions', compare: (a, b) => b.count - a.count },
+    size: { label: 'Largest', compare: (a, b) => b.size - a.size },
+  };
+  const SORT_KEY = 'moodler-cloud-sort';
+  let sortBy = $state(
+    (() => {
+      try {
+        const s = localStorage.getItem(SORT_KEY);
+        return s in SORTS ? s : 'newest';
+      } catch {
+        return 'newest';
+      }
+    })()
+  );
+  function setSort(s) {
+    sortBy = s;
+    try {
+      localStorage.setItem(SORT_KEY, s);
+    } catch {
+      // Remembering the order is a convenience only.
+    }
+  }
+  const shownQuizzes = $derived(
+    (quizzes?.filter((q) => folderOf(q) === current) ?? []).sort((a, b) => SORTS[sortBy].compare(a, b) || b.uploaded - a.uploaded)
+  );
   const quizzesPerFolder = $derived.by(() => {
     const counts = new Map();
     for (const q of quizzes ?? []) counts.set(folderOf(q), (counts.get(folderOf(q)) ?? 0) + 1);
     counts.set(TRASH, trash.length);
     return counts;
   });
-  const uploadLabel = $derived(openCopy ? 'Upload again' : selected ? `Upload to ${selected.name}` : 'Upload this quiz');
+  const uploadLabel = $derived(openCopy ? 'Upload again' : 'Upload here');
   const searching = $derived(!!query.trim() && !!quizzes);
   const results = $derived(
     searching
@@ -701,16 +731,13 @@
   function rowMenu(r) {
     if (r.id === TRASH) {
       return [
-        { label: 'Open', icon: Trash2, run: () => open(TRASH) },
-        '-',
         { label: 'Empty trash', icon: Trash2, danger: true, disabled: !trash.length, run: emptyTrash },
       ];
     }
     const newQuiz = { label: 'New quiz here…', icon: FilePlus, run: () => (open(r.id), startNewQuiz()) };
     const newFolder = { label: 'New folder inside', icon: FolderPlus, run: () => (open(r.id), startNaming(null, '')) };
-    if (!r.id) return [{ label: 'Open', icon: Cloud, run: () => open(null) }, newQuiz, { ...newFolder, label: 'New folder' }];
+    if (!r.id) return [newQuiz, { ...newFolder, label: 'New folder' }];
     return [
-      { label: 'Open', icon: Folder, run: () => open(r.id) },
       newQuiz,
       newFolder,
       { label: 'Rename…', icon: Pencil, run: () => (open(r.id), startNaming(r.id, r.name)) },
@@ -729,7 +756,7 @@
   const folderMenu = () => [
     { label: selected ? `New quiz in ${selected.name}…` : 'New quiz…', icon: FilePlus, run: startNewQuiz },
     { label: selected ? `New folder in ${selected.name}` : 'New folder', icon: FolderPlus, run: () => startNaming(null, '') },
-    { label: uploadLabel, icon: CloudUpload, disabled: !app.quiz.questions.length, run: upload },
+    { label: openCopy ? 'Upload the open quiz again' : 'Upload the open quiz here', icon: CloudUpload, disabled: !app.quiz.questions.length, run: upload },
     { label: 'Upload Moodle XML files…', icon: FileText, run: () => filePicker?.click() },
   ];
   let filePicker = $state(null);
@@ -861,13 +888,8 @@
 <svelte:document ondragenter={fileEnter} ondragleave={fileLeave} ondragover={fileOver} ondrop={fileDrop} />
 
 <Modal title="Cloud" width="1140px" onclose={close}>
-  {#if !ready}
-    <p class="note">Connecting…</p>
-  {:else if !user}
-    <p class="note">Sign in with Google to keep private copies of your quizzes. Only your account can read them. Your work stays in this browser too, and nothing is uploaded until you choose to.</p>
-  {:else}
-    <div class="account">
-      <span class="who" title={user.email}>Signed in as <strong>{user.email}</strong></span>
+  {#snippet headerExtra()}
+    {#if user}
       {#if quizzes}
         <div class="search">
           <Search size={15} />
@@ -881,9 +903,15 @@
           />
         </div>
       {/if}
+      <span class="who" title="Signed in as {user.email}">Signed in as <strong>{user.email}</strong></span>
       <button class="btn btn-ghost btn-sm" disabled={!!busy} onclick={logout}><LogOut size={14} /> Sign out</button>
-    </div>
-
+    {/if}
+  {/snippet}
+  {#if !ready}
+    <p class="note">Connecting…</p>
+  {:else if !user}
+    <p class="note">Sign in with Google to keep private copies of your quizzes. Only your account can read them. Your work stays in this browser too, and nothing is uploaded until you choose to.</p>
+  {:else}
     {#if quizzes}
       <div class="panes" class:resizing bind:this={panes} style:--tree-w="{shownTreeWidth}px">
         <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
@@ -1025,6 +1053,12 @@
               {/each}
             </nav>
             <div class="actions">
+              <label class="sort" title="Sort the quizzes in this folder">
+                <span>Sort by</span>
+                <select class="input input-sm" value={sortBy} onchange={(e) => setSort(e.currentTarget.value)} aria-label="Sort quizzes by">
+                  {#each Object.entries(SORTS) as [key, s] (key)}<option value={key}>{s.label}</option>{/each}
+                </select>
+              </label>
               {#if selected}
                 <button class="btn btn-ghost btn-icon" title="Rename the folder" aria-label="Rename {selected.name}" disabled={!!busy} onclick={() => startNaming(selected.id, selected.name)}><Pencil size={15} /></button>
                 <button class="btn btn-ghost btn-icon danger" title="Move the folder to the trash" aria-label="Delete the folder {selected.name}" disabled={!!busy} onclick={() => remove('folder', selected.id)}><Trash2 size={15} /></button>
@@ -1131,7 +1165,7 @@
     <span class="progress" role="status">{progressText}</span>
     <button class="btn" disabled={!!busy} onclick={close}>Close</button>
     {#if user}
-      <button class="btn btn-primary upload" bind:this={primary} disabled={!!busy || !quizzes || !app.quiz.questions.length} title={app.quiz.questions.length ? uploadLabel : 'This quiz has no questions yet'} onclick={upload}>
+      <button class="btn btn-primary upload" bind:this={primary} disabled={!!busy || !quizzes || !app.quiz.questions.length} title={!app.quiz.questions.length ? 'This quiz has no questions yet' : openCopy ? 'Upload the open quiz over its cloud copy' : `Upload the open quiz to ${selected?.name ?? 'Cloud'}`} onclick={upload}>
         <CloudUpload size={16} /> <span class="upload-text">{uploadLabel}</span>
       </button>
     {:else}
@@ -1148,15 +1182,11 @@
   .empty {
     padding: 14px 4px;
   }
-  .account,
   .bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-  }
-  .account {
-    margin-bottom: 12px;
   }
   .panes {
     display: grid;
@@ -1239,8 +1269,22 @@
   .actions .btn-sm {
     margin-left: 6px;
   }
+  .sort {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 6px;
+    font-size: 13px;
+    color: var(--text-3);
+    white-space: nowrap;
+  }
+  .sort select {
+    width: auto;
+  }
   .who {
     min-width: 0;
+    flex: 0 1 auto;
+    font-size: 13px;
     color: var(--text-2);
     white-space: nowrap;
     overflow: hidden;
@@ -1409,12 +1453,11 @@
     padding: 4px;
   }
   .search {
-    flex: 0 1 320px;
-    min-width: 0;
+    flex: 0 1 340px;
+    min-width: 120px;
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-left: auto;
     color: var(--text-3);
   }
   .search .input {
@@ -1532,12 +1575,8 @@
     .info {
       flex: 1 0 100%;
     }
-    .account {
-      flex-wrap: wrap;
-    }
-    .search {
-      order: 3;
-      flex: 1 0 100%;
+    .who {
+      display: none;
     }
   }
 </style>
