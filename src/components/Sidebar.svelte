@@ -9,7 +9,6 @@
     app,
     select,
     openModal,
-    duplicateQuestion,
     deleteQuestion,
     moveQuestion,
     isChecked,
@@ -337,10 +336,6 @@
         {#if !q.unreviewed && (q.reviewed || reviewCount > 0)}<span class="flag done" title="Reviewed"><CircleCheck size={15} /></span>{/if}
         {#if q.hidden}<span class="flag" title="Hidden"><EyeOff size={14} /></span>{/if}
         {#if issues.length}<span class="flag warn" title={issues.join('\n')}><TriangleAlert size={14} /></span>{/if}
-        <span class="actions">
-          <button class="btn btn-ghost btn-icon btn-sm" title="Duplicate" aria-label="Duplicate" onclick={(e) => (e.stopPropagation(), duplicateQuestion(q.id))}><Copy size={14} /></button>
-          <button class="btn btn-ghost btn-icon btn-sm danger" title="Delete" aria-label="Delete" onclick={(e) => (e.stopPropagation(), deleteQuestion(q.id))}><Trash size={14} /></button>
-        </span>
       </div>
     {:else}
       {#if app.quiz.questions.length}
@@ -609,19 +604,6 @@
   }
   .flag.done {
     color: var(--success);
-  }
-  .actions {
-    display: none;
-    gap: 2px;
-    flex: none;
-  }
-  .row:hover .actions,
-  .row:focus-within .actions {
-    display: flex;
-  }
-  .row:hover .flag,
-  .row:focus-within .flag {
-    display: none;
   }
   .first {
     display: flex;
