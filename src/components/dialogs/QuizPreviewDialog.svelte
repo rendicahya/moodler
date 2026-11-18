@@ -32,8 +32,8 @@
   <ol class="questions">
     {#each items as { q, number } (q.id)}
       <li class="item">
-        <Preview {q} index={number - 1} showAnswers={app.revealAnswers} />
-        <button class="btn btn-ghost btn-sm edit" title="Edit this question" onclick={() => edit(q.id)}><SquarePen size={14} /> Edit</button>
+        <div class="body"><Preview {q} index={number - 1} showAnswers={app.revealAnswers} /></div>
+        <button class="btn btn-sm edit" title="Edit this question" onclick={() => edit(q.id)}><SquarePen size={14} /> Edit</button>
       </li>
     {/each}
   </ol>
@@ -68,20 +68,39 @@
     flex-direction: column;
     gap: 22px;
   }
+  /* The Edit button keeps the same spot beside every question, at its top right, and stays in view below the bar while a long question scrolls past. */
   .item {
     display: flex;
-    flex-direction: column;
-    gap: 6px;
+    align-items: flex-start;
+    gap: 12px;
   }
   .item + .item {
     padding-top: 22px;
     border-top: 1px solid var(--border);
   }
+  .body {
+    flex: 1;
+    min-width: 0;
+  }
   .edit {
-    align-self: flex-end;
-    color: var(--text-3);
+    flex: none;
+    position: sticky;
+    top: 46px;
+    gap: 5px;
   }
   .edit:hover {
     color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  @media (max-width: 560px) {
+    .item {
+      flex-direction: column-reverse;
+      align-items: stretch;
+      gap: 6px;
+    }
+    .edit {
+      position: static;
+      align-self: flex-end;
+    }
   }
 </style>
