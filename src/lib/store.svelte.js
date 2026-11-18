@@ -674,7 +674,24 @@ export function createNewQuiz(quiz = createQuiz()) {
   return id;
 }
 
+/**
+ * Whether the app holds nothing yet but the empty quiz it starts with, which isn't shown as a quiz until the user
+ * creates one: the start screen offers New quiz, Import and the cloud instead of the question list.
+ */
+export function isStartScreen() {
+  if (library.quizzes.length !== 1) return false;
+  const entry = library.quizzes[0];
+  return entry.id === library.activeId && !entry.started && !entry.cloudVersion && !app.quiz.questions.length;
+}
+
 export function newQuiz() {
+  // On the start screen, the empty quiz already there becomes the new quiz.
+  if (isStartScreen()) {
+    library.quizzes[0].started = true;
+    // The starting quiz may never have been written, and a list entry without its quiz would not open again.
+    save(current);
+    return;
+  }
   createNewQuiz();
 }
 

@@ -1,5 +1,5 @@
 <script>
-  import { Plus, Upload, Sparkles, ChevronLeft, ChevronRight } from '@lucide/svelte';
+  import { Plus, Upload, Sparkles, ChevronLeft, ChevronRight, FilePlus, Cloud } from '@lucide/svelte';
   import Header from './components/Header.svelte';
   import Sidebar from './components/Sidebar.svelte';
   import QuestionEditor from './components/QuestionEditor.svelte';
@@ -24,7 +24,7 @@
   import CloudDialog from './components/dialogs/CloudDialog.svelte';
   import QuestionBankDialog from './components/dialogs/QuestionBankDialog.svelte';
   import { editedSinceUpload, uploadChanges, startAutoUpload } from './lib/cloudsync.svelte.js';
-  import { app, library, history, switchToTab, closeTab, initPersistence, undo, redo, openModal, notify, selectedQuestion, selectedIndex, addQuestion, deleteQuestion, newQuiz, cycleView, goToQuestion, markReviewed, markUnreviewed, nextUnreviewed, setSidebarWidth, saveLayout, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT } from './lib/store.svelte.js';
+  import { app, library, history, switchToTab, closeTab, initPersistence, undo, redo, openModal, notify, selectedQuestion, selectedIndex, addQuestion, deleteQuestion, newQuiz, isStartScreen, cycleView, goToQuestion, markReviewed, markUnreviewed, nextUnreviewed, setSidebarWidth, saveLayout, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT } from './lib/store.svelte.js';
   import { QUESTION_TYPES } from './lib/model.js';
   import { looksLikeQuestions } from './lib/formats/index.js';
   import { TYPE_ICONS } from './lib/icons.js';
@@ -34,6 +34,8 @@
 
   const q = $derived(selectedQuestion());
   const index = $derived(selectedIndex());
+  // Until the user creates or opens a quiz, the start screen shows without the question list.
+  const start = $derived(isStartScreen());
 
   // On narrow screens the sidebar is an overlay; close it after picking a question.
   let narrow = $state(window.matchMedia('(max-width: 800px)').matches);
@@ -242,7 +244,9 @@
 <div class="app">
   <Header />
   <div class="main">
-    {#if app.sidebarOpen}
+    {#if start}
+      <!-- No question list on the start screen. -->
+    {:else if app.sidebarOpen}
       {#if narrow}
         <button class="scrim" aria-label="Close question list" onclick={() => (app.sidebarOpen = false)}></button>
       {/if}
@@ -275,6 +279,21 @@
       {#key q.id}
         <QuestionEditor bind:q={app.quiz.questions[index]} {index} />
       {/key}
+    {:else if start}
+      <div class="welcome">
+        <div class="hero">
+          <h1>Build Moodle questions, right in your browser</h1>
+          <p>Start a new quiz and add questions to it, or open questions you already have: import a Moodle XML, GIFT or Aiken file (or drop one onto this window), or open a quiz from your cloud folders.</p>
+          <div class="cta">
+            <button class="btn btn-primary" title="Alt+Shift+N" onclick={newQuiz}><FilePlus size={16} /> New quiz</button>
+            <button class="btn" onclick={() => openModal('import')}><Upload size={16} /> Import questions</button>
+            <button class="btn" onclick={() => openModal('cloud')}><Cloud size={16} /> Open from the cloud</button>
+            <button class="btn" title="Write a prompt that makes an AI chatbot produce questions you can import (Alt+G)" onclick={() => openModal('ai-prompt')}>
+              <Sparkles size={16} /> Generate with AI
+            </button>
+          </div>
+        </div>
+      </div>
     {:else}
       <div class="welcome">
         <div class="hero">

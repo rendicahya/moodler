@@ -9,6 +9,7 @@
     renameQuiz,
     duplicateQuiz,
     newQuiz,
+    isStartScreen,
     downloadBackup,
     transfer,
     endTransfer,
@@ -29,7 +30,7 @@
   const closable = (t) => library.quizzes.length > 1 || countOf(t) > 0;
   // With nothing in the app but one empty quiz, there is no tab to show, only the New quiz button.
   // A quiz from the cloud keeps its tab even while empty, so that its name shows.
-  const blank = $derived(library.quizzes.length === 1 && countOf(library.quizzes[0]) === 0 && !library.quizzes[0].cloudVersion);
+  const blank = $derived(isStartScreen());
 
   // Keep the open tab in view when switching with the keyboard.
   $effect(() => {
@@ -41,6 +42,17 @@
     editing = t.id;
     draft = nameOf(t);
   }
+  // A quiz created from the start screen asks for its name straight away.
+  let wasBlank = isStartScreen();
+  $effect(() => {
+    const b = blank;
+    if (wasBlank && !b) {
+      const t = library.quizzes[0];
+      if (library.quizzes.length === 1 && t.started && !app.quiz.questions.length && ['', 'Untitled quiz'].includes((app.quiz.name || '').trim())) queueMicrotask(() => startRename(t));
+    }
+    wasBlank = b;
+  });
+
   function finishRename(save) {
     if (save && editing) renameQuiz(editing, draft);
     editing = null;
