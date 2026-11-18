@@ -523,6 +523,10 @@ code {
   background: var(--surface-3);
   white-space: pre-wrap;
 }
+/* Code shows exactly the characters typed: no "=>" drawn as an arrow. */
+.rendered :is(pre, code, kbd, samp, tt) {
+  font-variant-ligatures: none;
+}
 .rendered pre code {
   padding: 0;
   background: none;
@@ -535,5 +539,37 @@ code {
 }
 :root[data-theme='dark'] .rendered :is(pre, code, kbd, samp, tt) * {
   background-color: transparent !important;
+}
+:root[data-theme='dark'] .rendered :is(pre, code, kbd, samp, tt) *:not([class^='hljs-']) {
+  color: inherit !important;
+}
+/* Highlighted code keeps its light colours inline for Moodle; the class names give it dark ones here (GitHub's dark theme). */
+:root[data-theme='dark'] .rendered :is(.hljs-keyword, .hljs-doctag, .hljs-template-tag, .hljs-template-variable, .hljs-type) {
+  color: #ff7b72 !important;
+}
+:root[data-theme='dark'] .rendered .hljs-title {
+  color: #d2a8ff !important;
+}
+:root[data-theme='dark'] .rendered
+  :is(.hljs-attr, .hljs-attribute, .hljs-literal, .hljs-meta, .hljs-number, .hljs-operator, .hljs-variable, .hljs-selector-attr, .hljs-selector-class, .hljs-selector-id, .hljs-section) {
+  color: #79c0ff !important;
+}
+:root[data-theme='dark'] .rendered :is(.hljs-regexp, .hljs-string) {
+  color: #a5d6ff !important;
+}
+:root[data-theme='dark'] .rendered :is(.hljs-built_in, .hljs-symbol, .hljs-bullet) {
+  color: #ffa657 !important;
+}
+:root[data-theme='dark'] .rendered :is(.hljs-comment, .hljs-code, .hljs-formula) {
+  color: #8b949e !important;
+}
+:root[data-theme='dark'] .rendered :is(.hljs-name, .hljs-quote, .hljs-selector-tag, .hljs-selector-pseudo, .hljs-addition) {
+  color: #7ee787 !important;
+}
+:root[data-theme='dark'] .rendered .hljs-deletion {
+  color: #ffa198 !important;
+}
+/* A highlighted span with no colour of its own (hljs-params, hljs-subst …) takes the code's colour. */
+:root[data-theme='dark'] .rendered :is(pre, code) [class^='hljs-']:not([style]) {
   color: inherit !important;
 }

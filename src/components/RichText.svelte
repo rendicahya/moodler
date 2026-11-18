@@ -14,9 +14,12 @@
     RemoveFormatting,
     CodeXml,
     CaseSensitive,
+    SquareCode,
     Check,
     X,
+    Trash2,
   } from '@lucide/svelte';
+  import { LANGUAGES, codeBlockHtml, readCodeBlock } from '../lib/codehl.js';
   import { tick } from 'svelte';
   import { sanitizeHtml } from '../lib/sanitize.js';
   import { notify } from '../lib/store.svelte.js';
@@ -66,6 +69,7 @@
       }
     }
     active = s;
+    inCode = !!preAtCaret();
   }
 
   function exec(cmd, arg = null) {
@@ -204,6 +208,110 @@
     return () => hideMirror(me);
   });
 
+  // ---------------------------------------------------------------- code blocks with syntax highlighting
+
+  const LANG_KEY = 'moodler.codeLang';
+  let codeOpen = $state(false);
+  let codeText = $state('');
+  let codeLang = $state('python');
+  let codeEditing = null; // the <pre> being edited, or null for a new block
+  let inCode = $state(false);
+
+  function preAtCaret() {
+    const n = getSelection().anchorNode;
+    const pre = (n?.nodeType === 1 ? n : n?.parentElement)?.closest('pre');
+    return pre && el?.contains(pre) ? pre : null;
+  }
+
+  function openCode(pre = preAtCaret()) {
+    saveSelection();
+    linkOpen = false;
+    codeEditing = pre;
+    if (pre) {
+      const { code, lang } = readCodeBlock(pre);
+      codeText = code;
+      codeLang = lang || lastLang();
+    } else {
+      codeText = savedRange && !savedRange.collapsed ? savedRange.toString() : '';
+      codeLang = lastLang();
+    }
+    codeOpen = true;
+  }
+
+  function lastLang() {
+    try {
+      const l = localStorage.getItem(LANG_KEY);
+      if (LANGUAGES.some((x) => x.id === l)) return l;
+    } catch {
+      /* storage unavailable */
+    }
+    return 'python';
+  }
+
+  async function applyCode() {
+    if (!codeText.trim()) return removeCode();
+    try {
+      localStorage.setItem(LANG_KEY, codeLang);
+    } catch {
+      /* storage unavailable */
+    }
+    let html;
+    try {
+      html = await codeBlockHtml(codeText, codeLang);
+    } catch {
+      notify('Could not load the syntax highlighter. Check the connection and try again.', 'error');
+      return;
+    }
+    codeOpen = false;
+    // Inserted through the DOM: execCommand('insertHTML') merges the first line of a <pre> into the paragraph around the caret.
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    const pre = tpl.content.firstElementChild;
+    if (codeEditing && el.contains(codeEditing)) codeEditing.replaceWith(pre);
+    else {
+      let block = savedRange && el.contains(savedRange.startContainer) ? savedRange.startContainer : null;
+      while (block && block.parentNode !== el) block = block.parentNode;
+      if (savedRange && !savedRange.collapsed) savedRange.deleteContents();
+      if (!block) el.append(pre);
+      else if (!block.textContent.trim() && !block.querySelector?.('img')) block.replaceWith(pre);
+      else block.after(pre);
+    }
+    // Leaves a paragraph after the block so there is somewhere to keep typing.
+    if (!pre.nextElementSibling) pre.after(Object.assign(document.createElement('p'), { innerHTML: '<br>' }));
+    codeEditing = null;
+    sync();
+    el.focus();
+    const range = document.createRange();
+    range.setStart(pre.nextElementSibling, 0);
+    const sel = getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    refreshState();
+  }
+
+  function removeCode() {
+    codeOpen = false;
+    if (codeEditing && el.contains(codeEditing)) {
+      codeEditing.remove();
+      sync();
+    }
+    codeEditing = null;
+  }
+
+  function codeKeydown(e) {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      codeOpen = false;
+    } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      applyCode();
+    } else if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey) {
+      // Indents the code instead of leaving the box.
+      e.preventDefault();
+      document.execCommand('insertText', false, '    ');
+    }
+  }
+
   function toggleSource() {
     if (!source) sync();
     source = !source;
@@ -264,6 +372,16 @@
       onmousedown={(e) => e.preventDefault()}
       onclick={() => exec('insertText', '\\( x^2 \\)')}><Sigma size={15} /></button
     >
+    <button
+      type="button"
+      class="tb"
+      class:on={inCode || codeOpen}
+      title={inCode ? 'Edit this code block' : 'Insert code block with syntax highlighting'}
+      aria-label={inCode ? 'Edit code block' : 'Insert code block'}
+      disabled={source}
+      onmousedown={(e) => e.preventDefault()}
+      onclick={() => (codeOpen ? (codeOpen = false) : openCode())}><SquareCode size={15} /></button
+    >
     <span class="case-wrap">
       <button
         type="button"
@@ -310,6 +428,33 @@
     </div>
   {/if}
 
+  {#if codeOpen}
+    <div class="codebar" role="group" aria-label="Code block">
+      <div class="codebar-row">
+        <select class="input input-sm lang" bind:value={codeLang} aria-label="Language">
+          {#each LANGUAGES as l (l.id)}<option value={l.id}>{l.label}</option>{/each}
+        </select>
+        <span class="codebar-hint">Tab indents · Ctrl+Enter to {codeEditing ? 'update' : 'insert'}</span>
+        <span class="spacer"></span>
+        {#if codeEditing}
+          <button type="button" class="btn btn-sm btn-ghost" title="Remove this code block" onclick={removeCode}><Trash2 size={14} /> Remove</button>
+        {/if}
+        <button type="button" class="btn btn-sm btn-primary" onclick={applyCode}><Check size={14} /> {codeEditing ? 'Update' : 'Insert'}</button>
+        <button type="button" class="btn btn-sm btn-ghost btn-icon" aria-label="Cancel" onclick={() => (codeOpen = false)}><X size={14} /></button>
+      </div>
+      <textarea
+        class="input code-input"
+        bind:value={codeText}
+        rows={Math.min(16, Math.max(4, codeText.split('\n').length + 1))}
+        spellcheck="false"
+        placeholder="Paste or type the code"
+        aria-label="Code"
+        {@attach (node) => node.focus()}
+        onkeydown={codeKeydown}
+      ></textarea>
+    </div>
+  {/if}
+
   {#if source}
     <textarea class="src" {id} bind:value style:min-height="{Math.max(minHeight, 80)}px" spellcheck="false" aria-label="{label} (HTML source)"></textarea>
   {:else}
@@ -329,6 +474,10 @@
       {onpaste}
       {ondrop}
       onkeyup={refreshState}
+      ondblclick={(e) => {
+        const pre = e.target.closest?.('pre');
+        if (pre && el.contains(pre)) openCode(pre);
+      }}
     ></div>
   {/if}
 </div>
@@ -434,6 +583,37 @@
     gap: 6px;
     padding: 6px;
     border-bottom: 1px solid var(--border);
+  }
+  .codebar {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .codebar-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .lang {
+    width: auto;
+  }
+  .codebar-hint {
+    font-size: 12px;
+    color: var(--text-3);
+  }
+  .code-input {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.45;
+    resize: vertical;
+    tab-size: 4;
+    height: auto;
+    padding: 6px 8px;
+    white-space: pre;
+    font-variant-ligatures: none;
   }
   .editable {
     padding: 8px 11px;
