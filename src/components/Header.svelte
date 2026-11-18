@@ -102,7 +102,7 @@
     </button>
     <button class="btn btn-ghost btn-icon hide-xs" title="Check questions: review progress, answer key and repeated questions (Alt+C)" aria-label="Check questions" disabled={!app.quiz.questions.length} onclick={() => openModal('check')}><ListChecks size={17} /></button>
     <button class="btn btn-ghost btn-icon hide-xs" title="Print or save as PDF (Ctrl+P)" aria-label="Print" disabled={!app.quiz.questions.length} onclick={() => openModal('print')}><Printer size={17} /></button>
-    <button class="btn btn-ghost hide-xs" title="Generate questions with AI: write a prompt for an AI chatbot (Alt+G)" aria-label="Generate questions with AI" onclick={() => openModal('ai-prompt')}><Sparkles size={16} /><span class="btn-text">AI</span></button>
+    <button class="btn btn-soft hide-xs" title="Generate questions with AI: write a prompt for an AI chatbot (Alt+G)" aria-label="Generate questions with AI" onclick={() => openModal('ai-prompt')}><Sparkles size={16} /><span class="btn-text">AI</span></button>
     {#if inCloud || sync.busy}
       <button
         class="btn btn-sm cloud-sync"
@@ -114,9 +114,9 @@
         onclick={uploadChanges}>{#if unsaved || sync.busy}<CloudUpload size={16} />{:else}<CloudCheck size={16} />{/if}<span class="sync-text">{saveText}</span></button
       >
     {/if}
-    <button class="btn btn-ghost hide-xs" title="Cloud: keep your quizzes in your private cloud folders and open them on any device" aria-label="Cloud" onclick={() => openModal('cloud')}><Cloud size={16} /><span class="btn-text">Cloud</span></button>
-    <button class="btn" title="Import questions (Ctrl+O)" onclick={() => openModal('import')}><Download size={16} /><span class="btn-text">Import</span></button>
-    <button class="btn btn-primary" title={entry?.cloudVersion ? 'Export questions' : 'Export questions (Ctrl+S)'} onclick={() => openModal('export')}><Upload size={16} /><span class="btn-text">Export</span></button>
+    <button class="btn btn-soft hide-xs" title="Cloud: keep your quizzes in your private cloud folders and open them on any device" aria-label="Cloud" onclick={() => openModal('cloud')}><Cloud size={16} /><span class="btn-text">Cloud</span></button>
+    <button class="btn btn-ghost" title="Import questions (Ctrl+O)" onclick={() => openModal('import')}><Download size={16} /><span class="btn-text">Import</span></button>
+    <button class="btn btn-ghost" title={entry?.cloudVersion ? 'Export questions' : 'Export questions (Ctrl+S)'} onclick={() => openModal('export')}><Upload size={16} /><span class="btn-text">Export</span></button>
     <span class="divider"></span>
     <button class="btn btn-ghost btn-icon" title="Help & shortcuts" aria-label="Help" onclick={() => openModal('help')}><CircleQuestionMark size={17} /></button>
     <button

@@ -205,6 +205,16 @@ textarea {
   border-color: transparent;
   color: var(--text);
 }
+/* A highlighted feature button: tinted with the accent, quieter than .btn-primary. */
+.btn-soft {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--accent-text);
+}
+.btn-soft:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 20%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+}
 .btn-sm {
   height: 28px;
   padding: 0 9px;
