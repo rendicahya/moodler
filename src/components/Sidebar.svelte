@@ -110,6 +110,7 @@
   );
   const issueCount = $derived(rows.filter((r) => r.issues.length).length);
   const reviewCount = $derived(app.quiz.questions.filter((q) => q.unreviewed).length);
+  const reviewTracked = $derived(reviewCount > 0 || app.quiz.questions.some((q) => q.reviewed));
   const checkedToReview = $derived(app.quiz.questions.some((q) => q.unreviewed && app.checked.includes(q.id)));
   const typeCounts = $derived(
     QUESTION_TYPES.map((t) => ({ ...t, count: app.quiz.questions.filter((q) => q.type === t.type).length })).filter((t) => t.count)
@@ -332,8 +333,9 @@
             {#if q.type !== 'description'}· {Number(q.defaultgrade)} mark{Number(q.defaultgrade) === 1 ? '' : 's'}{/if}
           </span>
         </span>
-        <!-- Questions marked reviewed carry a check (and while some are still to review, so do the ones that never needed it). -->
-        {#if !q.unreviewed && (q.reviewed || reviewCount > 0)}<span class="flag done" title="Reviewed"><CircleCheck size={15} /></span>{/if}
+        <!-- In a quiz that went through review, every question no longer to review carries a check: questions reviewed
+             before Moodler recorded it (and ones that never needed review) have no `reviewed` mark of their own. -->
+        {#if !q.unreviewed && reviewTracked}<span class="flag done" title="Reviewed"><CircleCheck size={15} /></span>{/if}
         {#if q.hidden}<span class="flag" title="Hidden"><EyeOff size={14} /></span>{/if}
         {#if issues.length}<span class="flag warn" title={issues.join('\n')}><TriangleAlert size={14} /></span>{/if}
       </div>
