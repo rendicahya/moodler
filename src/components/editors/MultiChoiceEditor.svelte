@@ -146,7 +146,7 @@
           </button>
         </div>
         <div class="main">
-          <RichText bind:value={a.text} compact placeholder="Answer {label(i)}" label="Answer {label(i)} text" />
+          <RichText bind:value={a.text} sync="answer:{a.id}" compact placeholder="Answer {label(i)}" label="Answer {label(i)} text" />
           <div class="row2">
             <RichText bind:value={a.feedback} compact minHeight={32} placeholder="Feedback (optional)" label="Feedback for answer {label(i)}" />
             <FractionSelect bind:value={a.fraction} negative={!q.single} />

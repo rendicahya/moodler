@@ -79,7 +79,7 @@
       <div class="item" class:drop-before={ind === 'before'} class:drop-after={ind === 'after'} class:dragging={sort.dragging === i} {...sort.item(i)}>
         <span class="drag-handle" title="Drag to reorder" {...sort.handle(i)}><GripVertical size={15} /></span>
         <span class="pos">{i + 1}</span>
-        <RichText bind:value={it.text} compact placeholder="Item {i + 1}" label="Item {i + 1}" />
+        <RichText bind:value={it.text} sync="item:{it.id}" compact placeholder="Item {i + 1}" label="Item {i + 1}" />
         <div class="btns">
           <button class="btn btn-ghost btn-icon btn-sm" aria-label="Move up" disabled={i === 0} onclick={() => moveItem(q.items, i, i - 1)}><ChevronUp size={15} /></button>
           <button class="btn btn-ghost btn-icon btn-sm" aria-label="Move down" disabled={i === q.items.length - 1} onclick={() => moveItem(q.items, i, i + 1)}

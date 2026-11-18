@@ -25,7 +25,7 @@
       <div class="pair" class:drop-before={ind === 'before'} class:drop-after={ind === 'after'} {...sort.item(i)}>
         <span class="drag-handle" title="Drag to reorder" {...sort.handle(i)}><GripVertical size={15} /></span>
         <span class="n">{i + 1}</span>
-        <RichText bind:value={s.text} compact placeholder="Question {i + 1}" label="Question {i + 1}" />
+        <RichText bind:value={s.text} sync="subq:{s.id}" compact placeholder="Question {i + 1}" label="Question {i + 1}" />
         <span class="arrow"><ArrowRight size={16} /></span>
         <input class="input" bind:value={s.answer} placeholder="Matching answer" aria-label="Answer {i + 1}" />
         <button class="btn btn-ghost btn-icon btn-sm danger" title="Remove" aria-label="Remove pair" onclick={() => q.subquestions.splice(i, 1)}><Trash size={15} /></button>

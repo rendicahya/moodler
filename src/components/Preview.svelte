@@ -1,7 +1,9 @@
 <script>
   import { tick } from 'svelte';
-  import { Flag, Eye, EyeOff, Dices, Bold, Italic, Underline, Strikethrough, Code, RemoveFormatting } from '@lucide/svelte';
+  import { Flag, Eye, EyeOff, Dices, Bold, Italic, Underline, Strikethrough, Code, RemoveFormatting, CaseSensitive } from '@lucide/svelte';
   import { TYPE_MAP, escapeHtml, round, stripHtml } from '../lib/model.js';
+  import { CASES, changeCaseInRange, rangeOffsets, offsetsRange, selectOffsets } from '../lib/textcase.js';
+  import { mirror, setMirror, clearMirror, showMirror, hideMirror } from '../lib/selmirror.svelte.js';
   import { parseCloze, CLOZE_RE, isChoiceCloze, canonicalClozeType } from '../lib/formats/cloze.js';
   import { sanitizeHtml } from '../lib/sanitize.js';
   import { substitute, itemValues, tryEvaluate, formatAnswer, toleranceText } from '../lib/calc.js';
@@ -113,36 +115,11 @@
     if (e.button === 0 && formattable) setTimeout(placeBubble, 0);
   }
 
-  // Character offsets of the selection in the text, so that it can be selected again once the text is shown anew.
-  function offsets(el, range) {
-    const before = document.createRange();
-    before.selectNodeContents(el);
-    before.setEnd(range.startContainer, range.startOffset);
-    const start = before.toString().length;
-    return [start, start + range.toString().length];
-  }
-
-  function selectOffsets(el, start, end) {
-    const range = document.createRange();
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-    let pos = 0;
-    let begun = false;
-    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-      const len = n.data.length;
-      if (!begun && start <= pos + len) {
-        range.setStart(n, start - pos);
-        begun = true;
-      }
-      if (begun && end <= pos + len) {
-        range.setEnd(n, end - pos);
-        const sel = getSelection();
-        sel.removeAllRanges();
-        sel.addRange(range);
-        return true;
-      }
-      pos += len;
-    }
-    return false;
+  function textOf(key) {
+    const [kind, id] = key.split(':');
+    if (kind === 'questiontext' || kind === 'generalfeedback') return q[kind];
+    const list = { answer: q.answers, subq: q.subquestions, item: q.items }[kind];
+    return list?.find((x) => String(x.id) === id)?.text;
   }
 
   function storeText(key, html) {
@@ -177,7 +154,8 @@
     if (!s) return void (bubble = null);
     const { el, range } = s;
     const key = el.dataset.edit;
-    const [start, end] = offsets(el, range);
+    const [start, end] = rangeOffsets(el, range);
+    let newEnd = end;
     // The browser formats only editable text, so a hidden editable copy of the shown text is formatted instead.
     const copy = document.createElement('div');
     copy.contentEditable = 'true';
@@ -187,7 +165,11 @@
     copy.focus({ preventScroll: true });
     if (selectOffsets(copy, start, end)) {
       if (cmd === 'code') toggleCode(copy, getSelection().getRangeAt(0));
-      else {
+      else if (cmd.startsWith('case:')) {
+        caseOpen = false;
+        changeCaseInRange(copy, getSelection().getRangeAt(0), cmd.slice(5));
+        newEnd = rangeOffsets(copy, getSelection().getRangeAt(0))[1];
+      } else {
         document.execCommand('styleWithCSS', false, false);
         document.execCommand(cmd);
       }
@@ -197,24 +179,52 @@
     storeText(key, html === '<br>' ? '' : html);
     await tick();
     const shown = wrapEl?.querySelector(`[data-edit="${CSS.escape(key)}"]`);
-    if (shown && selectOffsets(shown, start, end)) placeBubble();
+    if (shown && selectOffsets(shown, start, newEnd)) placeBubble();
     else bubble = null;
   }
 
+  let caseOpen = $state(false);
+  $effect(() => {
+    if (!bubble) caseOpen = false;
+  });
+
   function onselection() {
-    if (bubble && !selected()) bubble = null;
+    const s = selected();
+    if (bubble && !s) bubble = null;
+    if (!formattable) return;
+    if (s) {
+      const [start, end] = rangeOffsets(s.el, s.range);
+      setMirror('preview', s.el.dataset.edit, start, end);
+    } else clearMirror('preview');
   }
 
-  // Scrolling, resizing or Escape put it away until the next selection.
+  // Text selected in the editor is highlighted here.
+  const me = {};
+  $effect(() => {
+    const on = formattable && mirror.from === 'editor' && mirror.key;
+    const { key, start, end } = mirror;
+    if (!on) return void hideMirror(me);
+    void textOf(key), reveal;
+    tick().then(() => {
+      const el = wrapEl?.querySelector(`[data-edit="${CSS.escape(key)}"]`);
+      const range = el && offsetsRange(el, start, end);
+      if (range && mirror.from === 'editor' && mirror.key === key) showMirror(me, range);
+      else hideMirror(me);
+    });
+    return () => hideMirror(me);
+  });
+
+  // Scrolling (of the preview), resizing or Escape put it away until the next selection.
   $effect(() => {
     if (!bubble) return;
     const hide = () => (bubble = null);
+    const onscroll = (e) => (e.target === document || e.target.contains?.(wrapEl)) && hide();
     const key = (e) => e.key === 'Escape' && (e.stopPropagation(), hide());
-    document.addEventListener('scroll', hide, true);
+    document.addEventListener('scroll', onscroll, true);
     window.addEventListener('resize', hide);
     document.addEventListener('keydown', key, true);
     return () => {
-      document.removeEventListener('scroll', hide, true);
+      document.removeEventListener('scroll', onscroll, true);
       window.removeEventListener('resize', hide);
       document.removeEventListener('keydown', key, true);
     };
@@ -411,8 +421,37 @@
           onmousedown={(e) => e.preventDefault()}
           onclick={() => format(t.cmd)}><t.icon size={15} /></button
         >
-        {#if t.cmd === 'code'}<span class="sep"></span>{/if}
+        {#if t.cmd === 'code'}
+          <span class="sep"></span>
+          <button
+            type="button"
+            class="tb"
+            class:on={caseOpen}
+            title="Change case"
+            aria-label="Change case"
+            aria-haspopup="menu"
+            aria-expanded={caseOpen}
+            tabindex="-1"
+            onpointerdown={(e) => (e.preventDefault(), e.stopPropagation())}
+            onmousedown={(e) => e.preventDefault()}
+            onclick={() => (caseOpen = !caseOpen)}><CaseSensitive size={16} /></button
+          >
+        {/if}
       {/each}
+      {#if caseOpen}
+        <div class="case-menu" class:up={bubble.below === false} role="menu" aria-label="Change case">
+          {#each CASES as c (c.id)}
+            <button
+              type="button"
+              role="menuitem"
+              tabindex="-1"
+              onpointerdown={(e) => (e.preventDefault(), e.stopPropagation())}
+              onmousedown={(e) => e.preventDefault()}
+              onclick={() => format(`case:${c.id}`)}>{c.label}</button
+            >
+          {/each}
+        </div>
+      {/if}
     </div>
   {/if}
 </div>
@@ -695,6 +734,35 @@
     height: 16px;
     margin: 0 4px;
     background: var(--border);
+  }
+  .case-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    min-width: 190px;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    box-shadow: var(--shadow-lg, 0 8px 24px rgb(0 0 0 / 0.15));
+  }
+  .case-menu.up {
+    top: auto;
+    bottom: calc(100% + 4px);
+  }
+  .case-menu button {
+    padding: 6px 10px;
+    border: none;
+    border-radius: 5px;
+    background: none;
+    text-align: left;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .case-menu button:hover {
+    background: var(--hover);
   }
   .probe {
     position: fixed;

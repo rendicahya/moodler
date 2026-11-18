@@ -187,6 +187,7 @@
           {#if q.questiontextformat === 'html'}
             <RichText
               bind:value={q.questiontext}
+              sync="questiontext"
               id={textId}
               minHeight={q.type === 'cloze' || q.type === 'description' ? 180 : 110}
               placeholder={q.type === 'cloze'
@@ -290,7 +291,7 @@
       {/if}
 
       <Section title="General feedback" subtitle="Shown to every student after the attempt, regardless of their answer." optional collapsible open={!!q.generalfeedback}>
-        <RichText bind:value={q.generalfeedback} minHeight={70} placeholder="Explain the correct answer…" label="General feedback" />
+        <RichText bind:value={q.generalfeedback} sync="generalfeedback" minHeight={70} placeholder="Explain the correct answer…" label="General feedback" />
       </Section>
 
       {#if hasHints}

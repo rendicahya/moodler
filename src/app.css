@@ -129,6 +129,13 @@ textarea {
   background: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
+/* The text selected in the editor, shown in the live preview, and the other way round. */
+::highlight(mq-mirror) {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  text-decoration: underline 2px color-mix(in srgb, var(--accent) 70%, transparent);
+  text-underline-offset: 3px;
+}
+
 :focus-visible {
   outline: none;
   box-shadow: var(--focus);

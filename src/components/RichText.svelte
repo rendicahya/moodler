@@ -13,15 +13,20 @@
     Sigma,
     RemoveFormatting,
     CodeXml,
+    CaseSensitive,
     Check,
     X,
   } from '@lucide/svelte';
+  import { tick } from 'svelte';
   import { sanitizeHtml } from '../lib/sanitize.js';
   import { notify } from '../lib/store.svelte.js';
   import { rememberCaret } from '../lib/caret.js';
   import { imageForEditor, sizeText } from '../lib/images.js';
+  import { CASES, changeCaseInRange, rangeOffsets, offsetsRange } from '../lib/textcase.js';
+  import { mirror, setMirror, clearMirror, showMirror, hideMirror } from '../lib/selmirror.svelte.js';
 
-  let { value = $bindable(''), placeholder = '', compact = false, minHeight = compact ? 38 : 120, id, label = 'Rich text editor' } = $props();
+  // `sync` names the text for the live preview ("questiontext", "answer:<id>", …), so a selection shows on both sides.
+  let { value = $bindable(''), placeholder = '', compact = false, minHeight = compact ? 38 : 120, id, label = 'Rich text editor', sync: syncKey } = $props();
 
   let el = $state();
   let fileInput;
@@ -153,8 +158,51 @@
     if (!e.currentTarget.contains(e.relatedTarget)) {
       focused = false;
       linkOpen = false;
+      caseOpen = false;
     }
   }
+
+  // ---------------------------------------------------------------- changing the case of the selected text
+
+  let caseOpen = $state(false);
+
+  function setCase(mode) {
+    caseOpen = false;
+    el.focus();
+    const sel = getSelection();
+    if (!sel.rangeCount || sel.isCollapsed || !el.contains(sel.anchorNode) || !el.contains(sel.focusNode)) {
+      notify('Select the text to change the case of first.', 'info');
+      return;
+    }
+    changeCaseInRange(el, sel.getRangeAt(0), mode);
+    sync();
+  }
+
+  // ---------------------------------------------------------------- the selection, mirrored in the live preview
+
+  function onselection() {
+    refreshState();
+    if (!syncKey || !el) return;
+    const sel = getSelection();
+    if (sel.rangeCount && !sel.isCollapsed && el.contains(sel.anchorNode) && el.contains(sel.focusNode)) {
+      const [start, end] = rangeOffsets(el, sel.getRangeAt(0));
+      setMirror('editor', syncKey, start, end);
+    } else if (mirror.from === 'editor' && mirror.key === syncKey) clearMirror('editor');
+  }
+
+  // Text selected in the preview is highlighted here.
+  const me = {};
+  $effect(() => {
+    void value;
+    const on = mirror.from === 'preview' && mirror.key === syncKey && syncKey && el && !source;
+    const { start, end } = mirror;
+    if (!on) return void hideMirror(me);
+    tick().then(() => {
+      const range = el && offsetsRange(el, start, end);
+      if (range && mirror.from === 'preview' && mirror.key === syncKey) showMirror(me, range);
+    });
+    return () => hideMirror(me);
+  });
 
   function toggleSource() {
     if (!source) sync();
@@ -175,9 +223,18 @@
   ];
 </script>
 
-<svelte:document onselectionchange={refreshState} />
+<svelte:document onselectionchange={onselection} />
 
-<div class="rte" class:compact class:focused class:source onfocusin={() => (focused = true)} onfocusout={onblur}>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+  class="rte"
+  class:compact
+  class:focused
+  class:source
+  onfocusin={() => (focused = true)}
+  onfocusout={onblur}
+  onkeydown={(e) => caseOpen && e.key === 'Escape' && (e.stopPropagation(), (caseOpen = false))}
+>
   <div class="toolbar" role="toolbar" aria-label="Formatting">
     {#each tools as t}
       {#if t}
@@ -207,6 +264,27 @@
       onmousedown={(e) => e.preventDefault()}
       onclick={() => exec('insertText', '\\( x^2 \\)')}><Sigma size={15} /></button
     >
+    <span class="case-wrap">
+      <button
+        type="button"
+        class="tb"
+        class:on={caseOpen}
+        title="Change case"
+        aria-label="Change case"
+        aria-haspopup="menu"
+        aria-expanded={caseOpen}
+        disabled={source}
+        onmousedown={(e) => e.preventDefault()}
+        onclick={() => (caseOpen = !caseOpen)}><CaseSensitive size={16} /></button
+      >
+      {#if caseOpen}
+        <div class="case-menu" role="menu" aria-label="Change case">
+          {#each CASES as c (c.id)}
+            <button type="button" role="menuitem" tabindex="-1" onmousedown={(e) => e.preventDefault()} onclick={() => setCase(c.id)}>{c.label}</button>
+          {/each}
+        </div>
+      {/if}
+    </span>
     <button type="button" class="tb" title="Clear formatting" aria-label="Clear formatting" disabled={source} onmousedown={(e) => e.preventDefault()} onclick={() => exec('removeFormat')}
       ><RemoveFormatting size={15} /></button
     >
@@ -320,6 +398,36 @@
   }
   .spacer {
     flex: 1;
+  }
+  .case-wrap {
+    position: relative;
+    display: inline-flex;
+  }
+  .case-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    min-width: 190px;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    box-shadow: var(--shadow-lg, 0 8px 24px rgb(0 0 0 / 0.15));
+  }
+  .case-menu button {
+    padding: 6px 10px;
+    border: none;
+    border-radius: 5px;
+    background: none;
+    text-align: left;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .case-menu button:hover {
+    background: var(--hover);
   }
   .linkbar {
     display: flex;
