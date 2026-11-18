@@ -101,6 +101,8 @@ export async function loadSavedQuiz() {
     library.activeId = saved.quizzes.some((q) => q.id === saved.activeId) ? saved.activeId : saved.quizzes[0].id;
     // Earlier versions could hide a quiz by closing its tab; every quiz has a tab now.
     for (const q of library.quizzes) delete q.closed;
+    // Quizzes made before new quizzes were marked as started: with several tabs, they were all made by the user.
+    if (library.quizzes.length > 1) for (const q of library.quizzes) q.started = true;
     const quiz = parseQuiz(await readStored(quizKey(library.activeId)));
     if (quiz) app.quiz = quiz;
     else {
@@ -661,14 +663,19 @@ export async function switchQuiz(id) {
     notify('Could not open that quiz: its saved data is missing or damaged.', 'error');
     return false;
   }
+  // It may have been closed while it was being read.
+  if (!library.quizzes.some((q) => q.id === id)) return false;
+  if (id === library.activeId) return true;
   activate(id, quiz);
   return true;
 }
 
 /** Adds a quiz to the list and opens it. Other quizzes are kept. */
-export function createNewQuiz(quiz = createQuiz()) {
+export function createNewQuiz(quiz = createQuiz(), started = true) {
   const id = uid();
-  library.quizzes.push(entryFor(id, quiz));
+  // A quiz the user made keeps its tab even when it is the last one left and empty; only the quiz the app starts
+  // with (or stands in after the last tab closes) is shown as the start screen.
+  library.quizzes.push({ ...entryFor(id, quiz), ...(started && { started: true }) });
   activate(id, quiz);
   save(current, id);
   return id;
@@ -814,7 +821,7 @@ export function moveTab(id, to) {
 /** Saves a quiz as a new tab without opening it. */
 function addClosedQuiz(quiz) {
   const id = uid();
-  library.quizzes.push(entryFor(id, quiz));
+  library.quizzes.push({ ...entryFor(id, quiz), started: true });
   save(JSON.stringify(quiz), id);
   return id;
 }
@@ -864,7 +871,14 @@ export async function renameCloudCopy(id, name) {
  * Closes a quiz's tab, which removes the quiz from the app: every quiz in the app has a tab.
  * Empty quizzes go straight away; others are confirmed first and can be brought back from the notification.
  */
-export async function closeTab(id) {
+let closing = Promise.resolve();
+export function closeTab(id) {
+  // Closes run one after another: a close that is still switching tabs must finish before the next one looks at them.
+  closing = closing.then(() => closeTabNow(id)).catch((e) => console.error(e));
+  return closing;
+}
+
+async function closeTabNow(id) {
   const index = library.quizzes.findIndex((q) => q.id === id);
   const entry = library.quizzes[index];
   if (!entry) return;
@@ -891,7 +905,7 @@ export async function closeTab(id) {
   if (id === library.activeId) {
     // Open the tab to the right, else the one to the left, else a fresh quiz when this was the last one.
     const next = library.quizzes[index + 1] ?? library.quizzes[index - 1];
-    if (!next || !(await switchQuiz(next.id))) fresh = createNewQuiz();
+    if (!next || !(await switchQuiz(next.id))) fresh = createNewQuiz(createQuiz(), false);
   }
   library.quizzes = library.quizzes.filter((q) => q.id !== id);
   stacks.delete(id);
