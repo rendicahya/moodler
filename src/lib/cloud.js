@@ -1,7 +1,7 @@
 // Private cloud copies of quizzes in Firebase: the user signs in with Google and each quiz is stored under their own
 // account (see firestore.rules). Firebase's free plan has Firestore but no file storage, and a Firestore document
 // holds at most 1 MiB, so a quiz's JSON (with its embedded images) is split over several documents:
-//   users/{uid}/quizzes/{quizId}                  name, count, size, uploaded, version, chunks, folder, history, deleted
+//   users/{uid}/quizzes/{quizId}                  name, count, review, size, uploaded, version, chunks, folder, history, deleted
 //   users/{uid}/quizzes/{quizId}/chunks/{version}-{n}  data
 //   users/{uid}/folders/{folderId}                name, parent, deleted
 //   users/{uid}/search/{quizId}                   text: the questions as plain text, for searching
@@ -362,6 +362,25 @@ export async function deleteCloudFolders(userId, ids, quizzes, onProgress = () =
 }
 
 /**
+ * How many questions of a quiz are reviewed and how many are still to review, or null for a quiz that never went
+ * through review. As in the question list, every question not marked as to review counts as reviewed.
+ */
+export function reviewCounts(quiz) {
+  const qs = quiz?.questions ?? [];
+  const todo = qs.filter((q) => q.unreviewed).length;
+  if (!todo && !qs.some((q) => q.reviewed)) return null;
+  return { done: qs.length - todo, todo };
+}
+
+function reviewOf(text) {
+  try {
+    return reviewCounts(JSON.parse(text));
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Uploads a quiz as its newest version. The earlier upload is kept in its history and keeps its folder; one in the
  * trash comes out of it, into `info.folder`.
  * @param {string} userId
@@ -390,6 +409,8 @@ export async function uploadCloudQuiz(userId, id, text, info, onProgress = () =>
     const replace = replacesVersion(previous, info.auto, now);
     const older = previous ? (replace ? (previous.history ?? []) : quizVersions(previous)) : [];
     const meta = { name: info.name, count: info.count, size: text.length, uploaded: now, version, chunks: chunks.length, folder, history: older.slice(0, KEEP_VERSIONS - 1) };
+    const review = reviewOf(text);
+    if (review) meta.review = review;
     if (info.auto) Object.assign(meta, { auto: true, since: replace ? (previous.since ?? previous.uploaded) : now });
     await store.setDoc(ref, meta);
     onProgress(chunks.length, chunks.length);

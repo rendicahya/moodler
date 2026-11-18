@@ -1,7 +1,7 @@
 <script>
   import { onMount, tick } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import { Cloud, CloudUpload, CloudDownload, LogIn, LogOut, Trash2, Folder, FolderPlus, FilePlus, Pencil, ChevronRight, Check, X, History, Undo2, FileText, Search } from '@lucide/svelte';
+  import { Cloud, CloudUpload, CloudDownload, LogIn, LogOut, Trash2, Folder, FolderPlus, FilePlus, Pencil, ChevronRight, Check, X, History, Undo2, FileText, Search, CircleCheck, CircleDot } from '@lucide/svelte';
   import Modal from '../ui/Modal.svelte';
   import { app, library, closeModal, notify, ask, prepareCloudUpload, markCloudSynced, applyCloudQuiz, quizFromXmlFile, renameCloudCopy, blankQuizForCloud } from '../../lib/store.svelte.js';
   import { uploadChanges } from '../../lib/cloudsync.svelte.js';
@@ -877,6 +877,16 @@
   };
 </script>
 
+<!-- How many questions are reviewed and still to review, as of the upload (uploads from before this was recorded show nothing). -->
+{#snippet review(q)}
+  {#if q.review}
+    <span class="review" title="{q.review.done} reviewed{q.review.todo ? `, ${q.review.todo} not reviewed yet` : ''}">
+      <span class="done"><CircleCheck size={12} />{q.review.done}</span>
+      {#if q.review.todo}<span class="todo"><CircleDot size={12} />{q.review.todo}</span>{/if}
+    </span>
+  {/if}
+{/snippet}
+
 {#snippet nameRow(label, placeholder)}
   <form class="inline" onsubmit={saveName} onkeydown={(e) => cancelOnEscape(e, cancelNaming)}>
     <input class="input" aria-label={label} {placeholder} maxlength="100" bind:value={naming.name} use:focusOnMount />
@@ -997,7 +1007,7 @@
                 <li class="item" class:open={q.id === library.activeId} oncontextmenu={(e) => openMenu(e, quizMenu(q, true))}>
                   <div class="info">
                     <span class="name" title={q.name}>{q.name}</span>
-                    <span class="meta">{folderOf(q) ? pathText(folderOf(q)) : 'Cloud'} · {plural(q.count, 'question')} · <span title={when(q.uploaded)}>{ago(q.uploaded)}</span></span>
+                    <span class="meta">{folderOf(q) ? pathText(folderOf(q)) : 'Cloud'} · {plural(q.count, 'question')}{@render review(q)} ·<span title={when(q.uploaded)}>{ago(q.uploaded)}</span></span>
                     {#each match.questions as m}
                       <span class="hit">{#if m.title}<strong>{m.title}</strong> — {/if}{m.excerpt}</span>
                     {/each}
@@ -1086,7 +1096,8 @@
                 ondragend={dragEnd}
                 oncontextmenu={(e) => openMenu(e, quizMenu(q, false))}
               >
-                <div class="info">
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div class="info" ondblclick={(e) => !busy && quizNaming?.id !== q.id && !e.target.closest('form') && download(q)}>
                   {#if quizNaming?.id === q.id}
                     <form class="inline" onsubmit={saveQuizName} onkeydown={(e) => cancelOnEscape(e, () => (quizNaming = null))}>
                       <input class="input input-sm" aria-label="New name for {q.name}" maxlength="200" bind:value={quizNaming.name} use:focusOnMount />
@@ -1094,9 +1105,9 @@
                       <button class="btn btn-ghost btn-icon" type="button" title="Cancel" aria-label="Cancel" disabled={!!busy} onclick={() => (quizNaming = null)}><X size={16} /></button>
                     </form>
                   {:else}
-                    <span class="name" title="{q.name}{'\n'}Double-click to rename" ondblclick={() => startQuizNaming(q)} role="presentation">{q.name}</span>
+                    <span class="name" title="{q.name}{'\n'}Double-click to open">{q.name}</span>
                   {/if}
-                  <span class="meta">{plural(q.count, 'question')} · {sizeText(q.size)} · <span title={when(q.uploaded)}>{ago(q.uploaded)}</span></span>
+                  <span class="meta">{plural(q.count, 'question')}{@render review(q)} · {sizeText(q.size)} · <span title={when(q.uploaded)}>{ago(q.uploaded)}</span></span>
                   {#if statusOf(q) !== 'absent'}<span class="state {statusOf(q)}">{STATUS[statusOf(q)]}</span>{/if}
                 </div>
                 <button class="btn btn-sm" disabled={!!busy} onclick={() => download(q)}><CloudDownload size={15} /> Open</button>
@@ -1369,6 +1380,23 @@
   .state {
     font-size: 12px;
     color: var(--text-3);
+  }
+  .review {
+    display: inline-flex;
+    gap: 6px;
+    margin-left: 6px;
+    vertical-align: -2px;
+  }
+  .review > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .review .done {
+    color: var(--success);
+  }
+  .review .todo {
+    color: var(--warning);
   }
   .state.same {
     color: var(--success);

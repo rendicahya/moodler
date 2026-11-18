@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { splitChunks, normalizeFolders, folderPath, childFolders, folderTreeIds, folderOptions, cloudView, daysLeft, quizVersions, searchText, matchQuiz, foldText, TRASH_DAYS } from '../src/lib/cloud.js';
+import { splitChunks, normalizeFolders, folderPath, childFolders, folderTreeIds, folderOptions, cloudView, daysLeft, quizVersions, searchText, matchQuiz, foldText, reviewCounts, TRASH_DAYS } from '../src/lib/cloud.js';
 import { fitSize } from '../src/lib/images.js';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -148,4 +148,10 @@ test('default chunks fit in a Firestore document, even with the widest character
   const chunks = splitChunks(text);
   assert.equal(chunks.join(''), text);
   assert.ok(chunks.every((c) => Buffer.byteLength(c) < MIB - 1024));
+});
+
+test('review counts of a quiz', () => {
+  assert.equal(reviewCounts({ questions: [{}, {}] }), null);
+  assert.deepEqual(reviewCounts({ questions: [{ unreviewed: true }, {}, { reviewed: true }] }), { done: 2, todo: 1 });
+  assert.deepEqual(reviewCounts({ questions: [{ reviewed: true }, {}] }), { done: 2, todo: 0 });
 });
