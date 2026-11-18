@@ -26,8 +26,6 @@
   // The open quiz's name and count change as you type, before its list entry is refreshed.
   const nameOf = (t) => (t.id === library.activeId ? app.quiz.name || 'Untitled quiz' : t.name);
   const countOf = (t) => (t.id === library.activeId ? app.quiz.questions.length : t.count);
-  // An empty quiz that is the only tab has nothing to close.
-  const closable = (t) => library.quizzes.length > 1 || countOf(t) > 0;
   // With nothing in the app but one empty quiz, there is no tab to show, only the New quiz button.
   // A quiz from the cloud keeps its tab even while empty, so that its name shows.
   const blank = $derived(isStartScreen());
@@ -193,11 +191,9 @@
             <span class="count">{count}</span>
           </button>
         {/if}
-        {#if closable(t)}
           <button class="close" title="Close tab and remove this quiz (Alt+W)" aria-label="Close {nameOf(t)}" onclick={() => closeTab(t.id)}>
             <X size={13} />
           </button>
-        {/if}
       </div>
     {/each}
     <button class="add" title="New quiz (Alt+Shift+N)" aria-label="New quiz" onclick={newQuiz}><Plus size={16} /></button>
@@ -209,10 +205,8 @@
     <button role="menuitem" onclick={() => run(startRename)}><Pencil size={14} /> Rename</button>
     <button role="menuitem" onclick={() => run((t) => duplicateQuiz(t.id))}><Copy size={14} /> Duplicate</button>
     <button role="menuitem" onclick={() => run(() => downloadBackup())}><Download size={14} /> Back up all quizzes</button>
-    {#if closable(menu.tab)}
       <hr />
       <button role="menuitem" class="danger" onclick={() => run((t) => closeTab(t.id))}><X size={14} /> Close and remove</button>
-    {/if}
   </div>
 {/if}
 

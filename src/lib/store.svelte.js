@@ -883,8 +883,8 @@ async function closeTabNow(id) {
   const entry = library.quizzes[index];
   if (!entry) return;
   const count = countOf(entry);
-  // Closing the only tab would just replace an empty quiz with another empty one.
-  if (!count && library.quizzes.length < 2) return;
+  // On the start screen there is no tab to close. Closing the last empty quiz otherwise goes back to the start screen.
+  if (isStartScreen()) return;
   // Edits still waiting to be saved count as changes.
   if (id === library.activeId) commit(JSON.stringify($state.snapshot(app.quiz)));
   // A quiz that is unchanged since it came from (or went to) the cloud can be opened again from there, so it closes
