@@ -153,7 +153,7 @@
   <section>
     <h3>
       Answer key
-      <Info text="Only single-answer multiple-choice questions are counted. Moodle can shuffle the answers when “Shuffle answers” is on, but printed papers and quizzes without shuffling use the order shown here." />
+      <Info text="The positions count only single-answer multiple-choice questions; answer lengths are checked in multiple-answer ones too. Moodle can shuffle the answers when “Shuffle answers” is on, but printed papers and quizzes without shuffling use the order shown here." />
     </h3>
     {#if !key.questions.length}
       <p class="muted">No single-answer multiple-choice questions.</p>
@@ -183,11 +183,15 @@
           <Shuffle size={14} /> Spread evenly
         </button>
       </div>
+    {/if}
       {#if key.longest.length}
         <div class="sub">
           <p class="status {key.longSkew ? 'warn' : 'note'}">
             {#if key.longSkew}<TriangleAlert size={16} />{/if}
-            <span>The correct answer is clearly the longest in {key.longest.length} of {key.questions.length} question{key.questions.length === 1 ? '' : 's'}{key.longSkew ? ', a hint students learn to use' : ''}. Shorten it or lengthen the others:</span>
+            <span>
+              The correct answer is clearly the longest in {key.longest.length} of {key.longPool} multiple-choice question{key.longPool === 1 ? '' : 's'}. Students who aren't sure tend to pick the longest answer, so it gives the answer away,
+              and AI chatbots often write questions like this. Shorten it or make the wrong answers just as detailed:
+            </span>
           </p>
           <ul class="list">
             {#each key.longest as q (q.id)}
@@ -202,7 +206,6 @@
           </ul>
         </div>
       {/if}
-    {/if}
   </section>
 
   <section>

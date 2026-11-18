@@ -4,7 +4,8 @@
   import Segmented from '../ui/Segmented.svelte';
   import Switch from '../ui/Switch.svelte';
   import { FORMATS, FORMAT_MAP, detectFormat } from '../../lib/formats/index.js';
-  import { TYPE_MAP, questionTitle } from '../../lib/model.js';
+  import { TYPE_MAP, questionTitle, normalizeQuestion } from '../../lib/model.js';
+  import { correctIsLongest } from '../../lib/quality.js';
   import { app, applyImport, closeModal, notify } from '../../lib/store.svelte.js';
 
   let source = $state('file');
@@ -74,6 +75,13 @@
     const n = applyImport(parsed.result, mode, filename, review && effective !== 'json');
     closeModal();
     if (!parsed.result.quizzes) notify(`Imported ${n} question${n === 1 ? '' : 's'} from ${FORMAT_MAP[effective].label}${mode === 'new' ? ' as a new quiz' : ''}.`, 'success');
+    const long = (parsed.result.questions ?? []).filter((q) => correctIsLongest(normalizeQuestion(q, app.quiz.defaults))).length;
+    if (long)
+      notify(
+        `${long === 1 ? 'One imported multiple-choice question has its' : `${long} imported multiple-choice questions have their`} correct answer clearly the longest, which gives it away to students (AI chatbots often do this). Check questions (Alt+C) lists ${long === 1 ? 'it' : 'them'}.`,
+        'warning',
+        9000
+      );
     if (parsed.result.warnings.length) notify(`${parsed.result.warnings.length} warning(s) during import — see the import dialog for details.`, 'warning', 6000);
   }
 

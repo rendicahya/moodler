@@ -46,6 +46,18 @@ test('spreading the key evenly keeps each question intact and pins "all of the a
 test('a correct answer much longer than the others is noticed', () => {
   assert.equal(correctIsLongest(mc(['It converts light energy into chemical energy stored in glucose', 'Heat', 'Sound', 'Wind'])), true);
   assert.equal(correctIsLongest(mc(['Paris', 'London', 'Berlin', 'Madrid'])), false);
+  // Multiple-answer questions: every correct answer is clearly longer than every wrong one.
+  const multi = (texts, right) => ({ ...mc(texts), single: false, answers: texts.map((text, i) => ({ id: `m${i}`, text, fraction: right.includes(i) ? 50 : -50 })) });
+  assert.equal(correctIsLongest(multi(['Plants release oxygen during photosynthesis', 'Roots absorb water and minerals from soil', 'Heat', 'Sound'], [0, 1])), true);
+  assert.equal(correctIsLongest(multi(['Plants release oxygen during photosynthesis', 'Heat', 'Sound', 'Leaves store all of the plant’s water for winter'], [0, 1])), false);
+});
+
+test('the generation prompt tells the chatbot not to make the correct answer the longest', () => {
+  for (const type of ['multichoice', 'multiresponse']) {
+    const p = buildPrompt({ counts: { [type]: 3 }, topic: 'Cells', difficulty: 'medium' });
+    assert.match(p, /correct answer is the longest/);
+  }
+  assert.doesNotMatch(buildPrompt({ counts: { truefalse: 3 }, topic: 'Cells', difficulty: 'medium' }), /longest/);
 });
 
 test('repeated questions are grouped, within a quiz and across quizzes', () => {

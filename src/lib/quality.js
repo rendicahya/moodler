@@ -17,16 +17,21 @@ export function correctPosition(q) {
   return correct.length === 1 ? q.answers.indexOf(correct[0]) : -1;
 }
 
-/** Whether the correct answer is noticeably longer than every other answer, a hint students learn to use. */
+/**
+ * Whether the correct answer (or, in a multiple-answer question, every correct answer) is noticeably longer than
+ * every wrong one: students learn to pick the longest option, and AI chatbots often write answers this way.
+ */
 export function correctIsLongest(q) {
-  const at = correctPosition(q);
+  if (q.type !== 'multichoice' || (q.answers?.length ?? 0) < 3) return false;
+  const correct = q.single ? (correctPosition(q) < 0 ? [] : [q.answers[correctPosition(q)]]) : q.answers.filter((a) => Number(a.fraction) > 0);
   // "All of the above" is long by nature and gives nothing away by it.
-  if (at < 0 || q.answers.length < 3 || isPinned(q.answers[at])) return false;
-  const len = q.answers.map((a) => stripHtml(a.text).length);
-  const others = len.filter((_, i) => i !== at && !isPinned(q.answers[i]));
+  if (!correct.length || correct.some(isPinned)) return false;
+  const len = (a) => stripHtml(a.text).length;
+  const others = q.answers.filter((a) => !correct.includes(a) && !isPinned(a)).map(len);
   if (others.length < 2) return false;
   const other = Math.max(...others);
-  return len[at] >= other * 1.25 && len[at] - other >= 8;
+  const shortest = Math.min(...correct.map(len));
+  return shortest >= other * 1.25 && shortest - other >= 8;
 }
 
 /**
@@ -45,10 +50,12 @@ export function answerKeyReport(questions) {
   }
   const skewed =
     mc.length >= 4 && positions.some((n, i) => (n - expected[i] >= 2 && n > expected[i] * 1.6) || (n === 0 && expected[i] >= 2.5));
-  const longest = mc.filter(correctIsLongest);
+  // Answer lengths are checked in multiple-answer questions too.
+  const pool = questions.filter((q) => q.type === 'multichoice' && (q.answers?.length ?? 0) >= 3 && q.answers.some((a) => Number(a.fraction) > 0));
+  const longest = pool.filter(correctIsLongest);
   // By chance the key would be the clearly longest answer only now and then; flag it when it is a pattern.
-  const longSkew = mc.length >= 4 && longest.length >= 3 && longest.length / mc.length > 0.35;
-  return { questions: mc, positions, expected, skewed, longest, longSkew };
+  const longSkew = pool.length >= 4 && longest.length >= 3 && longest.length / pool.length > 0.35;
+  return { questions: mc, positions, expected, skewed, longest, longSkew, longPool: pool.length };
 }
 
 const shuffled = (arr) => {

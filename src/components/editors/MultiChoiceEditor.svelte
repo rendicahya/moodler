@@ -1,5 +1,5 @@
 <script>
-  import { Plus, GripVertical, Trash, CircleCheck, Circle, SquareCheck, Square, Shuffle } from '@lucide/svelte';
+  import { Plus, GripVertical, Trash, CircleCheck, Circle, SquareCheck, Square, Shuffle, Ruler } from '@lucide/svelte';
   import Section from '../ui/Section.svelte';
   import Switch from '../ui/Switch.svelte';
   import Segmented from '../ui/Segmented.svelte';
@@ -8,6 +8,7 @@
   import RichText from '../RichText.svelte';
   import { newAnswer, moveItem, round } from '../../lib/model.js';
   import { createSortable } from '../../lib/sortable.svelte.js';
+  import { correctIsLongest } from '../../lib/quality.js';
 
   let { q = $bindable() } = $props();
   const sort = createSortable((from, to) => moveItem(q.answers, from, to));
@@ -21,6 +22,7 @@
     { value: 'none', label: 'No numbering' },
   ];
 
+  const tooLong = $derived(correctIsLongest(q));
   const positive = $derived(round(q.answers.filter((a) => a.fraction > 0).reduce((s, a) => s + Number(a.fraction), 0), 2));
 
   function label(i) {
@@ -154,6 +156,16 @@
       </div>
     {/each}
   </div>
+  {#if tooLong}
+    <p class="long-hint" role="status">
+      <Ruler size={16} />
+      <span>
+        <strong>{q.single ? 'The correct answer is' : 'The correct answers are'} clearly longer than the wrong ones.</strong>
+        Students who aren't sure tend to pick the longest answer, so this gives the answer away, and AI chatbots often write answers like this. Shorten
+        {q.single ? 'it' : 'them'}, or make the wrong answers just as long and detailed.
+      </span>
+    </p>
+  {/if}
   <div>
     <button class="btn btn-sm" onclick={() => q.answers.push(newAnswer())}><Plus size={15} /> Add answer</button>
   </div>
@@ -185,6 +197,25 @@
   .answer.correct {
     border-color: color-mix(in srgb, var(--success) 45%, transparent);
     background: var(--success-soft);
+  }
+  .long-hint {
+    display: flex;
+    gap: 10px;
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    background: var(--warning-soft);
+    border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
+    color: var(--text-2);
+    font-size: 13px;
+  }
+  .long-hint :global(svg) {
+    flex: none;
+    margin-top: 1px;
+    color: var(--warning);
+  }
+  .long-hint strong {
+    color: var(--text);
   }
   .answer.dragging {
     opacity: 0.4;

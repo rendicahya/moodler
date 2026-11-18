@@ -57,7 +57,7 @@
     if (toReview) list.push(`${toReview} question${toReview === 1 ? ' has' : 's have'} not been reviewed yet.`);
     const key = answerKeyReport(questions);
     if (key.skewed) list.push('The correct answers of the multiple-choice questions are not spread evenly over the positions.');
-    if (key.longSkew) list.push(`The correct answer is clearly the longest in ${key.longest.length} multiple-choice questions.`);
+    if (key.longSkew) list.push(`The correct answer is clearly the longest in ${key.longest.length} multiple-choice questions, which gives it away to students.`);
     const placed = questions.filter(placeProblem).length;
     if (placed) list.push(`${placed} question${placed === 1 ? ' has' : 's have'} an answer like “All of the above” that may not stay in its place.`);
     const alike = questions.filter((q) => lookAlikeAnswers(q).length).length;

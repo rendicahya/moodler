@@ -133,6 +133,11 @@ export function buildImprovePrompt(o) {
         : 'Keep every image reference such as @@PLUGINFILE@@/image1.png exactly as it is, in the same place.'
     );
   }
+  if (o.q.type === 'multichoice') {
+    rules.push(
+      'Never let the correct answer be the longest or most detailed option, since students who are unsure pick the longest one: make the wrong answers as long and specific as the correct one, or shorten the correct one.'
+    );
+  }
   if (o.q.type === 'calculated') rules.push('Keep the {wildcards} in the text and the formulas consistent, with a <dataset_definition> for each; leave out <dataset_items>.');
   if (o.q.type === 'cloze') rules.push('Keep the embedded answers in valid Cloze syntax, such as {1:MULTICHOICE:=right~wrong}.');
   rules.push(

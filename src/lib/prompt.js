@@ -121,9 +121,9 @@ export const PROMPT_TYPES = [
   {
     type: 'multichoice',
     label: 'Multiple choice (one answer)',
-    rule: 'type="multichoice" with <single>true</single>; exactly one answer with fraction="100", the others fraction="0"; plausible distractors of similar length and style to the correct answer; put the correct answer in a different position from question to question, evenly spread.',
+    rule: 'type="multichoice" with <single>true</single>; exactly one answer with fraction="100", the others fraction="0"; plausible distractors of similar length, detail and style to the correct answer, and never make the correct answer the longest one; put the correct answer in a different position from question to question, evenly spread.',
   },
-  { type: 'multiresponse', label: 'Multiple choice (several answers)', rule: 'type="multichoice" with <single>false</single>; the correct answers\' fractions add up to 100 and wrong ones are negative.' },
+  { type: 'multiresponse', label: 'Multiple choice (several answers)', rule: 'type="multichoice" with <single>false</single>; the correct answers\' fractions add up to 100 and wrong ones are negative; the wrong answers must be as long and detailed as the correct ones, so the correct answers are never the longest.' },
   { type: 'truefalse', label: 'True / False', rule: 'type="truefalse"; two answers whose text is exactly "true" and "false", the correct one with fraction="100".' },
   { type: 'shortanswer', label: 'Short answer', rule: 'type="shortanswer"; a one-word or short-phrase answer, listing accepted variants as extra answers with fraction="100".' },
   { type: 'numerical', label: 'Numerical', rule: 'type="numerical"; the answer is a plain number (dot as decimal separator) with a <tolerance>.' },
@@ -191,6 +191,11 @@ export function buildPrompt(o) {
     'Questions must be factually correct, unambiguous and independent of each other. Every question must have a clearly correct answer.',
     'Cover different parts of the topic rather than asking the same thing twice.'
   );
+  if (o.counts.multichoice > 0 || o.counts.multiresponse > 0) {
+    req.push(
+      'In multiple-choice questions, students who are unsure pick the longest or most detailed answer, so do not let length give the answer away: write the wrong answers as long, specific and carefully qualified as the correct one, or shorten the correct one. Before replying, check every multiple-choice question and fix any whose correct answer is the longest.'
+    );
+  }
   if (hasSource) {
     const where = [material || files.length ? 'below' : '', attached.length ? `in the attached file${attached.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ');
     req.push(`Base the questions only on the source material ${where}; do not test anything it does not contain.`);
