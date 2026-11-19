@@ -1,16 +1,22 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
+  import { ChevronRight } from '@lucide/svelte';
 
   /**
-   * A right-click menu at (x, y). `items` holds { label, icon, run, danger?, disabled? } and '-' for a separator.
+   * A right-click menu at (x, y). `items` holds { label, icon, run, danger?, disabled? } and '-' for a separator. An item
+   * with `items` instead of `run` opens a submenu of those items beside it (one level deep).
    * It closes on a click elsewhere, Escape, Tab, scrolling or when the window loses focus.
    */
   let { x, y, items, onclose } = $props();
   let menu;
+  let subEl = $state();
   let left = $state(x);
   let top = $state(y);
+  // The open submenu: { item, anchor (its button), left, top }.
+  let sub = $state(null);
 
-  const buttons = () => [...menu.querySelectorAll('button:not(:disabled)')];
+  const buttons = () => [...menu.querySelectorAll(':scope > button:not(:disabled)')];
+  const subButtons = () => (subEl ? [...subEl.querySelectorAll('button:not(:disabled)')] : []);
 
   onMount(() => {
     // Keep the whole menu on screen.
@@ -21,23 +27,57 @@
     (buttons()[0] ?? menu).focus();
   });
 
-  function choose(item) {
+  async function openSub(item, anchor, focus = false) {
+    if (sub?.item !== item) {
+      const a = anchor.getBoundingClientRect();
+      sub = { item, anchor, left: a.right + 2, top: a.top - 5 };
+      await tick();
+      // Open to the left when there is no room on the right, and keep it on screen.
+      const r = subEl.getBoundingClientRect();
+      sub.left = a.right + 2 + r.width > window.innerWidth - 4 ? Math.max(4, a.left - r.width - 2) : a.right + 2;
+      sub.top = Math.max(4, Math.min(a.top - 5, window.innerHeight - r.height - 4));
+    }
+    if (focus) subButtons()[0]?.focus();
+  }
+
+  function closeSub(refocus = false) {
+    const anchor = sub?.anchor;
+    sub = null;
+    if (refocus) anchor?.focus();
+  }
+
+  function choose(item, e) {
+    if (item.items) return openSub(item, e.currentTarget, e.detail === 0);
     onclose();
     item.run();
   }
 
   function onkeydown(e) {
-    const all = buttons();
+    const inSub = subEl?.contains(document.activeElement);
+    const all = inSub ? subButtons() : buttons();
     const at = all.indexOf(document.activeElement);
-    if (e.key === 'Escape' || e.key === 'Tab') {
+    const current = !inSub && items.filter((i) => i !== '-' && !i.disabled)[at];
+    if (e.key === 'Escape' && inSub) {
+      e.preventDefault();
+      e.stopPropagation();
+      closeSub(true);
+    } else if (e.key === 'Escape' || e.key === 'Tab') {
       e.preventDefault();
       e.stopPropagation();
       onclose();
+    } else if (e.key === 'ArrowRight' && current?.items) {
+      e.preventDefault();
+      openSub(current, document.activeElement, true);
+    } else if (e.key === 'ArrowLeft' && inSub) {
+      e.preventDefault();
+      closeSub(true);
     } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
+      if (!inSub) closeSub();
       all[(at + (e.key === 'ArrowDown' ? 1 : all.length - 1)) % all.length]?.focus();
     } else if (e.key === 'Home' || e.key === 'End') {
       e.preventDefault();
+      if (!inSub) closeSub();
       (e.key === 'Home' ? all[0] : all.at(-1))?.focus();
     }
   }
@@ -53,12 +93,36 @@
     {#if item === '-'}
       <hr />
     {:else}
-      <button role="menuitem" class:danger={item.danger} disabled={item.disabled} onclick={() => choose(item)}>
+      <button
+        role="menuitem"
+        class:danger={item.danger}
+        class:active={sub?.item === item}
+        disabled={item.disabled}
+        aria-haspopup={item.items ? 'menu' : undefined}
+        aria-expanded={item.items ? sub?.item === item : undefined}
+        onclick={(e) => choose(item, e)}
+        onpointerenter={(e) => (item.items ? !item.disabled && openSub(item, e.currentTarget) : closeSub())}
+      >
         {#if item.icon}<item.icon size={14} />{/if}
-        {item.label}
+        <span class="label">{item.label}</span>
+        {#if item.items}<ChevronRight size={14} class="chevron" />{/if}
       </button>
     {/if}
   {/each}
+  {#if sub}
+    <div class="menu sub" role="menu" bind:this={subEl} style:left="{sub.left}px" style:top="{sub.top}px">
+      {#each sub.item.items as item}
+        {#if item === '-'}
+          <hr />
+        {:else}
+          <button role="menuitem" class:danger={item.danger} disabled={item.disabled} onclick={(e) => choose(item, e)}>
+            {#if item.icon}<item.icon size={14} />{/if}
+            <span class="label">{item.label}</span>
+          </button>
+        {/if}
+      {/each}
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -72,6 +136,10 @@
     border-radius: var(--radius);
     background: var(--surface);
     box-shadow: var(--shadow-lg, 0 8px 24px rgb(0 0 0 / 0.15));
+  }
+  .sub {
+    z-index: 201;
+    min-width: 160px;
   }
   .menu:focus {
     outline: none;
@@ -91,11 +159,20 @@
     text-align: left;
     cursor: pointer;
     white-space: nowrap;
+  }
+  .label {
+    flex: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  button :global(.chevron) {
+    margin-right: -4px;
+    color: var(--text-3);
+  }
   button:hover:not(:disabled),
-  button:focus-visible {
+  button:focus-visible,
+  button.active {
     background: var(--hover);
     outline: none;
   }

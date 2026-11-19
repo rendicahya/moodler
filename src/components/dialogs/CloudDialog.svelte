@@ -737,7 +737,7 @@
 
   /** The formats a cloud quiz can be exported to, as menu items. */
   const exportMenu = (q) =>
-    FORMATS.filter((f) => f.export).map((f) => ({ label: `Export as ${f.id === 'json' ? 'project (JSON)' : f.label}`, icon: FileDown, run: () => exportQuiz(q, f) }));
+    FORMATS.filter((f) => f.export).map((f) => ({ label: f.id === 'json' ? 'Project (JSON)' : f.label, icon: FileDown, run: () => exportQuiz(q, f) }));
 
   function quizMenu(q, fromSearch) {
     const inFolder = (fn) => () => {
@@ -746,7 +746,7 @@
     };
     return [
       { label: 'Open', icon: CloudDownload, run: () => download(q) },
-      ...exportMenu(q),
+      { label: 'Export as', icon: FileDown, items: exportMenu(q) },
       { label: historyOf === q.id && !fromSearch ? 'Hide version history' : 'Version history', icon: History, run: inFolder(() => (historyOf = historyOf === q.id && !fromSearch ? null : q.id)) },
       fromSearch && { label: 'Show in its folder', icon: Folder, run: () => open(folderOf(q)) },
       { label: 'Rename…', icon: Pencil, run: inFolder(() => startQuizNaming(q)) },
