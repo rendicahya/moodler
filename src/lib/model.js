@@ -200,7 +200,17 @@ export function normalizeQuiz(raw) {
   const quiz = { ...createQuiz(), ...raw };
   quiz.defaults = { ...createQuiz().defaults, ...(raw.defaults || {}) };
   quiz.questions = (raw.questions || []).filter((q) => TYPE_MAP[q.type]).map((q) => normalizeQuestion(q, quiz.defaults));
+  if (quiz.noReview) clearReviewMarks(quiz);
+  else delete quiz.noReview;
   return quiz;
+}
+
+/** Removes the review marks (to review / reviewed) of all questions of a quiz, for a quiz that doesn't need review. */
+export function clearReviewMarks(quiz) {
+  for (const q of quiz.questions) {
+    delete q.unreviewed;
+    delete q.reviewed;
+  }
 }
 
 export function stripHtml(html) {

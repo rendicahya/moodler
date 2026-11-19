@@ -180,7 +180,7 @@
             {/each}
             {#if r.questions.length > 50}<li class="hint">…and {r.questions.length - 50} more</li>{/if}
           </ol>
-          {#if effective !== 'json'}
+          {#if effective !== 'json' && !(mode !== 'new' && app.quiz.noReview)}
             <Switch
               bind:checked={review}
               onchange={saveReview}

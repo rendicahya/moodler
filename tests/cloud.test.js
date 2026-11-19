@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { normalizeQuiz } from '../src/lib/model.js';
 import { splitChunks, normalizeFolders, folderPath, childFolders, folderTreeIds, folderOptions, cloudView, daysLeft, quizVersions, searchText, matchQuiz, foldText, reviewCounts, TRASH_DAYS } from '../src/lib/cloud.js';
 import { fitSize } from '../src/lib/images.js';
 
@@ -148,6 +149,13 @@ test('default chunks fit in a Firestore document, even with the widest character
   const chunks = splitChunks(text);
   assert.equal(chunks.join(''), text);
   assert.ok(chunks.every((c) => Buffer.byteLength(c) < MIB - 1024));
+});
+
+test('a quiz that does not need review drops its review marks', () => {
+  const quiz = normalizeQuiz({ noReview: true, questions: [{ type: 'truefalse', unreviewed: true }, { type: 'truefalse', reviewed: true }] });
+  assert.equal(quiz.questions.some((q) => q.unreviewed || q.reviewed), false);
+  assert.equal(reviewCounts(quiz), null);
+  assert.equal('noReview' in normalizeQuiz({ noReview: false, questions: [] }), false);
 });
 
 test('review counts of a quiz', () => {

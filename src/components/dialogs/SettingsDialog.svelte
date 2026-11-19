@@ -3,7 +3,7 @@
   import Switch from '../ui/Switch.svelte';
   import FieldLabel from '../ui/FieldLabel.svelte';
   import RichText from '../RichText.svelte';
-  import { app, closeModal, ask } from '../../lib/store.svelte.js';
+  import { app, closeModal, ask, setQuizReview } from '../../lib/store.svelte.js';
   import { HELP } from '../../lib/help.js';
   import { PENALTIES } from '../../lib/model.js';
 
@@ -51,6 +51,14 @@
     <FieldLabel text="Category description" optional info="Description stored with the category in the question bank. Only included in Moodle XML exports." />
     <RichText bind:value={app.quiz.info} compact minHeight={50} placeholder="Moodle XML only" label="Category description" />
   </div>
+
+  <Switch
+    bind:checked={() => !app.quiz.noReview, setQuizReview}
+    label="Questions need review"
+    description={app.quiz.noReview
+      ? 'Off: no question is flagged for review, including ones you import, generate or copy here. Turning it on marks every question as to review.'
+      : 'Imported and AI-generated questions are flagged until you mark them reviewed (Alt+R). Turning it off clears all review marks.'}
+  />
 
   <div class="divider"></div>
   <h3>Defaults for new questions</h3>

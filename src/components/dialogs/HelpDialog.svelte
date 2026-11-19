@@ -59,7 +59,7 @@
       <li>Right-click a question in the list, or the editor outside a text field, for its actions.</li>
       <li>Select text in the live preview to make it bold, italic, underlined, struck through or code, or to clear its formatting.</li>
       <li>The <strong>code block</strong> button in a text editor's toolbar inserts code with syntax highlighting for the chosen language. The colours are saved in the question, so students see them in Moodle too. Double-click a code block to edit it.</li>
-      <li>In the question list, questions marked reviewed show a green check.</li>
+      <li>In the question list, questions marked reviewed show a green check. For a quiz that doesn't need review, turn off <em>Questions need review</em> in <strong>Settings</strong>.</li>
       <li>Drag the <span class="grip">⠿</span> handle to reorder questions, answers and items.</li>
       <li>Drag a question onto another quiz's tab to move it there (hold Ctrl to copy), or hold it over the tab until it opens to drop it at a chosen place.</li>
       <li>Tick questions in the list (hover a number, or Ctrl+click) to export, edit, move, duplicate or delete several at once.</li>

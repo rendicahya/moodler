@@ -127,19 +127,21 @@
     />
   </div>
 
-  <div class="field">
-    <FieldLabel text="Review" optional info="Questions to review are flagged in the list until you have checked them. Only used in Moodler, never exported." />
-    <Segmented
-      size="sm"
-      label="Review"
-      bind:value={review}
-      options={[
-        { value: 'keep', label: 'Unchanged' },
-        { value: 'done', label: 'Reviewed' },
-        { value: 'todo', label: 'To review' },
-      ]}
-    />
-  </div>
+  {#if !app.quiz.noReview}
+    <div class="field">
+      <FieldLabel text="Review" optional info="Questions to review are flagged in the list until you have checked them. Only used in Moodler, never exported." />
+      <Segmented
+        size="sm"
+        label="Review"
+        bind:value={review}
+        options={[
+          { value: 'keep', label: 'Unchanged' },
+          { value: 'done', label: 'Reviewed' },
+          { value: 'todo', label: 'To review' },
+        ]}
+      />
+    </div>
+  {/if}
 
   {#snippet footer()}
     <button class="btn" onclick={closeModal}>Cancel</button>

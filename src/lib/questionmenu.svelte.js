@@ -40,9 +40,10 @@ export function questionMenu(id, { inEditor = false } = {}) {
     inEditor && '-',
     { label: 'Add a question after this…', icon: Plus, run: () => (select(id), openModal('add')) },
     { label: 'Duplicate', icon: Copy, run: () => duplicateQuestion(id) },
-    q.unreviewed
-      ? { label: 'Mark as reviewed', icon: CircleCheck, run: () => (inEditor ? markReviewed(id) : setReviewed(true, [id])) }
-      : { label: 'Mark as not reviewed', icon: CircleDot, run: () => setReviewed(false, [id]) },
+    !app.quiz.noReview &&
+      (q.unreviewed
+        ? { label: 'Mark as reviewed', icon: CircleCheck, run: () => (inEditor ? markReviewed(id) : setReviewed(true, [id])) }
+        : { label: 'Mark as not reviewed', icon: CircleDot, run: () => setReviewed(false, [id]) }),
     { label: q.hidden ? 'Show in the question bank' : 'Hide in the question bank', icon: q.hidden ? Eye : EyeOff, run: () => (q.hidden = !q.hidden) },
     { label: 'Improve with AI…', icon: WandSparkles, run: () => openModal('ai-question', { id }) },
     inEditor && { label: 'Preview the whole quiz', icon: Presentation, run: () => openModal('quiz-preview') },
@@ -65,9 +66,10 @@ export function checkedMenu() {
     { label: `Export ${n} questions…`, icon: Upload, run: () => openModal('export') },
     { label: 'Edit mark, tags, category…', icon: SquarePen, run: () => openModal('bulk') },
     { label: 'Copy or move to another quiz…', icon: FolderInput, run: () => openModal('copy-to') },
-    toReview
-      ? { label: 'Mark as reviewed', icon: CircleCheck, run: () => setReviewed(true, [...app.checked]) }
-      : { label: 'Mark as not reviewed', icon: CircleDot, run: () => setReviewed(false, [...app.checked]) },
+    !app.quiz.noReview &&
+      (toReview
+        ? { label: 'Mark as reviewed', icon: CircleCheck, run: () => setReviewed(true, [...app.checked]) }
+        : { label: 'Mark as not reviewed', icon: CircleDot, run: () => setReviewed(false, [...app.checked]) }),
     { label: 'Duplicate', icon: Copy, run: duplicateChecked },
     '-',
     { label: 'Move to the top', icon: ArrowUpToLine, run: () => moveChecked('top') },

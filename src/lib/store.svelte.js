@@ -1,4 +1,4 @@
-import { createQuiz, normalizeQuiz, normalizeQuestion, createQuestion, cloneQuestion, moveItem, questionTitle, uid } from './model.js';
+import { createQuiz, normalizeQuiz, normalizeQuestion, createQuestion, cloneQuestion, moveItem, questionTitle, uid, clearReviewMarks } from './model.js';
 import { FORMAT_MAP } from './formats/index.js';
 import { downloadText, slugify } from './download.js';
 import { dbGet, dbSet, dbDelete } from './db.js';
@@ -494,7 +494,7 @@ export function applyAiQuestions(id, questions, replace = false) {
   } else {
     for (const q of fresh) {
       q.category ||= old.category;
-      q.unreviewed = true;
+      if (!app.quiz.noReview) q.unreviewed = true;
     }
     app.quiz.questions.splice(i + 1, 0, ...fresh);
   }
@@ -533,7 +533,7 @@ export function markReviewed(id) {
 /** Puts a reviewed question back on the list of questions to review. */
 export function markUnreviewed(id) {
   const q = app.quiz.questions.find((x) => x.id === id);
-  if (!q || q.unreviewed) return;
+  if (!q || q.unreviewed || app.quiz.noReview) return;
   q.unreviewed = true;
   delete q.reviewed;
   notify('Marked as not reviewed.', 'info', 2500);
@@ -541,6 +541,7 @@ export function markUnreviewed(id) {
 
 /** Sets the review status of several questions (all of them when `ids` is omitted). */
 export function setReviewed(on, ids = null) {
+  if (!on && app.quiz.noReview) return;
   for (const q of app.quiz.questions) {
     if (ids && !ids.includes(q.id)) continue;
     if (on && q.unreviewed) {
@@ -553,7 +554,19 @@ export function setReviewed(on, ids = null) {
   }
 }
 
-// ---------------------------------------------------------------- bulk operations on ticked questions
+/**
+ * Sets whether the open quiz's questions need review. Turning it off clears every review mark and stops new questions
+ * (imported, generated, copied) from being marked; turning it on marks all questions as to review.
+ */
+export function setQuizReview(on) {
+  if (on) {
+    delete app.quiz.noReview;
+    setReviewed(false);
+  } else {
+    app.quiz.noReview = true;
+    clearReviewMarks(app.quiz);
+  }
+}
 
 function pruneChecked() {
   const ids = new Set(app.quiz.questions.map((q) => q.id));
@@ -730,7 +743,7 @@ export async function quizForUpload(id) {
 export function quizFromXmlFile(text, fileName = '') {
   const result = FORMAT_MAP.xml.import(text);
   if (!result.questions.length) throw new Error(`“${fileName || 'The file'}” has no questions.`);
-  const quiz = normalizeQuiz({ ...createQuiz(), ...result.quiz, questions: [] });
+  const quiz = normalizeQuiz({ ...createQuiz(), ...result.quiz, questions: [], noReview: true });
   quiz.questions = result.questions.map((q) => normalizeQuestion(q, quiz.defaults));
   if (!result.quiz?.name && fileName) quiz.name = fileName.replace(/\.[^.]+$/, '');
   return { id: uid(), quiz, text: JSON.stringify(quiz), name: quiz.name || 'Untitled quiz', count: quiz.questions.length };
@@ -942,6 +955,7 @@ export async function copyQuestionsTo(targetId, ids, move = false) {
     quiz = await loadQuiz(targetId);
     if (!quiz) return notify('Could not open that quiz: its saved data is missing or damaged.', 'error');
     quiz.questions.push(...copies);
+    if (quiz.noReview) clearReviewMarks(quiz);
     const entry = library.quizzes.find((q) => q.id === targetId);
     if (entry) Object.assign(entry, entryFor(targetId, quiz));
     save(JSON.stringify(quiz), targetId);
@@ -1006,7 +1020,10 @@ export async function transferQuestions(fromId, toId, ids, { at = Infinity, copy
   // New ids, so they can't clash with copies of the same questions already in the other quiz.
   const added = picked.map(cloneQuestion);
   const addedIds = added.map((q) => q.id);
-  const target = await editQuiz(toId, (quiz) => quiz.questions.splice(Math.min(at, quiz.questions.length), 0, ...added));
+  const target = await editQuiz(toId, (quiz) => {
+    quiz.questions.splice(Math.min(at, quiz.questions.length), 0, ...added);
+    if (quiz.noReview) clearReviewMarks(quiz);
+  });
   if (!target) return notify('Could not open that quiz: its saved data is missing or damaged.', 'error');
   if (!copy) await editQuiz(fromId, (quiz) => (quiz.questions = quiz.questions.filter((q) => !ids.includes(q.id))));
   if (toId === library.activeId) {
@@ -1034,6 +1051,7 @@ export function addFromBank(questions) {
   const copies = questions.map(cloneQuestion);
   const at = selectedIndex() + 1 || app.quiz.questions.length;
   app.quiz.questions.splice(at, 0, ...copies);
+  if (app.quiz.noReview) clearReviewMarks(app.quiz);
   app.search = '';
   app.tab = 'edit';
   app.selectedId = copies[0].id;
@@ -1060,8 +1078,11 @@ function importQuizzes(quizzes) {
  */
 export function applyImport(result, mode = 'append', fileName = '', review = false) {
   if (result.quizzes) return importQuizzes(result.quizzes);
-  const fresh = mode !== 'append' && normalizeQuiz({ ...createQuiz(), ...result.quiz, questions: [] });
-  const questions = result.questions.map((q) => normalizeQuestion(review ? { ...q, unreviewed: true } : q, (fresh || app.quiz).defaults));
+  // Replacing the contents keeps whether the quiz needs review.
+  const fresh = mode !== 'append' && normalizeQuiz({ ...createQuiz(), ...result.quiz, questions: [], noReview: mode === 'replace' && app.quiz.noReview });
+  const target = fresh || app.quiz;
+  const questions = result.questions.map((q) => normalizeQuestion(review && !target.noReview ? { ...q, unreviewed: true } : q, target.defaults));
+  if (target.noReview) clearReviewMarks({ questions });
   if (mode === 'new') {
     fresh.questions = questions;
     if (fileName && !result.quiz?.name) fresh.name = fileName.replace(/\.[^.]+$/, '');

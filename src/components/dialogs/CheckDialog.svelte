@@ -18,7 +18,7 @@
     setImageAlt,
     placeName,
   } from '../../lib/quality.js';
-  import { app, library, closeModal, notify, select, switchQuiz, nextUnreviewed, setReviewed, deleteQuestion, loadAllQuizzes } from '../../lib/store.svelte.js';
+  import { app, library, closeModal, notify, select, switchQuiz, nextUnreviewed, setReviewed, setQuizReview, deleteQuestion, loadAllQuizzes } from '../../lib/store.svelte.js';
 
   const questions = $derived(app.quiz.questions);
   const numberOf = (id) => questions.findIndex((q) => q.id === id) + 1;
@@ -128,7 +128,12 @@
 >
   <section>
     <h3>Review</h3>
-    {#if !total}
+    {#if app.quiz.noReview}
+      <div class="row">
+        <p class="status ok"><CircleCheck size={16} /> <span>This quiz doesn’t need review.</span></p>
+        <button class="btn btn-ghost btn-sm" title="Mark every question as to review, and flag new ones you import or generate" onclick={() => setQuizReview(true)}>Review this quiz</button>
+      </div>
+    {:else if !total}
       <p class="muted">This quiz has no questions yet.</p>
     {:else}
       <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax={total} aria-valuenow={reviewed} aria-label="Reviewed questions">
@@ -143,6 +148,7 @@
           <p class="status ok"><CircleCheck size={16} /> <span>All {total} question{total === 1 ? ' is' : 's are'} reviewed.</span></p>
           <button class="btn btn-ghost btn-sm" title="Mark every question as still to review, to go through the quiz again" onclick={() => setReviewed(false)}>Review again</button>
         {/if}
+        <button class="btn btn-ghost btn-sm" title="Clear all review marks and stop flagging new questions in this quiz (also in Quiz settings)" onclick={() => setQuizReview(false)}>Doesn’t need review</button>
       </div>
       <p class="hint">
         Imported questions are marked as to review. Read each one and its answers, then click <strong>Mark reviewed</strong> above the question (Alt+R), which opens the next one.

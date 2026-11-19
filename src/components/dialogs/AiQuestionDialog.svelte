@@ -71,7 +71,7 @@
     if (!n) return;
     closeModal();
     if (replace) notify(n === 1 ? 'Question replaced. Undo with Ctrl+Z.' : `Question replaced by ${n} questions. Undo with Ctrl+Z.`, 'success');
-    else notify(`Added ${n} question${n === 1 ? '' : 's'} after it, marked as to review.`, 'success');
+    else notify(`Added ${n} question${n === 1 ? '' : 's'} after it${app.quiz.noReview ? '' : ', marked as to review'}.`, 'success');
   }
 
   const typeLabel = (type) => TYPE_MAP[type]?.label ?? type;

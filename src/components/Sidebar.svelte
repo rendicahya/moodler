@@ -109,8 +109,8 @@
       })
   );
   const issueCount = $derived(rows.filter((r) => r.issues.length).length);
-  const reviewCount = $derived(app.quiz.questions.filter((q) => q.unreviewed).length);
-  const reviewTracked = $derived(reviewCount > 0 || app.quiz.questions.some((q) => q.reviewed));
+  const reviewCount = $derived(app.quiz.noReview ? 0 : app.quiz.questions.filter((q) => q.unreviewed).length);
+  const reviewTracked = $derived(!app.quiz.noReview && (reviewCount > 0 || app.quiz.questions.some((q) => q.reviewed)));
   const checkedToReview = $derived(app.quiz.questions.some((q) => q.unreviewed && app.checked.includes(q.id)));
   const typeCounts = $derived(
     QUESTION_TYPES.map((t) => ({ ...t, count: app.quiz.questions.filter((q) => q.type === t.type).length })).filter((t) => t.count)
@@ -260,7 +260,9 @@
         <button class="btn btn-sm" title="Export the selected questions" onclick={() => openModal('export')}><Upload size={14} /> Export</button>
         <button class="btn btn-sm" title="Change mark, penalty, tags, category or visibility" onclick={() => openModal('bulk')}><SquarePen size={14} /> Edit</button>
         <button class="btn btn-ghost btn-icon btn-sm" title="Copy or move to another quiz" aria-label="Copy or move to another quiz" onclick={() => openModal('copy-to')}><FolderInput size={15} /></button>
-        {#if checkedToReview}
+        {#if app.quiz.noReview}
+          <!-- This quiz doesn't need review. -->
+        {:else if checkedToReview}
           <button class="btn btn-ghost btn-icon btn-sm" title="Mark as reviewed" aria-label="Mark selected as reviewed" onclick={() => setReviewed(true, [...app.checked])}><CircleCheck size={15} /></button>
         {:else}
           <button class="btn btn-ghost btn-icon btn-sm" title="Mark as not reviewed" aria-label="Mark selected as not reviewed" onclick={() => setReviewed(false, [...app.checked])}><CircleDot size={15} /></button>

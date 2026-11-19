@@ -217,6 +217,9 @@
     } else if (e.altKey && !mod && key === 'c' && app.quiz.questions.length) {
       e.preventDefault();
       openModal('check');
+    } else if (e.altKey && !mod && key === 'r' && q && app.quiz.noReview) {
+      e.preventDefault();
+      notify('This quiz doesn’t need review. Turn on “Questions need review” in Quiz settings (Ctrl+,) to review its questions.', 'info', 5000);
     } else if (e.altKey && e.shiftKey && !mod && key === 'r' && q) {
       e.preventDefault();
       markUnreviewed(q.id);

@@ -129,7 +129,9 @@
       {/if}
     </div>
     <div class="acts">
-      {#if q.unreviewed}
+      {#if app.quiz.noReview}
+        <!-- This quiz doesn't need review. -->
+      {:else if q.unreviewed}
         <button class="btn btn-sm review" title="Imported and not checked yet. Mark it as reviewed and open the next question to review (Alt+R)" onclick={() => markReviewed(q.id)}>
           <CircleCheck size={15} /><span class="review-text">Mark reviewed</span>
         </button>
