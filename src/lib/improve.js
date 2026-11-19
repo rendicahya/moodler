@@ -2,6 +2,7 @@
 // (fix it, better distractors, translate, write variations, …), and reading the reply back in.
 
 import { exportMoodleXml, importMoodleXml } from './formats/moodlexml.js';
+import { styleRules } from './prompt.js';
 
 const DISTRACTOR_TYPES = ['multichoice', 'cloze', 'gapselect', 'ddwtos', 'matching'];
 
@@ -126,6 +127,7 @@ export function buildImprovePrompt(o) {
     'Questions must be factually correct and unambiguous, with a clearly correct answer.',
   ];
   if (task.id !== 'translate') rules.push('Write in the same language as the original question.');
+  rules.push(...styleRules(task.id === 'translate' ? o.language?.trim() || 'English' : ''));
   if (Object.keys(images).length) {
     rules.push(
       task.adds

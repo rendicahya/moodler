@@ -38,6 +38,9 @@ test('the prompt asks for the chosen types and counts only', () => {
   assert.match(p, /2 × True \/ False/);
   assert.doesNotMatch(p, /type="matching"/);
   assert.match(p, /in Indonesian/);
+  assert.match(p, /not in Indonesian .* in italics with <em>/);
+  assert.match(p, /Put programming code inside <code>/);
+  assert.match(buildPrompt({ topic: 'x', counts: { truefalse: 1 } }), /not in the language of the question/);
   assert.match(p, /\$course\$\/top\/Biology &amp; Plants/);
   assert.match(p, /Source material:\n"""\nPlants make sugar from light\.\n"""$/);
   assert.equal(PROMPT_TYPES.every((t) => XML_EXAMPLES[t.type]), true);

@@ -189,7 +189,8 @@ export function buildPrompt(o) {
   if (o.language?.trim()) req.push(`Write every question, answer and feedback in ${o.language.trim()}.`);
   req.push(
     'Questions must be factually correct, unambiguous and independent of each other. Every question must have a clearly correct answer.',
-    'Cover different parts of the topic rather than asking the same thing twice.'
+    'Cover different parts of the topic rather than asking the same thing twice.',
+    ...styleRules(o.language?.trim())
   );
   if (o.counts.multichoice > 0 || o.counts.multiresponse > 0) {
     req.push(
@@ -217,7 +218,7 @@ export function buildPrompt(o) {
     'Output format: Moodle XML only, so it can be imported directly.',
     '- Reply with one complete XML document in a single code block, starting with <?xml version="1.0" encoding="UTF-8"?> and a <quiz> root element. No text before or after it.',
     '- Give every question a short, descriptive <name>.',
-    '- Put question text in <![CDATA[ ]]> as simple HTML (<p>, <strong>, <em>, <ul>, <li>, <code>, <sub>, <sup>). Escape any other &, < and > as &amp;, &lt; and &gt;.',
+    '- Put question text in <![CDATA[ ]]> as simple HTML (<p>, <strong>, <em>, <ul>, <li>, <code>, <pre>, <sub>, <sup>). Escape any other &, < and > as &amp;, &lt; and &gt;.',
     '- Fractions are percentages: fraction="100" is fully correct, fraction="0" is wrong.',
     '- Do not include images, links or <file> elements.'
   );
@@ -235,6 +236,14 @@ export function buildPrompt(o) {
   if (material) L.push('', 'Source material:', '"""', material, '"""');
   for (const f of files) L.push('', `Source material from the file "${f.name}":`, '"""', f.text.trim(), '"""');
   return L.join('\n');
+}
+
+/** Formatting rules for the text of the questions, shared with the "improve with AI" prompt. */
+export function styleRules(language) {
+  return [
+    `Write every word or phrase that is not in ${language ? language : 'the language of the question'} (foreign terms, scientific names, loanwords) in italics with <em>, unless it is code.`,
+    'Put programming code inside <code>: variable, function and class names, keywords, operators, values and any other syntax, e.g. <code>count</code> or <code>for i in range(n):</code>. Put code of several lines in <pre><code>…</code></pre>, keeping its line breaks and indentation.',
+  ];
 }
 
 const escXml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
