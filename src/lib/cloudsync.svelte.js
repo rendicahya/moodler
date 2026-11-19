@@ -26,11 +26,20 @@ export const autoBlocked = (entry) => !!entry && sync.blocked[entry.id] === entr
 
 const when = (t) => new Date(t).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
-/** Uploads the open quiz over its cloud copy. Opens the cloud dialog when that needs a choice, such as signing in. */
-export async function uploadChanges() {
-  if (sync.busy) return;
-  const entry = library.quizzes.find((q) => q.id === library.activeId);
-  if (!entry?.cloudVersion) return openModal('cloud');
+/**
+ * Uploads a quiz (the open one by default) over its cloud copy, resolving to true once it is uploaded. Opens the cloud
+ * dialog when that needs a choice, such as signing in.
+ */
+export async function uploadChanges(quizId) {
+  const target = typeof quizId === 'string' ? quizId : library.activeId;
+  if (sync.busy) {
+    // Asked for a particular quiz (to close it): wait for the running upload, which may already include it.
+    if (target !== quizId) return false;
+    while (sync.busy) await new Promise((r) => setTimeout(r, 200));
+  }
+  const entry = library.quizzes.find((q) => q.id === target);
+  if (!entry?.cloudVersion) return openModal('cloud'), false;
+  if (target === quizId && !editedSinceUpload(entry)) return true;
   Object.assign(sync, { busy: true, background: false, done: 0, total: 0 });
   let cloud;
   try {
@@ -62,6 +71,7 @@ export async function uploadChanges() {
     delete sync.blocked[id];
     sync.error = '';
     notify(`Saved the changes to “${name}” in the cloud.`, 'success', 3000);
+    return true;
   } catch (e) {
     notify(cloud ? cloud.cloudErrorMessage(e) : 'Could not load the cloud features. Check your connection and try again.', 'error', 8000);
   } finally {

@@ -405,14 +405,18 @@ export function closeModal() {
   app.modalProps = {};
 }
 
-/** Shows a confirmation dialog; resolves to true when confirmed. */
-export function ask({ title, message, confirmLabel = 'Confirm', danger = false }) {
+/**
+ * Shows a confirmation dialog; resolves to true when confirmed. `primary` adds a main button after the confirm one,
+ * which resolves to 'primary'.
+ */
+export function ask({ title, message, confirmLabel = 'Confirm', danger = false, primary = null }) {
   return new Promise((resolve) => {
     app.confirm = {
       title,
       message,
       confirmLabel,
       danger,
+      primary,
       resolve: (v) => {
         app.confirm = null;
         resolve(v);
@@ -905,13 +909,22 @@ async function closeTabNow(id) {
   const inCloud = !!entry.cloudVersion && entry.updated === entry.cloudUpdated;
   if (count && !inCloud) {
     const name = id === library.activeId ? app.quiz.name || 'Untitled quiz' : entry.name;
+    // A quiz from the cloud with changes can have them uploaded before it closes.
+    const fromCloud = !!entry.cloudVersion;
     const ok = await ask({
       title: `Close “${name}”?`,
-      message: `Its ${plural(count)} will be removed from this browser. Export or back up the quiz first if you may need it again.`,
-      confirmLabel: 'Close and remove',
+      message: fromCloud
+        ? 'It has changes that aren’t in the cloud yet. Upload them first, or close it and lose them.'
+        : `Its ${plural(count)} will be removed from this browser. Export or back up the quiz first if you may need it again.`,
+      confirmLabel: fromCloud ? 'Close without uploading' : 'Close and remove',
       danger: true,
+      primary: fromCloud ? 'Upload and close' : null,
     });
     if (!ok) return;
+    if (ok === 'primary') {
+      const { uploadChanges } = await import('./cloudsync.svelte.js');
+      if (!(await uploadChanges(id))) return;
+    }
   }
   const saved = count && (await loadQuiz(id));
   let fresh = null;
