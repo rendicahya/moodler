@@ -213,6 +213,24 @@ export function clearReviewMarks(quiz) {
   }
 }
 
+/**
+ * Sets whether a quiz's questions need review. Off clears every review mark and stops new questions being marked;
+ * on marks every question as to review.
+ */
+export function setNeedsReview(quiz, on) {
+  if (on) {
+    delete quiz.noReview;
+    for (const q of quiz.questions) {
+      q.unreviewed = true;
+      delete q.reviewed;
+    }
+  } else {
+    quiz.noReview = true;
+    clearReviewMarks(quiz);
+  }
+  return quiz;
+}
+
 export function stripHtml(html) {
   if (!html) return '';
   const text = String(html)

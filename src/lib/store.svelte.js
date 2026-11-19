@@ -1,4 +1,4 @@
-import { createQuiz, normalizeQuiz, normalizeQuestion, createQuestion, cloneQuestion, moveItem, questionTitle, uid, clearReviewMarks } from './model.js';
+import { createQuiz, normalizeQuiz, normalizeQuestion, createQuestion, cloneQuestion, moveItem, questionTitle, uid, clearReviewMarks, setNeedsReview } from './model.js';
 import { FORMAT_MAP } from './formats/index.js';
 import { downloadText, slugify } from './download.js';
 import { dbGet, dbSet, dbDelete } from './db.js';
@@ -563,13 +563,24 @@ export function setReviewed(on, ids = null) {
  * (imported, generated, copied) from being marked; turning it on marks all questions as to review.
  */
 export function setQuizReview(on) {
-  if (on) {
-    delete app.quiz.noReview;
-    setReviewed(false);
-  } else {
-    app.quiz.noReview = true;
-    clearReviewMarks(app.quiz);
+  setNeedsReview(app.quiz, on);
+}
+
+/**
+ * Sets whether any quiz in this browser needs review (see setQuizReview), and resolves to the quiz ready for uploading
+ * as quizForUpload does, or null when its saved data can't be read.
+ */
+export async function setStoredQuizReview(id, on) {
+  if (id === library.activeId) {
+    setQuizReview(on);
+    return quizForUpload(id);
   }
+  const entry = library.quizzes.find((q) => q.id === id);
+  const quiz = entry && (await loadQuiz(id));
+  if (!quiz) return null;
+  const text = JSON.stringify(setNeedsReview(quiz, on));
+  save(text, id);
+  return { id, text, name: quiz.name || 'Untitled quiz', count: quiz.questions.length, entry, updated: entry.updated };
 }
 
 function pruneChecked() {

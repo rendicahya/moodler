@@ -3,10 +3,10 @@
   import { SvelteSet } from 'svelte/reactivity';
   import { Cloud, CloudUpload, CloudDownload, LogIn, LogOut, Trash2, Folder, FolderPlus, FilePlus, Pencil, ChevronRight, Check, X, History, Undo2, FileText, FileDown, Search, CircleCheck, CircleDot } from '@lucide/svelte';
   import { FORMATS } from '../../lib/formats/index.js';
-  import { normalizeQuiz } from '../../lib/model.js';
+  import { normalizeQuiz, setNeedsReview } from '../../lib/model.js';
   import { downloadText, slugify } from '../../lib/download.js';
   import Modal from '../ui/Modal.svelte';
-  import { app, library, closeModal, notify, ask, prepareCloudUpload, markCloudSynced, applyCloudQuiz, quizFromXmlFile, renameCloudCopy, blankQuizForCloud } from '../../lib/store.svelte.js';
+  import { app, library, closeModal, notify, ask, prepareCloudUpload, markCloudSynced, applyCloudQuiz, quizFromXmlFile, renameCloudCopy, blankQuizForCloud, setStoredQuizReview } from '../../lib/store.svelte.js';
   import { uploadChanges } from '../../lib/cloudsync.svelte.js';
   import ContextMenu from '../ui/ContextMenu.svelte';
   import {
@@ -36,6 +36,7 @@
     folderTreeIds,
     folderOptions,
     cloudErrorMessage,
+    needsReview,
     KEEP_VERSIONS,
     TRASH_DAYS,
   } from '../../lib/cloud.js';
@@ -397,6 +398,35 @@
   }
 
   /**
+   * Sets whether a cloud quiz's questions need review, and uploads it as a new version. A copy in this browser that
+   * matches the cloud copy, or has newer edits, is changed too and uploaded with its edits.
+   */
+  function setReview(q, on) {
+    return run('Saving', async () => {
+      let prepared;
+      if (statusOf(q) === 'same' || statusOf(q) === 'edited') {
+        prepared = await setStoredQuizReview(q.id, on);
+        if (!prepared) throw new Error('This browser’s copy of the quiz could not be read.');
+      } else {
+        const text = await downloadCloudQuiz(user.uid, q, progress);
+        let quiz;
+        try {
+          quiz = setNeedsReview(JSON.parse(text), on);
+        } catch {
+          throw new Error('This cloud copy could not be read.');
+        }
+        prepared = { text: JSON.stringify(quiz), count: quiz.questions.length };
+      }
+      const search = searchText(JSON.parse(prepared.text));
+      const meta = await uploadCloudQuiz(user.uid, q.id, prepared.text, { name: q.name, count: prepared.count, folder: null, search }, progress);
+      if (prepared.updated != null) markCloudSynced(q.id, meta.version, prepared.updated);
+      if (texts) texts = new Map(texts).set(q.id, search);
+      await refresh();
+      notify(on ? `“${q.name}” now needs review: all its questions are marked as to review.` : `“${q.name}” no longer needs review.`, 'success');
+    });
+  }
+
+  /**
    * Opens an earlier upload of a quiz in this browser. It then counts as edited since the upload, so that uploading
    * it makes it the newest version again.
    */
@@ -750,6 +780,9 @@
       { label: historyOf === q.id && !fromSearch ? 'Hide version history' : 'Version history', icon: History, run: inFolder(() => (historyOf = historyOf === q.id && !fromSearch ? null : q.id)) },
       fromSearch && { label: 'Show in its folder', icon: Folder, run: () => open(folderOf(q)) },
       { label: 'Rename…', icon: Pencil, run: inFolder(() => startQuizNaming(q)) },
+      needsReview(q)
+        ? { label: 'Mark as not needing review', icon: CircleCheck, run: () => setReview(q, false) }
+        : { label: 'Mark as needing review', icon: CircleDot, run: () => setReview(q, true) },
       '-',
       { label: 'Move to the trash', icon: Trash2, danger: true, run: () => remove('quiz', q.id) },
     ].filter(Boolean);

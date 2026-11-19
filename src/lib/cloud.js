@@ -372,13 +372,18 @@ export function reviewCounts(quiz) {
   return { done: qs.length - todo, todo };
 }
 
+/** A quiz's review counts, or `false` when the quiz doesn't need review. */
 function reviewOf(text) {
   try {
-    return reviewCounts(JSON.parse(text));
+    const quiz = JSON.parse(text);
+    return quiz?.noReview ? false : reviewCounts(quiz);
   } catch {
     return null;
   }
 }
+
+/** Whether an uploaded quiz needs review: true, false, or null when that isn't known (uploaded before it was recorded). */
+export const needsReview = (meta) => (meta.noReview ? false : meta.review ? true : null);
 
 /**
  * Uploads a quiz as its newest version. The earlier upload is kept in its history and keeps its folder; one in the
@@ -411,6 +416,7 @@ export async function uploadCloudQuiz(userId, id, text, info, onProgress = () =>
     const meta = { name: info.name, count: info.count, size: text.length, uploaded: now, version, chunks: chunks.length, folder, history: older.slice(0, KEEP_VERSIONS - 1) };
     const review = reviewOf(text);
     if (review) meta.review = review;
+    else if (review === false) meta.noReview = true;
     if (info.auto) Object.assign(meta, { auto: true, since: replace ? (previous.since ?? previous.uploaded) : now });
     await store.setDoc(ref, meta);
     onProgress(chunks.length, chunks.length);
