@@ -1,7 +1,10 @@
 <script>
   import { onMount, tick } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import { Cloud, CloudUpload, CloudDownload, LogIn, LogOut, Trash2, Folder, FolderPlus, FilePlus, Pencil, ChevronRight, Check, X, History, Undo2, FileText, Search, CircleCheck, CircleDot } from '@lucide/svelte';
+  import { Cloud, CloudUpload, CloudDownload, LogIn, LogOut, Trash2, Folder, FolderPlus, FilePlus, Pencil, ChevronRight, Check, X, History, Undo2, FileText, FileDown, Search, CircleCheck, CircleDot } from '@lucide/svelte';
+  import { FORMATS } from '../../lib/formats/index.js';
+  import { normalizeQuiz } from '../../lib/model.js';
+  import { downloadText, slugify } from '../../lib/download.js';
   import Modal from '../ui/Modal.svelte';
   import { app, library, closeModal, notify, ask, prepareCloudUpload, markCloudSynced, applyCloudQuiz, quizFromXmlFile, renameCloudCopy, blankQuizForCloud } from '../../lib/store.svelte.js';
   import { uploadChanges } from '../../lib/cloudsync.svelte.js';
@@ -374,6 +377,25 @@
     });
   }
 
+  /** Downloads the cloud copy of a quiz as a file in the given format, without opening it here. */
+  function exportQuiz(meta, fmt) {
+    return run('Exporting', async () => {
+      const text = await downloadCloudQuiz(user.uid, meta, progress);
+      let quiz;
+      try {
+        quiz = normalizeQuiz(JSON.parse(text));
+      } catch {
+        throw new Error('This cloud copy could not be read.');
+      }
+      const out = fmt.export(quiz, quiz.questions);
+      if (!out.text.trim()) throw new Error(`None of the questions in “${meta.name}” can be written as ${fmt.label}.`);
+      const name = `${slugify(meta.name)}${fmt.id === 'gift' ? '-gift' : fmt.id === 'aiken' ? '-aiken' : ''}.${fmt.ext}`;
+      downloadText(out.text, name, fmt.mime);
+      const skipped = out.warnings?.length;
+      notify(`Downloaded ${name}.${skipped ? ` ${skipped} note${skipped === 1 ? '' : 's'}: ${out.warnings.slice(0, 3).join(' ')}${skipped > 3 ? ' …' : ''}` : ''}`, skipped ? 'warning' : 'success', skipped ? 10000 : 4000);
+    });
+  }
+
   /**
    * Opens an earlier upload of a quiz in this browser. It then counts as edited since the upload, so that uploading
    * it makes it the newest version again.
@@ -713,6 +735,10 @@
     if (document.activeElement === document.body) primary?.focus();
   }
 
+  /** The formats a cloud quiz can be exported to, as menu items. */
+  const exportMenu = (q) =>
+    FORMATS.filter((f) => f.export).map((f) => ({ label: `Export as ${f.id === 'json' ? 'project (JSON)' : f.label}`, icon: FileDown, run: () => exportQuiz(q, f) }));
+
   function quizMenu(q, fromSearch) {
     const inFolder = (fn) => () => {
       if (fromSearch) open(folderOf(q));
@@ -720,6 +746,7 @@
     };
     return [
       { label: 'Open', icon: CloudDownload, run: () => download(q) },
+      ...exportMenu(q),
       { label: historyOf === q.id && !fromSearch ? 'Hide version history' : 'Version history', icon: History, run: inFolder(() => (historyOf = historyOf === q.id && !fromSearch ? null : q.id)) },
       fromSearch && { label: 'Show in its folder', icon: Folder, run: () => open(folderOf(q)) },
       { label: 'Rename…', icon: Pencil, run: inFolder(() => startQuizNaming(q)) },
@@ -1111,6 +1138,7 @@
                   {#if statusOf(q) !== 'absent'}<span class="state {statusOf(q)}">{STATUS[statusOf(q)]}</span>{/if}
                 </div>
                 <button class="btn btn-sm" disabled={!!busy} onclick={() => download(q)}><CloudDownload size={15} /> Open</button>
+                <button class="btn btn-ghost btn-icon" title="Export: download as Moodle XML, GIFT, Aiken or project file" aria-label="Export {q.name}" aria-haspopup="menu" disabled={!!busy} onclick={(e) => openMenu(e, exportMenu(q))}><FileDown size={15} /></button>
                 <button class="btn btn-ghost btn-icon" title="Rename" aria-label="Rename {q.name}" disabled={!!busy} onclick={() => startQuizNaming(q)}><Pencil size={15} /></button>
                 <button
                   class="btn btn-ghost btn-icon"
