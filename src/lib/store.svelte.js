@@ -724,14 +724,14 @@ export async function quizForUpload(id) {
 }
 
 /**
- * A Moodle XML file as a new quiz for uploading, without adding it to this browser. Its questions are marked as to
- * review, as imported questions are. Throws when the file holds no questions.
+ * A Moodle XML file as a new quiz for uploading, without adding it to this browser. Its questions are not marked as
+ * to review: a file uploaded straight to the cloud is taken as finished. Throws when the file holds no questions.
  */
 export function quizFromXmlFile(text, fileName = '') {
   const result = FORMAT_MAP.xml.import(text);
   if (!result.questions.length) throw new Error(`“${fileName || 'The file'}” has no questions.`);
   const quiz = normalizeQuiz({ ...createQuiz(), ...result.quiz, questions: [] });
-  quiz.questions = result.questions.map((q) => normalizeQuestion({ ...q, unreviewed: true }, quiz.defaults));
+  quiz.questions = result.questions.map((q) => normalizeQuestion(q, quiz.defaults));
   if (!result.quiz?.name && fileName) quiz.name = fileName.replace(/\.[^.]+$/, '');
   return { id: uid(), quiz, text: JSON.stringify(quiz), name: quiz.name || 'Untitled quiz', count: quiz.questions.length };
 }
