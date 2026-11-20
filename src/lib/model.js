@@ -184,11 +184,18 @@ export function cloneQuestion(q) {
 
 /** Fills in any fields missing from a partially specified question (e.g. from an importer). */
 export function normalizeQuestion(partial, defaults) {
-  const q = { ...createQuestion(partial.type, defaults), ...partial };
+  const template = createQuestion(partial.type, defaults);
+  const q = { ...template, ...partial };
   if (!q.id) q.id = uid();
-  for (const key of ['answers', 'subquestions', 'choices', 'items', 'datasets']) {
-    if (Array.isArray(q[key])) q[key] = q[key].map((row) => ({ id: uid(), ...row }));
+  // Rows get the fields a new row of this type has (empty text, no grade, no feedback), so a hand-written file
+  // with answers like { text, fraction } still has every field the editors bind to.
+  for (const key of ['answers', 'subquestions', 'choices', 'items']) {
+    if (!Array.isArray(q[key])) continue;
+    const { id, ...blank } = template[key]?.at(-1) ?? {};
+    for (const k of ['text', 'answer']) if (k in blank) blank[k] = '';
+    q[key] = q[key].map((row) => ({ ...blank, id: uid(), ...row }));
   }
+  if (Array.isArray(q.datasets)) q.datasets = q.datasets.map((row) => ({ id: uid(), ...row }));
   q.hints = (q.hints || []).map((h) => (typeof h === 'string' ? { id: uid(), text: h } : { id: uid(), ...h }));
   q.tags = q.tags || [];
   // An imported question may come without generated values (an AI is told to leave them out).

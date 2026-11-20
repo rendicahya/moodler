@@ -7,30 +7,54 @@
   import ContextMenu from './components/ui/ContextMenu.svelte';
   import { contextMenu, closeMenu } from './lib/questionmenu.svelte.js';
   import ConfirmDialog from './components/ui/ConfirmDialog.svelte';
-  import AddQuestionDialog from './components/dialogs/AddQuestionDialog.svelte';
-  import ImportDialog from './components/dialogs/ImportDialog.svelte';
-  import ExportDialog from './components/dialogs/ExportDialog.svelte';
-  import SettingsDialog from './components/dialogs/SettingsDialog.svelte';
-  import HelpDialog from './components/dialogs/HelpDialog.svelte';
-  import BulkEditDialog from './components/dialogs/BulkEditDialog.svelte';
-  import QuizPreviewDialog from './components/dialogs/QuizPreviewDialog.svelte';
-  import PrintDialog from './components/dialogs/PrintDialog.svelte';
-  import MarkingDialog from './components/dialogs/MarkingDialog.svelte';
-  import FindReplaceDialog from './components/dialogs/FindReplaceDialog.svelte';
-  import CopyToQuizDialog from './components/dialogs/CopyToQuizDialog.svelte';
-  import AiPromptDialog from './components/dialogs/AiPromptDialog.svelte';
-  import CheckDialog from './components/dialogs/CheckDialog.svelte';
-  import AiQuestionDialog from './components/dialogs/AiQuestionDialog.svelte';
-  import CloudDialog from './components/dialogs/CloudDialog.svelte';
-  import QuestionBankDialog from './components/dialogs/QuestionBankDialog.svelte';
   import { editedSinceUpload, uploadChanges, startAutoUpload } from './lib/cloudsync.svelte.js';
-  import { app, library, history, switchToTab, closeTab, initPersistence, undo, redo, openModal, notify, selectedQuestion, selectedIndex, addQuestion, deleteQuestion, newQuiz, isStartScreen, cycleView, goToQuestion, markReviewed, markUnreviewed, nextUnreviewed, setSidebarWidth, saveLayout, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT } from './lib/store.svelte.js';
+  import { app, library, history, switchToTab, closeTab, initPersistence, undo, redo, openModal, closeModal, notify, selectedQuestion, selectedIndex, addQuestion, deleteQuestion, newQuiz, isStartScreen, cycleView, goToQuestion, markReviewed, markUnreviewed, nextUnreviewed, setSidebarWidth, saveLayout, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT } from './lib/store.svelte.js';
   import { QUESTION_TYPES } from './lib/model.js';
   import { looksLikeQuestions } from './lib/formats/index.js';
   import { TYPE_ICONS } from './lib/icons.js';
 
   initPersistence();
   $effect(() => startAutoUpload());
+
+  // Dialogs are loaded separately from the editor, so the app opens faster. They are all fetched once the page is
+  // idle, so opening one is still instant, and an update published while the app is open can't break opening one.
+  const DIALOGS = {
+    add: () => import('./components/dialogs/AddQuestionDialog.svelte'),
+    import: () => import('./components/dialogs/ImportDialog.svelte'),
+    export: () => import('./components/dialogs/ExportDialog.svelte'),
+    settings: () => import('./components/dialogs/SettingsDialog.svelte'),
+    help: () => import('./components/dialogs/HelpDialog.svelte'),
+    bulk: () => import('./components/dialogs/BulkEditDialog.svelte'),
+    'quiz-preview': () => import('./components/dialogs/QuizPreviewDialog.svelte'),
+    print: () => import('./components/dialogs/PrintDialog.svelte'),
+    marking: () => import('./components/dialogs/MarkingDialog.svelte'),
+    find: () => import('./components/dialogs/FindReplaceDialog.svelte'),
+    'copy-to': () => import('./components/dialogs/CopyToQuizDialog.svelte'),
+    'ai-prompt': () => import('./components/dialogs/AiPromptDialog.svelte'),
+    check: () => import('./components/dialogs/CheckDialog.svelte'),
+    'ai-question': () => import('./components/dialogs/AiQuestionDialog.svelte'),
+    cloud: () => import('./components/dialogs/CloudDialog.svelte'),
+    bank: () => import('./components/dialogs/QuestionBankDialog.svelte'),
+  };
+  let dialog = $state(null);
+  $effect(() => {
+    const name = app.modal;
+    if (!DIALOGS[name]) return void (dialog = null);
+    let live = true;
+    DIALOGS[name]().then(
+      (m) => live && (dialog = { name, component: m.default }),
+      () => {
+        if (!live) return;
+        closeModal();
+        notify('Could not load this dialog. Check your connection, or reload the page.', 'error');
+      }
+    );
+    return () => (live = false);
+  });
+  $effect(() => {
+    const idle = window.requestIdleCallback ?? ((fn) => setTimeout(fn, 1500));
+    idle(() => Object.values(DIALOGS).forEach((load) => load().catch(() => {})));
+  });
 
   const q = $derived(selectedQuestion());
   const index = $derived(selectedIndex());
@@ -327,38 +351,8 @@
   </div>
 </div>
 
-{#if app.modal === 'add'}
-  <AddQuestionDialog />
-{:else if app.modal === 'import'}
-  <ImportDialog />
-{:else if app.modal === 'export'}
-  <ExportDialog />
-{:else if app.modal === 'settings'}
-  <SettingsDialog />
-{:else if app.modal === 'help'}
-  <HelpDialog />
-{:else if app.modal === 'bulk'}
-  <BulkEditDialog />
-{:else if app.modal === 'quiz-preview'}
-  <QuizPreviewDialog />
-{:else if app.modal === 'print'}
-  <PrintDialog />
-{:else if app.modal === 'marking'}
-  <MarkingDialog />
-{:else if app.modal === 'find'}
-  <FindReplaceDialog />
-{:else if app.modal === 'copy-to'}
-  <CopyToQuizDialog />
-{:else if app.modal === 'ai-prompt'}
-  <AiPromptDialog />
-{:else if app.modal === 'check'}
-  <CheckDialog />
-{:else if app.modal === 'ai-question'}
-  <AiQuestionDialog />
-{:else if app.modal === 'cloud'}
-  <CloudDialog />
-{:else if app.modal === 'bank'}
-  <QuestionBankDialog />
+{#if dialog && dialog.name === app.modal}
+  <dialog.component />
 {/if}
 
 {#if app.confirm}

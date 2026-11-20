@@ -78,6 +78,17 @@ test('calculated questions round-trip through Moodle XML', () => {
   assert.match(buildPrompt({ topic: 'Speed', counts: { calculated: 2 } }), /<dataset_definition>/);
 });
 
+test('rows of a hand-written question get the fields a new row has', () => {
+  const q = normalizeQuestion({ type: 'multichoice', answers: [{ text: 'Paris', fraction: 100 }, { text: 'Lyon' }] });
+  assert.deepEqual(
+    q.answers.map(({ id, ...a }) => a),
+    [{ text: 'Paris', fraction: 100, feedback: '' }, { text: 'Lyon', fraction: 0, feedback: '' }]
+  );
+  assert.ok(q.answers.every((a) => a.id));
+  const m = normalizeQuestion({ type: 'matching', subquestions: [{ text: 'A' }] });
+  assert.deepEqual(m.subquestions.map(({ id, ...s }) => s), [{ text: 'A', answer: '' }]);
+});
+
 test('improve prompt sends the question without its images and reads the reply back', () => {
   const q = createQuestion('multichoice');
   q.questiontext = '<p>Which animal is this? <img src="data:image/png;base64,AAAA"></p>';
