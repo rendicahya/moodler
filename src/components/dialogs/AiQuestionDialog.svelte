@@ -1,9 +1,10 @@
 <script>
-  import { Copy, Check, Replace, ListPlus, CircleAlert, CircleCheck, ImageIcon } from '@lucide/svelte';
+  import { Copy, Check, Replace, ListPlus, CircleAlert, CircleCheck, ImageIcon, Columns2, ArrowLeft, Eye, EyeOff } from '@lucide/svelte';
   import Modal from '../ui/Modal.svelte';
   import FieldLabel from '../ui/FieldLabel.svelte';
-  import { TASK_MAP, tasksFor, buildImprovePrompt, readReply } from '../../lib/improve.js';
-  import { TYPE_MAP, questionTitle } from '../../lib/model.js';
+  import Preview from '../Preview.svelte';
+  import { TASK_MAP, tasksFor, buildImprovePrompt, readReply, replyNotes } from '../../lib/improve.js';
+  import { TYPE_MAP, questionTitle, normalizeQuestion } from '../../lib/model.js';
   import { app, closeModal, notify, applyAiQuestions } from '../../lib/store.svelte.js';
 
   const PREFS_KEY = 'mqe.aiImprove';
@@ -51,6 +52,24 @@
   });
   const found = $derived(parsed?.questions ?? []);
 
+  // Comparing the original with the AI's version side by side, to choose one or to see how the prompt could be better.
+  let comparing = $state(false);
+  let showAnswers = $state(true);
+  const index = app.quiz.questions.findIndex((x) => x.id === q.id);
+  // Own ids, so the radio buttons here don't share names with the preview pane behind the dialog.
+  const original = { ...q, id: `cmp-${q.id}` };
+  const versions = $derived(found.map((f, i) => ({ ...normalizeQuestion($state.snapshot(f), app.quiz.defaults), id: `cmp-ai-${i}` })));
+  const notes = $derived(reply.trim() ? replyNotes(reply) : '');
+
+  $effect(() => {
+    if (!found.length) comparing = false;
+  });
+
+  // A pasted reply that reads well opens the comparison straight away.
+  function onpaste() {
+    setTimeout(() => found.length && (comparing = true));
+  }
+
   function setCount(value) {
     count = Math.max(1, Math.min(20, Math.round(Number(value) || 1)));
   }
@@ -80,9 +99,35 @@
 <Modal
   title="Improve with AI"
   subtitle="Copy the prompt into ChatGPT, Claude, Gemini or another AI chatbot. It sends this question as Moodle XML, so you can paste the reply back here."
-  width="820px"
+  width={comparing ? '1280px' : '820px'}
   onclose={closeModal}
 >
+  {#if comparing}
+    {#if notes}
+      <div class="notes">
+        <strong>What the AI says it changed</strong>
+        <p>{notes}</p>
+      </div>
+    {/if}
+    <div class="compare-bar">
+      <span class="hint">Not what you wanted? Go back, change the task or add instructions, copy the prompt again and paste the new reply.</span>
+      <button class="btn btn-sm" aria-pressed={showAnswers} onclick={() => (showAnswers = !showAnswers)}>
+        {#if showAnswers}<EyeOff size={15} /> Hide correct answers{:else}<Eye size={15} /> Show correct answers{/if}
+      </button>
+    </div>
+    <div class="compare">
+      <section>
+        <h3>Original</h3>
+        <Preview q={original} {index} {showAnswers} />
+      </section>
+      <section>
+        <h3>{versions.length === 1 ? "AI's version" : `AI's versions (${versions.length})`}</h3>
+        {#each versions as v, i (v.id)}
+          <Preview q={v} index={current.adds ? index + 1 + i : index + i} {showAnswers} />
+        {/each}
+      </section>
+    </div>
+  {:else}
   <div class="target">
     <span class="chip">{typeLabel(q.type)}</span>
     <span class="target-title">{questionTitle(q)}</span>
@@ -142,7 +187,7 @@
 
   <div class="field">
     <FieldLabel for="aiq-reply" text="2. Paste the AI's reply" />
-    <textarea id="aiq-reply" class="textarea mono reply" rows="5" bind:value={reply} placeholder="Paste the whole reply here, including the XML code block"></textarea>
+    <textarea id="aiq-reply" class="textarea mono reply" rows="5" bind:value={reply} {onpaste} placeholder="Paste the whole reply here, including the XML code block"></textarea>
     {#if parsed?.error}
       <p class="status bad"><CircleAlert size={15} /> {parsed.error}</p>
     {:else if found.length}
@@ -154,12 +199,19 @@
             {#each found as f}<li><strong>{typeLabel(f.type)}</strong> · {questionTitle(f)}</li>{/each}
           </ul>
           {#if !current.adds && found.some((f) => f.type !== q.type)}<span class="warn">The question type has changed.</span>{/if}
+          <div class="compare-open">
+            <button class="btn btn-sm" onclick={() => (comparing = true)}><Columns2 size={15} /> Compare side by side</button>
+          </div>
         </div>
       </div>
     {/if}
   </div>
+  {/if}
 
   {#snippet footer()}
+    {#if comparing}
+      <button class="btn back" onclick={() => (comparing = false)}><ArrowLeft size={16} /> Back to the prompt</button>
+    {/if}
     <button class="btn" onclick={closeModal}>Close</button>
     {#if current.adds}
       <button class="btn btn-primary" disabled={!found.length} onclick={() => apply(false)}>
@@ -291,5 +343,68 @@
   }
   .warn {
     color: var(--warning);
+  }
+  .compare-open {
+    margin-top: 8px;
+  }
+  .back {
+    margin-right: auto;
+  }
+  .notes {
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    background: var(--surface-2);
+    font-size: 13px;
+  }
+  .notes p {
+    margin: 4px 0 0;
+    white-space: pre-wrap;
+    color: var(--text-2);
+  }
+  .compare-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .hint {
+    font-size: 13px;
+    color: var(--text-3);
+  }
+  .compare-bar .btn {
+    flex: none;
+  }
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+  .compare section {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .compare section + section {
+    padding-left: 20px;
+    border-left: 1px solid var(--border);
+  }
+  .compare h3 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-2);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  @media (max-width: 760px) {
+    .compare {
+      grid-template-columns: 1fr;
+    }
+    .compare section + section {
+      padding-left: 0;
+      border-left: none;
+    }
   }
 </style>

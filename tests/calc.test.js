@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { evaluate, tryEvaluate, syncDatasets, wildcardNames, substitute, formatAnswer } from '../src/lib/calc.js';
 import { createQuestion, normalizeQuestion, validateQuestion } from '../src/lib/model.js';
 import { exportMoodleXml, importMoodleXml } from '../src/lib/formats/moodlexml.js';
-import { buildImprovePrompt, readReply, tasksFor } from '../src/lib/improve.js';
+import { buildImprovePrompt, readReply, replyNotes, tasksFor } from '../src/lib/improve.js';
 import { buildPrompt } from '../src/lib/prompt.js';
 
 test('formulas evaluate like Moodle', () => {
@@ -95,6 +95,8 @@ test('improve prompt sends the question without its images and reads the reply b
   assert.equal(questions.length, 1);
   assert.match(questions[0].questiontext, /src="data:image\/png;base64,AAAA"/);
   assert.throws(() => readReply('Sorry, I cannot help.'), /No Moodle XML/);
+  assert.equal(replyNotes(reply), 'Changes:\n- Translated.');
+  assert.equal(replyNotes('<?xml version="1.0"?><quiz></quiz>'), '');
 
   const v = buildImprovePrompt({ q, task: 'variants', count: 3 }).prompt;
   assert.match(v, /Write 3 new questions/);

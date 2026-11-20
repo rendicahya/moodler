@@ -162,6 +162,14 @@ export function buildImprovePrompt(o) {
   return { prompt: L.join('\n'), images };
 }
 
+/** What the AI wrote before its XML: the list of changes the prompt asks for, or '' when there is none. */
+export function replyNotes(text) {
+  const at = text.search(/```|<\?xml|<quiz[\s>]/);
+  return (at === -1 ? '' : text.slice(0, at))
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 /** Reads the questions from an AI reply and puts the images back. Throws when the reply holds no questions. */
 export function readReply(text, images = {}) {
   if (!/<quiz[\s>]/.test(text)) throw new Error('No Moodle XML found. Paste the whole reply, including the code block.');
