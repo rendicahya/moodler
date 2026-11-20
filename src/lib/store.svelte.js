@@ -306,14 +306,24 @@ function commit(snapshot) {
   countEdit();
 }
 
-/** Tracks every change to the quiz; changes are grouped into undo steps after a short pause. */
+/** Reads every value in the tree, so that an effect runs again when any of them changes. */
+function track(value) {
+  if (value && typeof value === 'object') for (const key in value) track(value[key]);
+}
+
+/**
+ * Tracks every change to the quiz; changes are grouped into undo steps after a short pause. The quiz is only turned
+ * into JSON once the pause is over, not on every keystroke: with images in it, that text can be megabytes long.
+ */
 export function initPersistence() {
+  let first = true;
   $effect.root(() => {
     $effect(() => {
-      const snapshot = JSON.stringify(app.quiz);
+      track(app.quiz);
       clearTimeout(timer);
-      if (snapshot !== current) history.pending = true;
-      timer = setTimeout(() => commit(snapshot), 350);
+      if (first) return void (first = false);
+      history.pending = true;
+      timer = setTimeout(() => commit(JSON.stringify(app.quiz)), 350);
     });
   });
   window.addEventListener('beforeunload', () => timer && commit(JSON.stringify($state.snapshot(app.quiz))));

@@ -19,7 +19,8 @@
   import CalculatedEditor from './editors/CalculatedEditor.svelte';
   import { app, duplicateQuestion, deleteQuestion, setView, goToQuestion, saveLayout, markReviewed, markUnreviewed, openModal } from '../lib/store.svelte.js';
   import { showMenu, questionMenu } from '../lib/questionmenu.svelte.js';
-  import { TYPE_MAP, TEXT_FORMATS, PENALTIES, validateQuestion, uid } from '../lib/model.js';
+  import { TYPE_MAP, TEXT_FORMATS, PENALTIES, uid } from '../lib/model.js';
+  import { issuesOf } from '../lib/questioncache.svelte.js';
   import { TYPE_ICONS } from '../lib/icons.js';
   import { HELP } from '../lib/help.js';
 
@@ -27,7 +28,7 @@
 
   const meta = $derived(TYPE_MAP[q.type]);
   const Icon = $derived(TYPE_ICONS[q.type]);
-  const issues = $derived(validateQuestion(q));
+  const issues = $derived(issuesOf(q));
   const textId = $derived(`qtext-${q.id}`);
   const hasCombined = $derived(['multichoice', 'matching', 'gapselect', 'ddwtos', 'ordering'].includes(q.type));
   const hasHints = $derived(!['essay', 'description'].includes(q.type));

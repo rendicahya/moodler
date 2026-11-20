@@ -25,7 +25,8 @@
     setReviewed,
   } from '../lib/store.svelte.js';
   import { showMenu, questionMenu, checkedMenu } from '../lib/questionmenu.svelte.js';
-  import { questionTitle, validateQuestion, TYPE_MAP, QUESTION_TYPES, stripHtml } from '../lib/model.js';
+  import { questionTitle, TYPE_MAP, QUESTION_TYPES } from '../lib/model.js';
+  import { issuesOf, searchTextOf } from '../lib/questioncache.svelte.js';
   import { TYPE_ICONS } from '../lib/icons.js';
   import { createSortable } from '../lib/sortable.svelte.js';
 
@@ -89,26 +90,19 @@
 
   // Opens the next question with problems after the open one, wrapping around.
   function nextIssue() {
-    const bad = rows.filter((r) => r.issues.length);
+    const bad = rows.filter((r) => issuesOf(r.q).length);
     const at = app.quiz.questions.findIndex((q) => q.id === app.selectedId);
     select((bad.find((r) => r.i > at) ?? bad[0]).q.id);
   }
 
   const query = $derived(app.search.trim().toLowerCase());
+  // Problems and search text are cached per question, so typing in one question doesn't redo the whole list.
   const rows = $derived(
     app.quiz.questions
-      .map((q, i) => ({ q, i, issues: validateQuestion(q) }))
-      .filter(({ q }) => {
-        if (!query) return true;
-        return (
-          q.name.toLowerCase().includes(query) ||
-          stripHtml(q.questiontext).toLowerCase().includes(query) ||
-          TYPE_MAP[q.type].label.toLowerCase().includes(query) ||
-          q.tags.some((t) => t.toLowerCase().includes(query))
-        );
-      })
+      .map((q, i) => ({ q, i }))
+      .filter(({ q }) => !query || searchTextOf(q).includes(query) || TYPE_MAP[q.type].label.toLowerCase().includes(query))
   );
-  const issueCount = $derived(rows.filter((r) => r.issues.length).length);
+  const issueCount = $derived(rows.filter((r) => issuesOf(r.q).length).length);
   const reviewCount = $derived(app.quiz.noReview ? 0 : app.quiz.questions.filter((q) => q.unreviewed).length);
   const reviewTracked = $derived(!app.quiz.noReview && (reviewCount > 0 || app.quiz.questions.some((q) => q.reviewed)));
   const checkedToReview = $derived(app.quiz.questions.some((q) => q.unreviewed && app.checked.includes(q.id)));
@@ -290,8 +284,9 @@
     ondragleave={(e) => foreign && !listEl.contains(e.relatedTarget) && (over = null)}
     ondrop={(e) => foreign && dropForeign(e, app.quiz.questions.length)}
   >
-    {#each rows as { q, i, issues } (q.id)}
+    {#each rows as { q, i } (q.id)}
       {@const Icon = TYPE_ICONS[q.type]}
+      {@const issues = issuesOf(q)}
       {@const ind = indicator(i)}
       {@const ticked = app.checked.includes(q.id)}
       <div
