@@ -143,12 +143,26 @@ function loadLayout() {
     if (l) {
       // Older versions stored only whether the preview was shown.
       const view = VIEWS.includes(l.view) ? l.view : l.showPreview === false ? 'edit' : 'split';
-      return { view, splitRatio: Math.min(0.75, Math.max(0.25, Number(l.splitRatio) || 0.55)), sidebarWidth: clampSidebar(l.sidebarWidth) };
+      return { view, splitRatio: Math.min(0.75, Math.max(0.25, Number(l.splitRatio) || 0.55)), sidebarWidth: clampSidebar(l.sidebarWidth), previewZoom: clampZoom(l.previewZoom) };
     }
   } catch {
     /* fall through to defaults */
   }
-  return { view: 'split', splitRatio: 0.55, sidebarWidth: SIDEBAR_DEFAULT };
+  return { view: 'split', splitRatio: 0.55, sidebarWidth: SIDEBAR_DEFAULT, previewZoom: 1 };
+}
+
+/** Zoom levels offered for the question preview. */
+export const ZOOMS = [0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
+const clampZoom = (z) => (Number.isFinite(Number(z)) && Number(z) > 0 ? Math.min(2, Math.max(0.5, Number(z))) : 1);
+
+/** Sets the preview zoom: a level, or +1 / -1 for the next level up or down. */
+export function setPreviewZoom(z, step = 0) {
+  if (step) {
+    const cur = app.previewZoom;
+    z = step > 0 ? (ZOOMS.find((x) => x > cur + 0.001) ?? ZOOMS.at(-1)) : (ZOOMS.findLast((x) => x < cur - 0.001) ?? ZOOMS[0]);
+  }
+  app.previewZoom = clampZoom(z);
+  saveLayout();
 }
 
 function loadBackup() {
@@ -174,6 +188,7 @@ export const app = $state({
   view: layout.view,
   splitRatio: layout.splitRatio,
   sidebarWidth: layout.sidebarWidth,
+  previewZoom: layout.previewZoom,
   // "Show correct answers" in the preview stays on while moving between questions.
   revealAnswers: false,
   theme: document.documentElement.dataset.theme || 'light',
@@ -373,7 +388,7 @@ export function setSidebarWidth(w) {
 
 export function saveLayout() {
   try {
-    localStorage.setItem(LAYOUT_KEY, JSON.stringify({ view: app.view, splitRatio: app.splitRatio, sidebarWidth: app.sidebarWidth }));
+    localStorage.setItem(LAYOUT_KEY, JSON.stringify({ view: app.view, splitRatio: app.splitRatio, sidebarWidth: app.sidebarWidth, previewZoom: app.previewZoom }));
   } catch {
     /* ignore */
   }

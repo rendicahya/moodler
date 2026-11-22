@@ -1,13 +1,14 @@
 <script>
   import { tick } from 'svelte';
-  import { Flag, Eye, EyeOff, Dices, Bold, Italic, Underline, Strikethrough, Code, RemoveFormatting, CaseSensitive } from '@lucide/svelte';
+  import { Flag, Eye, EyeOff, Dices, ZoomIn, ZoomOut, Check, RotateCcw, Bold, Italic, Underline, Strikethrough, Code, RemoveFormatting, CaseSensitive } from '@lucide/svelte';
   import { TYPE_MAP, escapeHtml, round, stripHtml } from '../lib/model.js';
   import { CASES, changeCaseInRange, rangeOffsets, offsetsRange, selectOffsets } from '../lib/textcase.js';
   import { mirror, setMirror, clearMirror, showMirror, hideMirror } from '../lib/selmirror.svelte.js';
   import { parseCloze, CLOZE_RE, isChoiceCloze, canonicalClozeType } from '../lib/formats/cloze.js';
   import { sanitizeHtml } from '../lib/sanitize.js';
   import { substitute, itemValues, tryEvaluate, formatAnswer, toleranceText } from '../lib/calc.js';
-  import { app } from '../lib/store.svelte.js';
+  import { app, ZOOMS, setPreviewZoom } from '../lib/store.svelte.js';
+  import ContextMenu from './ui/ContextMenu.svelte';
 
   // `showAnswers` lets a parent control the answer reveal (the whole-quiz preview); without it the pane has its own toggle,
   // which stays on when moving to another question.
@@ -18,6 +19,28 @@
   // The value set shown for a calculated question.
   let valueSet = $state(0);
   const set = $derived(Math.min(valueSet, Math.max(0, (q.itemcount || 1) - 1)));
+
+  // The question pane can be zoomed (the whole-quiz preview isn't).
+  const zoom = $derived(showAnswers === null ? app.previewZoom : 1);
+  let zoomMenu = $state(null);
+  function openZoomMenu(e) {
+    if (zoomMenu) return void (zoomMenu = null);
+    const r = e.currentTarget.getBoundingClientRect();
+    zoomMenu = { x: r.left, y: r.bottom + 4 };
+  }
+  const zoomItems = $derived([
+    { label: 'Zoom in', icon: ZoomIn, run: () => setPreviewZoom(0, 1), disabled: app.previewZoom >= ZOOMS.at(-1) },
+    { label: 'Zoom out', icon: ZoomOut, run: () => setPreviewZoom(0, -1), disabled: app.previewZoom <= ZOOMS[0] },
+    { label: 'Reset to 100%', icon: RotateCcw, run: () => setPreviewZoom(1), disabled: app.previewZoom === 1 },
+    '-',
+    ...ZOOMS.map((z) => ({ label: `${Math.round(z * 100)}%`, icon: Math.abs(z - app.previewZoom) < 0.001 ? Check : undefined, run: () => setPreviewZoom(z) })),
+  ]);
+  function onzoomwheel(e) {
+    if (showAnswers !== null || !(e.ctrlKey || e.metaKey) || !e.deltaY) return;
+    e.preventDefault();
+    bubble = null;
+    setPreviewZoom(0, e.deltaY < 0 ? 1 : -1);
+  }
 
   const mark = $derived(q.type === 'cloze' ? parseCloze(q.questiontext).reduce((s, g) => s + g.weight, 0) : Number(q.defaultgrade));
 
@@ -254,6 +277,16 @@
   {#if showAnswers === null}
     <div class="bar">
       <span class="hint">Student view preview — options are shown in their original order.</span>
+      <span class="tools">
+      <button
+        class="btn btn-sm zoom-btn"
+        title="Zoom the preview (Ctrl + scroll wheel)"
+        aria-label="Zoom: {Math.round(app.previewZoom * 100)}%"
+        aria-haspopup="menu"
+        aria-expanded={!!zoomMenu}
+        onpointerdown={(e) => e.stopPropagation()}
+        onclick={openZoomMenu}><ZoomIn size={15} /> {Math.round(app.previewZoom * 100)}%</button
+      >
       {#if q.type !== 'description' && q.type !== 'essay'}
         <button class="btn btn-sm" class:active={app.revealAnswers} title="Alt+A" aria-pressed={app.revealAnswers} onclick={() => (app.revealAnswers = !app.revealAnswers)}>
           {#if app.revealAnswers}<EyeOff size={15} />{:else}<Eye size={15} />{/if}
@@ -264,10 +297,14 @@
           </span>
         </button>
       {/if}
+      </span>
     </div>
   {/if}
+  {#if zoomMenu}
+    <ContextMenu x={zoomMenu.x} y={zoomMenu.y} items={zoomItems} onclose={() => (zoomMenu = null)} />
+  {/if}
 
-  <div class="que">
+  <div class="que" style:zoom={zoom === 1 ? undefined : zoom} onwheel={onzoomwheel}>
     <div class="side">
       <div class="info">
         {#if q.type === 'description'}
@@ -478,7 +515,18 @@
     justify-content: space-between;
     gap: 12px;
   }
+  .tools {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+  }
+  .zoom-btn {
+    font-variant-numeric: tabular-nums;
+  }
+  /* Its own container, so that the narrow layout follows the zoomed width. */
   .que {
+    container-type: inline-size;
     display: flex;
     gap: 14px;
     align-items: flex-start;
