@@ -1,5 +1,6 @@
 <script>
-  import { CircleCheck, TriangleAlert, ArrowRight, Shuffle, Trash, LoaderCircle } from '@lucide/svelte';
+  import { CircleCheck, TriangleAlert, ArrowRight, Shuffle, Trash, LoaderCircle, Eraser } from '@lucide/svelte';
+  import { htmlClutter, cleanQuestionsHtml } from '../../lib/cleanhtml.js';
   import { tick } from 'svelte';
   import Modal from '../ui/Modal.svelte';
   import Segmented from '../ui/Segmented.svelte';
@@ -83,6 +84,27 @@
   // A button inside the dialog to move the focus to when the focused row disappears.
   const keepFocus = (dialog) => dialog?.querySelector('footer button') ?? dialog?.querySelector('button');
 
+  // ------------------------------------------------ extra HTML
+  const cluttered = $derived(
+    questions
+      .map((q) => {
+        const fields = htmlClutter(q);
+        return { q, fields, saved: fields.reduce((n, f) => n + f.before.length - f.after.length, 0) };
+      })
+      .filter((x) => x.fields.length)
+  );
+
+  async function clean(list, e) {
+    const dialog = e?.currentTarget.closest('[role=dialog]');
+    const n = cleanQuestionsHtml(list.map((x) => x.q));
+    if (n) notify(`Removed the extra HTML from ${n} question${n === 1 ? '' : 's'}. Undo with Ctrl+Z.`, 'success', 4000);
+    await tick();
+    if (dialog && !dialog.contains(document.activeElement)) keepFocus(dialog)?.focus();
+  }
+
+  const fieldsText = (fields) => [...new Set(fields.map((f) => f.label.toLowerCase()))].join(', ');
+  const sizeText = (n) => (n >= 1024 ? `${(n / 1024).toFixed(1)} KB` : `${Math.max(n, 0)} characters`);
+
   // ------------------------------------------------ duplicates
   let scope = $state('quiz');
   // The other quizzes, read from storage when "All quizzes" is chosen; the open quiz always uses its live copy.
@@ -122,7 +144,7 @@
 
 <Modal
   title="Check questions"
-  subtitle="Catch the usual problems before you export: unchecked questions, a predictable answer key, answers that depend on their place or look alike, pictures without a description and repeated questions."
+  subtitle="Catch the usual problems before you export: unchecked questions, a predictable answer key, answers that depend on their place or look alike, pictures without a description, extra HTML and repeated questions."
   width="720px"
   onclose={closeModal}
 >
@@ -306,6 +328,43 @@
           </li>
         {/each}
       </ul>
+    {/if}
+  </section>
+
+  <section>
+    <h3>
+      Extra HTML
+      <Info
+        text="Text pasted from Word, Google Docs, web pages or AI chats brings along markup Moodle doesn't need: Office tags and comments, data-* and lang attributes, generated ids and classes, and styles that fix the font, size and spacing so the text looks different from the rest of Moodle. Cleaning keeps colours, alignment, bold and italics, links and picture sizes."
+      />
+    </h3>
+    {#if !cluttered.length}
+      <p class="status ok"><CircleCheck size={16} /> <span>No unnecessary HTML attributes.</span></p>
+    {:else}
+      <div class="sub">
+        <div class="row">
+          <p class="status warn">
+            <TriangleAlert size={16} />
+            <span>
+              {cluttered.length} question{cluttered.length === 1 ? ' has' : 's have'} unnecessary HTML attributes or styles, such as fonts and spacing pasted from Word or Google Docs.
+            </span>
+          </p>
+          {#if cluttered.length > 1}<button class="btn btn-sm" onclick={(e) => clean(cluttered, e)}><Eraser size={14} /> Clean all</button>{/if}
+        </div>
+        <ul class="list">
+          {#each cluttered as x (x.q.id)}
+            {@const Icon = TYPE_ICONS[x.q.type]}
+            <li>
+              <span class="num">{numberOf(x.q.id)}</span>
+              <span class="icon"><Icon size={14} /></span>
+              <span class="name">{questionTitle(x.q)}</span>
+              <span class="why" title="In {fieldsText(x.fields)}">{fieldsText(x.fields)} · {sizeText(x.saved)}</span>
+              <button class="btn btn-sm" onclick={(e) => clean([x], e)}>Clean</button>
+              <button class="btn btn-ghost btn-sm" onclick={() => openQuestion(x.q.id)}>Open <ArrowRight size={14} /></button>
+            </li>
+          {/each}
+        </ul>
+      </div>
     {/if}
   </section>
 

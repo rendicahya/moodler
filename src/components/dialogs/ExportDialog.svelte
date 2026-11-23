@@ -1,6 +1,7 @@
 <script>
   import { Download, Copy, TriangleAlert, Check, CircleCheck, ArrowRight, ListChecks, FileDown } from '@lucide/svelte';
   import { answerKeyReport, findDuplicates, placeProblem, lookAlikeAnswers, imagesWithoutAlt } from '../../lib/quality.js';
+  import { htmlClutter } from '../../lib/cleanhtml.js';
   import Modal from '../ui/Modal.svelte';
   import Switch from '../ui/Switch.svelte';
   import Segmented from '../ui/Segmented.svelte';
@@ -73,6 +74,8 @@
     if (alike) list.push(`${alike} question${alike === 1 ? ' has' : 's have'} answers that look alike.`);
     const pictures = questions.reduce((n, q) => n + imagesWithoutAlt(q).length, 0);
     if (pictures) list.push(`${pictures} picture${pictures === 1 ? ' has' : 's have'} no description for screen readers.`);
+    const cluttered = questions.filter((q) => htmlClutter(q).length).length;
+    if (cluttered) list.push(`${cluttered} question${cluttered === 1 ? ' has' : 's have'} unnecessary HTML attributes or styles (from Word, Google Docs or AI chats).`);
     const dupes = findDuplicates(questions.map((q) => ({ id: q.id, quizId: '', q })));
     if (dupes.length) list.push(`${dupes.length} set${dupes.length === 1 ? '' : 's'} of questions repeat each other.`);
     return list;
