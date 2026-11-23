@@ -116,6 +116,9 @@
   const typeCounts = $derived(
     QUESTION_TYPES.map((t) => ({ ...t, count: app.quiz.questions.filter((q) => q.type === t.type).length })).filter((t) => t.count)
   );
+  const total = $derived(app.quiz.questions.length);
+  const marks = $derived(app.quiz.questions.reduce((sum, q) => sum + (q.type === 'description' ? 0 : Number(q.defaultgrade) || 0), 0));
+  const fmt = (n) => String(Math.round(n * 100) / 100);
 
   // Keep the open question visible in the list when it changes from elsewhere (Next/Previous, jump menu, shortcuts).
   // Each quiz's list goes back to where it was scrolled when its tab is opened again.
@@ -204,18 +207,12 @@
 
 <aside class="sidebar">
   <div class="top">
-    {#if typeCounts.length || issueCount}
+    {#if typeCounts.length}
       <div class="summary">
-        <ul class="types" aria-label="Questions by type">
-          {#each typeCounts as t (t.type)}
-            {@const Icon = TYPE_ICONS[t.type]}
-            <li class="type-count" title="{t.count} {t.label}">
-              <Icon size={13} />
-              <span class="type-short">{t.short}</span>
-              <span class="type-num">{t.count}</span>
-            </li>
-          {/each}
-        </ul>
+        <!-- One line; the count per type is in the tooltip (each row also names its type). -->
+        <span class="totals" title={typeCounts.map((t) => `${t.count} × ${t.label}`).join('\n')}>
+          {total} question{total === 1 ? '' : 's'}{#if marks}<span class="sep">·</span>{fmt(marks)} mark{marks === 1 ? '' : 's'}{/if}
+        </span>
         <span class="badges">
           {#if reviewTracked}
             <button
@@ -385,8 +382,9 @@
   }
   .summary {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
+    min-height: 22px;
     gap: 6px;
   }
   .badges {
@@ -425,34 +423,20 @@
     outline: none;
     box-shadow: var(--focus);
   }
-  .types {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-  .type-count {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 2px 7px;
-    border-radius: 999px;
-    border: 1px solid var(--border);
-    font-size: 11px;
+  .totals {
+    min-width: 0;
+    font-size: 12.5px;
+    font-weight: 500;
     color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     cursor: default;
   }
-  .type-count :global(svg) {
+  .sep {
+    margin: 0 5px;
     color: var(--text-3);
-  }
-  .type-short {
-    font-weight: 600;
-    letter-spacing: 0.02em;
-  }
-  .type-num {
-    font-variant-numeric: tabular-nums;
   }
   .add-row {
     display: flex;

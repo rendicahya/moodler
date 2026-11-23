@@ -140,11 +140,20 @@
   }
 
   const pct = (x) => `${Math.round(x * 100)}%`;
+
+  // Checks that found nothing are listed on one line instead of a section each.
+  const passed = $derived(
+    [
+      !placed.length && !alike.length && 'the answers',
+      !images.length && questions.some((q) => /<img\b/i.test(JSON.stringify(q))) && 'picture descriptions',
+      !cluttered.length && 'the HTML',
+    ].filter(Boolean)
+  );
 </script>
 
 <Modal
   title="Check questions"
-  subtitle="Catch the usual problems before you export: unchecked questions, a predictable answer key, answers that depend on their place or look alike, pictures without a description, extra HTML and repeated questions."
+  subtitle="Catch the usual problems before you export."
   width="720px"
   onclose={closeModal}
 >
@@ -172,20 +181,27 @@
         {/if}
         <button class="btn btn-ghost btn-sm" title="Clear all review marks and stop flagging new questions in this quiz (also in Quiz settings)" onclick={() => setQuizReview(false)}>Doesn’t need review</button>
       </div>
-      <p class="hint">
-        Imported questions are marked as to review. Read each one and its answers, then click <strong>Mark reviewed</strong> above the question (Alt+R), which opens the next one.
-      </p>
+      {#if toReview}
+        <p class="hint">
+          Read each question and its answers, then click <strong>Mark reviewed</strong> above it (Alt+R), which opens the next one.
+        </p>
+      {/if}
     {/if}
   </section>
 
+  {#if passed.length}
+    <section>
+      <p class="status ok"><CircleCheck size={16} /> <span>No problems with {passed.join(', ').replace(/, ([^,]*)$/, ' and $1')}.</span></p>
+    </section>
+  {/if}
+
+  {#if key.questions.length || key.longest.length}
   <section>
     <h3>
       Answer key
       <Info text="The positions count only single-answer multiple-choice questions; answer lengths are checked in multiple-answer ones too. Moodle can shuffle the answers when “Shuffle answers” is on, but printed papers and quizzes without shuffling use the order shown here." />
     </h3>
-    {#if !key.questions.length}
-      <p class="muted">No single-answer multiple-choice questions.</p>
-    {:else}
+    {#if key.questions.length}
       <div class="bars" aria-label="Position of the correct answer">
         {#each key.positions as n, i}
           <div class="bar-row" title="{n} correct answer{n === 1 ? '' : 's'} at {LETTERS[i]} (about {Math.round(key.expected[i])} if evenly spread)">
@@ -235,7 +251,9 @@
         </div>
       {/if}
   </section>
+  {/if}
 
+  {#if placed.length || alike.length}
   <section>
     <h3>
       Answers
@@ -243,9 +261,6 @@
         text="Moodle shuffles the answers when both the question's “Shuffle the choices” and the quiz's “Shuffle within questions” are on, so “All of the above” can end up at the top. Answers that read the same are confusing, and a question can't be answered fairly when two of them are the same."
       />
     </h3>
-    {#if !placed.length && !alike.length}
-      <p class="status ok"><CircleCheck size={16} /> <span>No answers that depend on their place or look alike.</span></p>
-    {/if}
     {#if placed.length}
       <div class="sub">
         <div class="row">
@@ -294,15 +309,14 @@
       </div>
     {/if}
   </section>
+  {/if}
 
+  {#if images.length}
   <section>
     <h3>
       Image descriptions
       <Info text="Screen readers read a picture's description (its alt text) to students who can't see it. A file name such as image.png says nothing about what the picture shows." />
     </h3>
-    {#if !images.length}
-      <p class="status ok"><CircleCheck size={16} /> <span>{questions.some((q) => /<img\b/i.test(JSON.stringify(q))) ? 'Every picture has a description.' : 'No pictures in this quiz.'}</span></p>
-    {:else}
       <p class="status warn">
         <TriangleAlert size={16} />
         <span>{images.length} picture{images.length === 1 ? ' has' : 's have'} no description. Type what each one shows and press Enter:</span>
@@ -328,9 +342,10 @@
           </li>
         {/each}
       </ul>
-    {/if}
   </section>
+  {/if}
 
+  {#if cluttered.length}
   <section>
     <h3>
       Extra HTML
@@ -338,9 +353,6 @@
         text="Text pasted from Word, Google Docs, web pages or AI chats brings along markup Moodle doesn't need: Office tags and comments, data-* and lang attributes, generated ids and classes, and styles that fix the font, size and spacing so the text looks different from the rest of Moodle. Cleaning keeps colours, alignment, bold and italics, links and picture sizes."
       />
     </h3>
-    {#if !cluttered.length}
-      <p class="status ok"><CircleCheck size={16} /> <span>No unnecessary HTML attributes.</span></p>
-    {:else}
       <div class="sub">
         <div class="row">
           <p class="status warn">
@@ -365,8 +377,8 @@
           {/each}
         </ul>
       </div>
-    {/if}
   </section>
+  {/if}
 
   <section>
     <div class="head">

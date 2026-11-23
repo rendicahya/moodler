@@ -3,7 +3,7 @@
   import { ChevronRight } from '@lucide/svelte';
 
   /**
-   * A right-click menu at (x, y). `items` holds { label, icon, run, danger?, disabled? } and '-' for a separator. An item
+   * A right-click menu at (x, y). `items` holds { label, icon, run, danger?, disabled?, hint? (a shortcut) } and '-' for a separator. An item
    * with `items` instead of `run` opens a submenu of those items beside it (one level deep).
    * It closes on a click elsewhere, Escape, Tab, scrolling or when the window loses focus.
    */
@@ -105,6 +105,7 @@
       >
         {#if item.icon}<item.icon size={14} />{/if}
         <span class="label">{item.label}</span>
+        {#if item.hint}<kbd>{item.hint}</kbd>{/if}
         {#if item.items}<ChevronRight size={14} class="chevron" />{/if}
       </button>
     {/if}
@@ -118,6 +119,7 @@
           <button role="menuitem" class:danger={item.danger} disabled={item.disabled} onclick={(e) => choose(item, e)}>
             {#if item.icon}<item.icon size={14} />{/if}
             <span class="label">{item.label}</span>
+            {#if item.hint}<kbd>{item.hint}</kbd>{/if}
           </button>
         {/if}
       {/each}
@@ -165,6 +167,12 @@
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  kbd {
+    margin-left: 16px;
+    font: inherit;
+    font-size: 11.5px;
+    color: var(--text-3);
   }
   button :global(.chevron) {
     margin-right: -4px;

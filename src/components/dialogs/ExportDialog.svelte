@@ -17,6 +17,15 @@
   let scope = $state(app.checked.length ? 'picked' : 'all');
   let picked = $state(app.checked.length ? [...app.checked] : app.selectedId ? [app.selectedId] : []);
   let copied = $state(false);
+  // The file itself is hidden until asked for, and stays open for the next export once opened.
+  let showFile = $state(localStorageGet('mqe.exportShowFile') === '1');
+  $effect(() => {
+    try {
+      localStorage.setItem('mqe.exportShowFile', showFile ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  });
 
   function localStorageGet(k) {
     try {
@@ -120,13 +129,13 @@
 </script>
 
 <Modal title="Export questions" subtitle="Download a file you can import into Moodle’s question bank (Question bank → Import)." width="860px" onclose={closeModal}>
-  <div class="formats" role="radiogroup" aria-label="Format">
-    {#each exportable as f}
-      <button class="fmt" class:on={format === f.id} role="radio" aria-checked={format === f.id} onclick={() => choose(f.id)}>
-        <span class="name">{f.label}</span>
-        <span class="desc">{f.description}</span>
-      </button>
-    {/each}
+  <div class="format-pick">
+    <div class="formats" role="radiogroup" aria-label="Format">
+      {#each exportable as f}
+        <button class="fmt" class:on={format === f.id} role="radio" aria-checked={format === f.id} title={f.description} onclick={() => choose(f.id)}>{f.label}</button>
+      {/each}
+    </div>
+    <p class="desc">{fmt.description}</p>
   </div>
 
   <div class="opts">
@@ -221,9 +230,12 @@
   {#if questions.length && notes.length}
     <div class="notes">
       <ListChecks size={16} />
-      <ul>
-        {#each notes as note}<li>{note}</li>{/each}
-      </ul>
+      <details>
+        <summary>{notes.length} thing{notes.length === 1 ? '' : 's'} worth a look before students see these questions</summary>
+        <ul>
+          {#each notes as note}<li>{note}</li>{/each}
+        </ul>
+      </details>
       <button class="btn btn-sm" onclick={() => openModal('check')}>Check <ArrowRight size={14} /></button>
     </div>
   {/if}
@@ -241,13 +253,15 @@
     </div>
   {/if}
 
-  <div class="out">
-    <div class="out-head">
-      <span>Preview</span>
+  <details class="out" bind:open={showFile}>
+    <summary class="out-head">
+      <span>Show the file</span>
       <span class="hint">{formatSize(size)}</span>
-    </div>
-    <textarea class="textarea mono" readonly rows="14" value={output.text.length > 200000 ? output.text.slice(0, 200000) + '\n… (truncated preview)' : output.text}></textarea>
-  </div>
+    </summary>
+    {#if showFile}
+      <textarea class="textarea mono" readonly rows="14" value={output.text.length > 200000 ? output.text.slice(0, 200000) + '\n… (truncated preview)' : output.text}></textarea>
+    {/if}
+  </details>
 
   {#snippet footer()}
     <button class="btn btn-ghost pdf-link" title="A paper version to print or download as PDF" onclick={() => openModal('print')}><FileDown size={16} /> PDF / print…</button>
@@ -259,40 +273,49 @@
 </Modal>
 
 <style>
+  .format-pick {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
   .formats {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 8px;
+    gap: 6px;
   }
-  @media (max-width: 760px) {
+  @media (max-width: 560px) {
     .formats {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
   .fmt {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    padding: 10px 12px;
-    text-align: left;
+    padding: 7px 10px;
     border-radius: var(--radius);
     border: 1px solid var(--border);
     background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-weight: 600;
+    font-size: 13px;
+    white-space: nowrap;
     cursor: pointer;
   }
   .fmt:hover {
     border-color: var(--border-strong);
   }
+  .fmt:focus-visible {
+    outline: none;
+    box-shadow: var(--focus);
+  }
   .fmt.on {
     border-color: var(--accent);
     background: var(--accent-soft);
+    color: var(--accent-text);
     box-shadow: 0 0 0 1px var(--accent);
   }
-  .name {
-    font-weight: 600;
-  }
   .desc {
-    font-size: 12px;
+    margin: 0;
+    font-size: 12.5px;
     color: var(--text-2);
     line-height: 1.4;
   }
@@ -456,9 +479,17 @@
     flex: none;
     margin-top: 2px;
   }
-  .notes ul {
+  .notes details {
     flex: 1;
-    margin: 0;
+    min-width: 0;
+    padding-top: 3px;
+  }
+  .notes summary {
+    cursor: pointer;
+    color: var(--text);
+  }
+  .notes ul {
+    margin: 6px 0 0;
     padding-left: 16px;
     color: var(--text);
   }
@@ -487,10 +518,32 @@
   }
   .out-head {
     display: flex;
-    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
     font-size: 12.5px;
     font-weight: 600;
     color: var(--text-2);
+    cursor: pointer;
+    list-style: none;
+  }
+  .out-head::-webkit-details-marker {
+    display: none;
+  }
+  .out-head::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    margin: 0 4px 0 2px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(-45deg);
+    transition: transform 0.12s;
+  }
+  .out[open] .out-head::before {
+    transform: rotate(45deg);
+  }
+  .out-head .hint {
+    margin-left: auto;
   }
   .pdf-link {
     margin-right: auto;

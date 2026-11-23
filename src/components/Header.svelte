@@ -1,7 +1,8 @@
 <script>
   import { onMount } from 'svelte';
-  import { Sun, Moon, Maximize, Minimize, Undo2, Redo2, Upload, Download, FilePlus, Settings, CircleQuestionMark, Presentation, Printer, Sparkles, ListChecks, Cloud, CloudUpload, CloudCheck, RefreshCw } from '@lucide/svelte';
+  import { Sun, Moon, Maximize, Minimize, Undo2, Redo2, Upload, Download, FilePlus, Settings, CircleQuestionMark, Presentation, Printer, Sparkles, ListChecks, Cloud, CloudUpload, CloudCheck, RefreshCw, EllipsisVertical, HardDriveDownload } from '@lucide/svelte';
   import QuizTabs from './QuizTabs.svelte';
+  import ContextMenu from './ui/ContextMenu.svelte';
   import { app, library, history, backup, REMIND_AFTER, undo, redo, toggleTheme, openModal, newQuiz, downloadBackup } from '../lib/store.svelte.js';
   import { sync, editedSinceUpload, autoBlocked, uploadChanges } from '../lib/cloudsync.svelte.js';
   import { appUpdate, applyUpdate } from '../lib/pwa.svelte.js';
@@ -37,6 +38,26 @@
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen().catch(() => {});
   }
+
+  // The "More" menu, right-aligned under its button.
+  let more = $state(null);
+  function openMore(e) {
+    if (more) return void (more = null);
+    const r = e.currentTarget.getBoundingClientRect();
+    more = { x: r.right - 230, y: r.bottom + 4 };
+  }
+  const empty = $derived(!app.quiz.questions.length);
+  const moreItems = $derived([
+    { label: 'New quiz', icon: FilePlus, hint: 'Alt+Shift+N', run: newQuiz },
+    { label: 'Quiz settings…', icon: Settings, hint: 'Ctrl+,', run: () => openModal('settings') },
+    { label: 'Print or save as PDF…', icon: Printer, hint: 'Ctrl+P', disabled: empty, run: () => openModal('print') },
+    { label: 'Download a backup', icon: HardDriveDownload, disabled: empty, run: downloadBackup },
+    '-',
+    { label: app.theme === 'dark' ? 'Light mode' : 'Dark mode', icon: app.theme === 'dark' ? Sun : Moon, run: toggleTheme },
+    canFullscreen && { label: fullscreen ? 'Exit full screen' : 'Full screen', icon: fullscreen ? Minimize : Maximize, run: toggleFullscreen },
+    '-',
+    { label: 'Help & shortcuts', icon: CircleQuestionMark, run: () => openModal('help') },
+  ].filter(Boolean));
 
   // The save status is plain text, except when a backup is due or saving failed: then it becomes a backup button.
   const backupDue = $derived(app.quiz.questions.length > 0 && backup.edits >= REMIND_AFTER);
@@ -95,18 +116,15 @@
       <button class="btn btn-ghost btn-icon" title="Redo (Ctrl+Y)" aria-label="Redo" disabled={!history.canRedo} onclick={redo}><Redo2 size={17} /></button>
     </div>
     <span class="divider"></span>
-    <!-- Quiz files -->
-    <button class="btn btn-ghost hide-sm" title="New quiz (Alt+Shift+N)" onclick={newQuiz}><FilePlus size={16} /><span class="btn-text">New</span></button>
+    <!-- Getting questions in and out -->
     <button class="btn btn-ghost" title="Import questions (Ctrl+O)" onclick={() => openModal('import')}><Download size={16} /><span class="btn-text">Import</span></button>
     <button class="btn btn-ghost" title={entry?.cloudVersion ? 'Export questions' : 'Export questions (Ctrl+S)'} onclick={() => openModal('export')}><Upload size={16} /><span class="btn-text">Export</span></button>
     <span class="divider"></span>
-    <!-- Working on the quiz -->
-    <button class="btn btn-ghost" title="Quiz settings (Ctrl+,)" onclick={() => openModal('settings')}><Settings size={16} /><span class="btn-text">Settings</span></button>
+    <!-- Looking over the quiz -->
     <button class="btn btn-ghost" title="Preview the whole quiz (Alt+Q)" disabled={!app.quiz.questions.length} onclick={() => openModal('quiz-preview')}>
       <Presentation size={16} /><span class="btn-text">Preview</span>
     </button>
-    <button class="btn btn-ghost btn-icon hide-xs" title="Check questions: review progress, answer key and repeated questions (Alt+C)" aria-label="Check questions" disabled={!app.quiz.questions.length} onclick={() => openModal('check')}><ListChecks size={17} /></button>
-    <button class="btn btn-ghost btn-icon hide-xs" title="Print or save as PDF (Ctrl+P)" aria-label="Print" disabled={!app.quiz.questions.length} onclick={() => openModal('print')}><Printer size={17} /></button>
+    <button class="btn btn-ghost hide-xs" title="Check questions: review progress, answer key and repeated questions (Alt+C)" disabled={!app.quiz.questions.length} onclick={() => openModal('check')}><ListChecks size={16} /><span class="btn-text">Check</span></button>
     <button class="btn btn-soft hide-xs" title="Generate questions with AI: write a prompt for an AI chatbot (Alt+G)" aria-label="Generate questions with AI" onclick={() => openModal('ai-prompt')}><Sparkles size={16} /><span class="btn-text">AI</span></button>
     <span class="divider"></span>
     <!-- Cloud, with the Save button of a quiz that is in the cloud after it -->
@@ -123,22 +141,22 @@
       >
     {/if}
     <span class="divider"></span>
-    <button class="btn btn-ghost btn-icon" title="Help & shortcuts" aria-label="Help" onclick={() => openModal('help')}><CircleQuestionMark size={17} /></button>
+    <!-- Everything used less often -->
     <button
       class="btn btn-ghost btn-icon"
-      title={app.theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-      aria-label="Toggle dark mode"
-      onclick={toggleTheme}
+      title="More: new quiz, settings, print, help, dark mode"
+      aria-label="More"
+      aria-haspopup="menu"
+      aria-expanded={!!more}
+      onpointerdown={(e) => e.stopPropagation()}
+      onclick={openMore}><EllipsisVertical size={18} /></button
     >
-      {#if app.theme === 'dark'}<Sun size={17} />{:else}<Moon size={17} />{/if}
-    </button>
-    {#if canFullscreen}
-      <button class="btn btn-ghost btn-icon" title={fullscreen ? 'Exit full screen' : 'Full screen'} aria-label="Toggle full screen" onclick={toggleFullscreen}>
-        {#if fullscreen}<Minimize size={17} />{:else}<Maximize size={17} />{/if}
-      </button>
-    {/if}
   </div>
 </header>
+
+{#if more}
+  <ContextMenu x={more.x} y={more.y} items={moreItems} onclose={() => (more = null)} />
+{/if}
 
 <style>
   .header {
@@ -257,7 +275,7 @@
     }
   }
   /* Below this, the plain buttons show only their icon so everything fits; AI and Cloud keep their label longer. */
-  @media (max-width: 1320px) {
+  @media (max-width: 1060px) {
     .btn-ghost .btn-text {
       display: none;
     }
@@ -279,9 +297,6 @@
     .btn:has(.btn-text) {
       width: 34px;
       padding: 0;
-    }
-    .hide-sm {
-      display: none;
     }
   }
   @media (max-width: 560px) {

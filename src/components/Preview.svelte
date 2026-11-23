@@ -276,10 +276,10 @@
 <div class="wrap" bind:this={wrapEl} {onpointerup} onpointerdown={() => (bubble = null)}>
   {#if showAnswers === null}
     <div class="bar">
-      <span class="hint">Student view preview — options are shown in their original order.</span>
+      <span class="pane-title" title="What a student sees. Shuffled options are shown in their original order."><span class="live"></span> Live preview</span>
       <span class="tools">
       <button
-        class="btn btn-sm zoom-btn"
+        class="btn btn-ghost btn-sm zoom-btn"
         title="Zoom the preview (Ctrl + scroll wheel)"
         aria-label="Zoom: {Math.round(app.previewZoom * 100)}%"
         aria-haspopup="menu"
@@ -288,12 +288,12 @@
         onclick={openZoomMenu}><ZoomIn size={15} /> {Math.round(app.previewZoom * 100)}%</button
       >
       {#if q.type !== 'description' && q.type !== 'essay'}
-        <button class="btn btn-sm" class:active={app.revealAnswers} title="Alt+A" aria-pressed={app.revealAnswers} onclick={() => (app.revealAnswers = !app.revealAnswers)}>
+        <button class="btn btn-sm" class:active={app.revealAnswers} title="{app.revealAnswers ? 'Hide' : 'Show'} the correct answers (Alt+A)" aria-pressed={app.revealAnswers} onclick={() => (app.revealAnswers = !app.revealAnswers)}>
           {#if app.revealAnswers}<EyeOff size={15} />{:else}<Eye size={15} />{/if}
           <!-- Both labels take up space so the button keeps its width when toggled. -->
           <span class="swap">
-            <span class:off={app.revealAnswers} aria-hidden={app.revealAnswers}>Show correct answers</span>
-            <span class:off={!app.revealAnswers} aria-hidden={!app.revealAnswers}>Hide correct answers</span>
+            <span class:off={app.revealAnswers} aria-hidden={app.revealAnswers}>Show answers</span>
+            <span class:off={!app.revealAnswers} aria-hidden={!app.revealAnswers}>Hide answers</span>
           </span>
         </button>
       {/if}
@@ -514,6 +514,25 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+  }
+  .pane-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-3);
+    white-space: nowrap;
+    cursor: default;
+  }
+  .live {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 0 3px var(--success-soft);
   }
   .tools {
     display: flex;

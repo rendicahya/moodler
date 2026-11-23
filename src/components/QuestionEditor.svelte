@@ -1,6 +1,6 @@
 <script>
   import { tick } from 'svelte';
-  import { ChevronLeft, ChevronRight, Copy, Trash, Pencil, Eye, Columns2, TriangleAlert, Plus, X, CircleCheck, CircleDot, WandSparkles } from '@lucide/svelte';
+  import { ChevronLeft, ChevronRight, Pencil, Eye, Columns2, TriangleAlert, Plus, X, CircleCheck, CircleDot, WandSparkles, EllipsisVertical } from '@lucide/svelte';
   import Section from './ui/Section.svelte';
   import Switch from './ui/Switch.svelte';
   import Segmented from './ui/Segmented.svelte';
@@ -17,8 +17,8 @@
   import GapEditor from './editors/GapEditor.svelte';
   import OrderingEditor from './editors/OrderingEditor.svelte';
   import CalculatedEditor from './editors/CalculatedEditor.svelte';
-  import { app, duplicateQuestion, deleteQuestion, setView, goToQuestion, saveLayout, markReviewed, markUnreviewed, openModal } from '../lib/store.svelte.js';
-  import { showMenu, questionMenu } from '../lib/questionmenu.svelte.js';
+  import { app, setView, goToQuestion, saveLayout, markReviewed, markUnreviewed, openModal } from '../lib/store.svelte.js';
+  import { showMenu, questionMenu, contextMenu, closeMenu } from '../lib/questionmenu.svelte.js';
   import { TYPE_MAP, TEXT_FORMATS, PENALTIES, uid } from '../lib/model.js';
   import { issuesOf } from '../lib/questioncache.svelte.js';
   import { TYPE_ICONS } from '../lib/icons.js';
@@ -50,6 +50,13 @@
   const showPreview = $derived(app.wide ? app.view !== 'edit' : app.tab === 'preview');
 
   const total = $derived(app.quiz.questions.length);
+
+  // A second click on the "More" button closes its menu again.
+  function openMore(e) {
+    if (contextMenu.open) return closeMenu();
+    const r = e.currentTarget.getBoundingClientRect();
+    contextMenu.open = { x: r.right - 220, y: r.bottom + 4, items: questionMenu(q.id) };
+  }
 
   // The editor is re-created for each question, so put focus back on the button that was used to navigate.
   async function go(step, e) {
@@ -99,11 +106,12 @@
     <!-- Navigation and layout switch are centred; identity on the left, actions on the right. -->
     <div class="center">
       <nav class="pager" aria-label="Question navigation">
-        <button id="nav-prev" class="btn btn-sm" title="Previous question (Alt+Page Up)" aria-label="Previous question" disabled={index === 0} onclick={(e) => go(-1, e)}>
-          <ChevronLeft size={16} /><span class="nav-text">Previous</span>
+        <button id="nav-prev" class="btn btn-ghost btn-icon btn-sm" title="Previous question (Alt+Page Up)" aria-label="Previous question" disabled={index === 0} onclick={(e) => go(-1, e)}>
+          <ChevronLeft size={16} />
         </button>
-        <button id="nav-next" class="btn btn-sm" title="Next question (Alt+Page Down)" aria-label="Next question" disabled={index === total - 1} onclick={(e) => go(1, e)}>
-          <span class="nav-text">Next</span><ChevronRight size={16} />
+        <span class="pos" aria-label="Question {index + 1} of {total}">{index + 1} / {total}</span>
+        <button id="nav-next" class="btn btn-ghost btn-icon btn-sm" title="Next question (Alt+Page Down)" aria-label="Next question" disabled={index === total - 1} onclick={(e) => go(1, e)}>
+          <ChevronRight size={16} />
         </button>
       </nav>
       {#if app.wide}
@@ -140,8 +148,15 @@
         <button class="btn btn-ghost btn-icon btn-sm" title="Mark as not reviewed, to check it again later (Alt+Shift+R)" aria-label="Mark as not reviewed" onclick={() => markUnreviewed(q.id)}><CircleDot size={15} /></button>
       {/if}
       <button class="btn btn-ghost btn-icon btn-sm" title="Improve with AI: fix, simplify, translate or write similar questions (Alt+I)" aria-label="Improve with AI" onclick={() => openModal('ai-question', { id: q.id })}><WandSparkles size={15} /></button>
-      <button class="btn btn-ghost btn-icon btn-sm" title="Duplicate" aria-label="Duplicate" onclick={() => duplicateQuestion(q.id)}><Copy size={15} /></button>
-      <button class="btn btn-ghost btn-icon btn-sm danger" title="Delete question (Alt+Delete)" aria-label="Delete question" onclick={() => deleteQuestion(q.id)}><Trash size={15} /></button>
+      <!-- Duplicate, delete, move and the rest: the same menu as a right-click on the question. -->
+      <button
+        class="btn btn-ghost btn-icon btn-sm"
+        title="More: duplicate, move, delete…"
+        aria-label="More actions for this question"
+        aria-haspopup="menu"
+        onpointerdown={(e) => contextMenu.open && e.stopPropagation()}
+        onclick={openMore}><EllipsisVertical size={16} /></button
+      >
     </div>
   </div>
 
@@ -222,7 +237,7 @@
             <div class="field">
               <FieldLabel
                 for="penalty-{q.id}"
-                text="Penalty per wrong try"
+                text="Penalty"
                 info={HELP.penalty}
               />
               <select id="penalty-{q.id}" class="select select-sm" value={penaltyValue} onchange={(e) => (q.penalty = Number(e.currentTarget.value))}>
@@ -234,10 +249,9 @@
             <FieldLabel
               for="idn-{q.id}"
               text="ID number"
-              optional
-              info="Your own identifier for the question, e.g. CH2-Q05. It must be unique within its category. Students never see it."
+              info="Optional. Your own identifier for the question, e.g. CH2-Q05. It must be unique within its category. Students never see it."
             />
-            <input id="idn-{q.id}" class="input input-sm" bind:value={q.idnumber} />
+            <input id="idn-{q.id}" class="input input-sm" placeholder="Optional" bind:value={q.idnumber} />
           </div>
           <div class="field">
             <FieldLabel text="Visibility" info="Hidden questions stay in the question bank but can’t be added to new quizzes." />
@@ -358,7 +372,6 @@
     {#if showPreview}
       <div class="pane preview-pane" class:side={split}>
         <div class="content">
-          {#if split}<div class="pane-title"><span class="live"></span> Live preview</div>{/if}
           <Preview {q} {index} />
         </div>
       </div>
@@ -419,8 +432,16 @@
     display: flex;
     gap: 4px;
   }
-  .pager .btn {
-    gap: 2px;
+  .pager {
+    align-items: center;
+  }
+  .pos {
+    min-width: 44px;
+    text-align: center;
+    font-size: 12.5px;
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
   .center {
     display: flex;
@@ -496,23 +517,6 @@
   .dragging .divider::after {
     inset: 0 2px;
     background: var(--accent);
-  }
-  .pane-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--text-3);
-  }
-  .live {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--success);
-    box-shadow: 0 0 0 3px var(--success-soft);
   }
   .content {
     container-type: inline-size;
@@ -609,11 +613,6 @@
     .meta > .field,
     .meta > .field:last-child {
       flex: 1 1 40%;
-    }
-  }
-  @container (max-width: 1000px) {
-    .nav-text {
-      display: none;
     }
   }
   @container (max-width: 640px) {

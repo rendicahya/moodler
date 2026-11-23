@@ -1,7 +1,6 @@
 // Right-click menus for questions, in the editor and in the question list. One menu is shown at a time, by App.
 
-import { Plus, Copy, Trash, CircleCheck, CircleDot, WandSparkles, ArrowUp, ArrowDown, ArrowUpToLine, ArrowDownToLine, Upload, SquarePen, FolderInput, ChevronLeft, ChevronRight, Eye, EyeOff, Presentation } from '@lucide/svelte';
-import { Eraser } from '@lucide/svelte';
+import { Plus, Copy, Trash, CircleCheck, CircleDot, WandSparkles, ArrowUp, ArrowDown, ArrowUpToLine, ArrowDownToLine, ArrowUpDown, Upload, SquarePen, FolderInput, ChevronLeft, ChevronRight, Eye, EyeOff, Presentation, Eraser } from '@lucide/svelte';
 import { app, select, openModal, duplicateQuestion, deleteQuestion, moveQuestion, setReviewed, markReviewed, goToQuestion, deleteChecked, duplicateChecked, moveChecked, notify } from './store.svelte.js';
 import { htmlClutter, cleanQuestionsHtml } from './cleanhtml.js';
 
@@ -53,10 +52,17 @@ export function questionMenu(id, { inEditor = false } = {}) {
     { label: 'Remove extra HTML', icon: Eraser, disabled: !htmlClutter(q).length, run: () => cleaned(cleanQuestionsHtml([q])) },
     inEditor && { label: 'Preview the whole quiz', icon: Presentation, run: () => openModal('quiz-preview') },
     '-',
-    { label: 'Move up', icon: ArrowUp, disabled: i === 0, run: move(i - 1) },
-    { label: 'Move down', icon: ArrowDown, disabled: i === last, run: move(i + 1) },
-    { label: 'Move to the top', icon: ArrowUpToLine, disabled: i === 0, run: move(0) },
-    { label: 'Move to the bottom', icon: ArrowDownToLine, disabled: i === last, run: move(last) },
+    {
+      label: 'Move',
+      icon: ArrowUpDown,
+      disabled: last === 0,
+      items: [
+        { label: 'Up', icon: ArrowUp, hint: 'Alt+↑', disabled: i === 0, run: move(i - 1) },
+        { label: 'Down', icon: ArrowDown, hint: 'Alt+↓', disabled: i === last, run: move(i + 1) },
+        { label: 'To the top', icon: ArrowUpToLine, disabled: i === 0, run: move(0) },
+        { label: 'To the bottom', icon: ArrowDownToLine, disabled: i === last, run: move(last) },
+      ],
+    },
     '-',
     { label: 'Delete question', icon: Trash, danger: true, run: () => deleteQuestion(id) },
   ].filter(Boolean);
@@ -83,8 +89,14 @@ export function checkedMenu() {
       run: () => cleaned(cleanQuestionsHtml(app.quiz.questions.filter((q) => ids.has(q.id)))),
     },
     '-',
-    { label: 'Move to the top', icon: ArrowUpToLine, run: () => moveChecked('top') },
-    { label: 'Move to the bottom', icon: ArrowDownToLine, run: () => moveChecked('bottom') },
+    {
+      label: 'Move',
+      icon: ArrowUpDown,
+      items: [
+        { label: 'To the top', icon: ArrowUpToLine, run: () => moveChecked('top') },
+        { label: 'To the bottom', icon: ArrowDownToLine, run: () => moveChecked('bottom') },
+      ],
+    },
     '-',
     { label: `Delete ${n} questions`, icon: Trash, danger: true, run: deleteChecked },
   ];
