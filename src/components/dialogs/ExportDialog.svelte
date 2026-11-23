@@ -30,8 +30,17 @@
   const fmt = $derived(FORMAT_MAP[format]);
   const defaultName = $derived(`${slug}${format === 'gift' ? '-gift' : format === 'aiken' ? '-aiken' : ''}.${fmt.ext}`);
 
-  const questions = $derived(scope === 'picked' ? app.quiz.questions.filter((q) => picked.includes(q.id)) : app.quiz.questions);
+  // When the quiz is tracked for review, every question not left to review counts as reviewed (as in the sidebar).
+  const reviewTracked = $derived(!app.quiz.noReview && app.quiz.questions.some((q) => q.unreviewed || q.reviewed));
+  const reviewed = $derived(reviewTracked ? app.quiz.questions.filter((q) => !q.unreviewed) : []);
+  const questions = $derived(
+    scope === 'picked' ? app.quiz.questions.filter((q) => picked.includes(q.id)) : scope === 'reviewed' ? reviewed : app.quiz.questions
+  );
   const allPicked = $derived(app.quiz.questions.length > 0 && picked.length === app.quiz.questions.length);
+  const reviewedPicked = $derived(reviewed.length > 0 && reviewed.length === picked.length && reviewed.every((q) => picked.includes(q.id)));
+  $effect(() => {
+    if (scope === 'reviewed' && !reviewTracked) scope = 'all';
+  });
 
   function togglePick(id) {
     picked = picked.includes(id) ? picked.filter((p) => p !== id) : [...picked, id];
@@ -127,6 +136,7 @@
       <Segmented
         options={[
           { value: 'all', label: `All (${app.quiz.questions.length})` },
+          ...(reviewTracked ? [{ value: 'reviewed', label: `Reviewed (${reviewed.length})` }] : []),
           { value: 'picked', label: `Selected (${picked.length})` },
         ]}
         label="Questions to export"
@@ -151,6 +161,16 @@
           />
           Select all
         </label>
+        {#if reviewTracked}
+          <button
+            class="btn btn-ghost btn-sm pick-reviewed"
+            title="Select only the questions that have been reviewed"
+            disabled={!reviewed.length || reviewedPicked}
+            onclick={() => (picked = reviewed.map((q) => q.id))}
+          >
+            <CircleCheck size={14} /> Select reviewed
+          </button>
+        {/if}
         <span class="hint">{picked.length} of {app.quiz.questions.length} selected</span>
       </div>
       <ul class="pick-list" aria-label="Questions to export">
@@ -162,6 +182,7 @@
               <span class="pick-num">{i + 1}</span>
               <span class="pick-icon" title={TYPE_MAP[q.type].label}><Icon size={14} /></span>
               <span class="pick-name">{questionTitle(q)}</span>
+              {#if reviewTracked && !q.unreviewed}<span class="pick-done" title="Reviewed"><CircleCheck size={14} /></span>{/if}
             </label>
           </li>
         {/each}
@@ -349,6 +370,19 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .pick-list .pick-name {
+    flex: 1;
+  }
+  .pick-done {
+    flex: none;
+    display: inline-flex;
+    color: var(--success);
+  }
+  .pick-head .pick-reviewed {
+    margin-left: auto;
+    margin-right: 8px;
+    font-weight: 500;
+  }
   .check {
     flex: none;
     border-radius: var(--radius);
@@ -363,6 +397,10 @@
     color: var(--success);
   }
   .check.bad {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    cursor: default;
     border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent);
     overflow: hidden;
   }

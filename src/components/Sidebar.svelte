@@ -107,7 +107,12 @@
   const reviewTracked = $derived(!app.quiz.noReview && (reviewCount > 0 || app.quiz.questions.some((q) => q.reviewed)));
   // Every question not left to review counts as reviewed (see the check marks in the list).
   const reviewedCount = $derived(reviewTracked ? app.quiz.questions.length - reviewCount : 0);
-  const checkedToReview = $derived(app.quiz.questions.some((q) => q.unreviewed && app.checked.includes(q.id)));
+  // Ticks exactly the reviewed questions, clearing the search so none of them are hidden.
+  function selectReviewed() {
+    app.search = '';
+    app.checked = app.quiz.questions.filter((q) => !q.unreviewed).map((q) => q.id);
+  }
+  const checkedToReview =$derived(app.quiz.questions.some((q) => q.unreviewed && app.checked.includes(q.id)));
   const typeCounts = $derived(
     QUESTION_TYPES.map((t) => ({ ...t, count: app.quiz.questions.filter((q) => q.type === t.type).length })).filter((t) => t.count)
   );
@@ -213,9 +218,14 @@
         </ul>
         <span class="badges">
           {#if reviewTracked}
-            <span class="badge reviewed" title="{reviewedCount} question{reviewedCount === 1 ? '' : 's'} reviewed">
+            <button
+              class="badge reviewed"
+              title="{reviewedCount} question{reviewedCount === 1 ? '' : 's'} reviewed: click to select them (to export them, for example)"
+              disabled={!reviewedCount}
+              onclick={selectReviewed}
+            >
               <CircleCheck size={12} /> {reviewedCount}
-            </span>
+            </button>
           {/if}
           {#if reviewCount}
             <button class="badge to-review" title="{reviewCount} question{reviewCount === 1 ? '' : 's'} still to review: click to go to the next one (Alt+R)" onclick={nextUnreviewed}>
@@ -394,18 +404,24 @@
     font-size: 12px;
   }
   .issues,
-  .to-review {
+  .to-review,
+  .reviewed {
     border: none;
     font: inherit;
     font-size: 12px;
     cursor: pointer;
   }
+  .reviewed:disabled {
+    cursor: default;
+  }
   .issues:hover,
-  .to-review:hover {
+  .to-review:hover,
+  .reviewed:hover:not(:disabled) {
     filter: brightness(0.95);
   }
   .issues:focus-visible,
-  .to-review:focus-visible {
+  .to-review:focus-visible,
+  .reviewed:focus-visible {
     outline: none;
     box-shadow: var(--focus);
   }
