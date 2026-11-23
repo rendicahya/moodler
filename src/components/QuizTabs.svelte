@@ -196,7 +196,7 @@
           </button>
       </div>
     {/each}
-    <button class="add" title="New quiz (Alt+Shift+N)" aria-label="New quiz" onclick={newQuiz}><Plus size={16} /></button>
+    {#if !blank}<button class="add" title="New quiz (Alt+Shift+N)" aria-label="New quiz" onclick={newQuiz}><Plus size={16} /></button>{/if}
   </div>
 </nav>
 

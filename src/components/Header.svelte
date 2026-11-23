@@ -3,7 +3,7 @@
   import { Sun, Moon, Maximize, Minimize, Undo2, Redo2, Upload, Download, FilePlus, Settings, CircleQuestionMark, Presentation, Printer, Sparkles, ListChecks, Cloud, CloudUpload, CloudCheck, RefreshCw, EllipsisVertical, HardDriveDownload } from '@lucide/svelte';
   import QuizTabs from './QuizTabs.svelte';
   import ContextMenu from './ui/ContextMenu.svelte';
-  import { app, library, history, backup, REMIND_AFTER, undo, redo, toggleTheme, openModal, newQuiz, downloadBackup } from '../lib/store.svelte.js';
+  import { app, library, history, backup, REMIND_AFTER, undo, redo, toggleTheme, openModal, newQuiz, downloadBackup, isStartScreen } from '../lib/store.svelte.js';
   import { sync, editedSinceUpload, autoBlocked, uploadChanges } from '../lib/cloudsync.svelte.js';
   import { appUpdate, applyUpdate } from '../lib/pwa.svelte.js';
 
@@ -47,6 +47,8 @@
     more = { x: r.right - 230, y: r.bottom + 4 };
   }
   const empty = $derived(!app.quiz.questions.length);
+  // On the start screen no quiz is open yet, so there is nothing saved to report.
+  const start = $derived(isStartScreen());
   const moreItems = $derived([
     { label: 'New quiz', icon: FilePlus, hint: 'Alt+Shift+N', run: newQuiz },
     { label: 'Quiz settings…', icon: Settings, hint: 'Ctrl+,', run: () => openModal('settings') },
@@ -102,7 +104,9 @@
         <RefreshCw size={14} /><span>Update</span>
       </button>
     {/if}
-    {#if actionable}
+    {#if start}
+      <!-- Nothing open, so no save status. -->
+    {:else if actionable}
       <button class="btn btn-ghost btn-sm status {status}" title={statusTitle} aria-label="{STATUS_TEXT[status]}. Download a backup" onclick={downloadBackup}>
         <span class="dot"></span><span class="status-text">{STATUS_TEXT[status]}</span>
       </button>
@@ -118,7 +122,7 @@
     <span class="divider"></span>
     <!-- Getting questions in and out -->
     <button class="btn btn-ghost" title="Import questions (Ctrl+O)" onclick={() => openModal('import')}><Download size={16} /><span class="btn-text">Import</span></button>
-    <button class="btn btn-ghost" title={entry?.cloudVersion ? 'Export questions' : 'Export questions (Ctrl+S)'} onclick={() => openModal('export')}><Upload size={16} /><span class="btn-text">Export</span></button>
+    <button class="btn btn-ghost" title={entry?.cloudVersion ? 'Export questions' : 'Export questions (Ctrl+S)'} disabled={empty} onclick={() => openModal('export')}><Upload size={16} /><span class="btn-text">Export</span></button>
     <span class="divider"></span>
     <!-- Looking over the quiz -->
     <button class="btn btn-ghost" title="Preview the whole quiz (Alt+Q)" disabled={!app.quiz.questions.length} onclick={() => openModal('quiz-preview')}>

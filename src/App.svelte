@@ -182,7 +182,7 @@
       e.preventDefault();
       // A quiz opened from (or uploaded to) the cloud is saved back there; others open the export dialog.
       const entry = library.quizzes.find((q) => q.id === library.activeId);
-      if (!entry?.cloudVersion) openModal('export');
+      if (!entry?.cloudVersion && app.quiz.questions.length) openModal('export');
       else if (editedSinceUpload(entry) || history.pending) uploadChanges();
       else notify(`No changes to upload: “${entry.name}” is up to date in the cloud.`, 'info', 3000);
     } else if (mod && key === 'o') {
