@@ -14,7 +14,8 @@
     LETTERS,
     placeProblem,
     fixPlace,
-    lookAlikeAnswers,
+    answerProblems,
+    answerProblemText,
     imagesWithoutAlt,
     setImageAlt,
     placeName,
@@ -46,7 +47,10 @@
 
   // ------------------------------------------------ answers
   const placed = $derived(questions.map((q) => ({ q, problem: placeProblem(q) })).filter((x) => x.problem));
-  const alike = $derived(questions.map((q) => ({ q, pairs: lookAlikeAnswers(q) })).filter((x) => x.pairs.length));
+  const answerRows = $derived(questions.map((q) => ({ q, problems: answerProblems(q) })));
+  const pick = (kind) => answerRows.map(({ q, problems }) => ({ q, problems: problems.filter((p) => p.kind === kind) })).filter((x) => x.problems.length);
+  const same = $derived(pick('same'));
+  const empty = $derived(pick('empty'));
 
   async function fixPlaces(list, e) {
     const dialog = e?.currentTarget.closest('[role=dialog]');
@@ -57,10 +61,6 @@
     if (dialog && !dialog.contains(document.activeElement)) keepFocus(dialog)?.focus();
   }
 
-  const pairText = (p) => {
-    const what = { answers: 'Answers', items: 'Items', questions: 'Pairs', choices: 'Choices' }[p.what];
-    return `${what} ${p.a} and ${p.b} ${p.kind === 'same' ? 'are the same' : 'have the same words'}`;
-  };
 
   // ------------------------------------------------ images
   const images = $derived(questions.flatMap((q) => imagesWithoutAlt(q).map((img) => ({ q, ...img, key: `${q.id}:${img.path.join('.')}:${img.index}` }))));
@@ -144,7 +144,7 @@
   // Checks that found nothing are listed on one line instead of a section each.
   const passed = $derived(
     [
-      !placed.length && !alike.length && 'the answers',
+      !placed.length && !same.length && !empty.length && 'the answers',
       !images.length && questions.some((q) => /<img\b/i.test(JSON.stringify(q))) && 'picture descriptions',
       !cluttered.length && 'the HTML',
     ].filter(Boolean)
@@ -253,12 +253,33 @@
   </section>
   {/if}
 
-  {#if placed.length || alike.length}
+  {#snippet answerList(list, text)}
+    <div class="sub">
+      <p class="status warn">
+        <TriangleAlert size={16} />
+        <span>{text}</span>
+      </p>
+      <ul class="list">
+        {#each list as { q, problems } (q.id)}
+          {@const Icon = TYPE_ICONS[q.type]}
+          <li>
+            <span class="num">{numberOf(q.id)}</span>
+            <span class="icon"><Icon size={14} /></span>
+            <span class="name">{questionTitle(q)}</span>
+            <span class="why">{problems.map(answerProblemText).join('; ')}</span>
+            <button class="btn btn-sm" onclick={() => openQuestion(q.id)}>Open <ArrowRight size={14} /></button>
+          </li>
+        {/each}
+      </ul>
+    </div>
+  {/snippet}
+
+  {#if placed.length || same.length || empty.length}
   <section>
     <h3>
       Answers
       <Info
-        text="Moodle shuffles the answers when both the question's “Shuffle the choices” and the quiz's “Shuffle within questions” are on, so “All of the above” can end up at the top. Answers that read the same are confusing, and a question can't be answered fairly when two of them are the same."
+        text="Moodle shuffles the answers when both the question's “Shuffle the choices” and the quiz's “Shuffle within questions” are on, so “All of the above” can end up at the top. A question can't be answered fairly when two of its answers are exactly the same, and an empty answer shows up as a blank option. Answers that are only alike are fine."
       />
     </h3>
     {#if placed.length}
@@ -288,25 +309,11 @@
         </ul>
       </div>
     {/if}
-    {#if alike.length}
-      <div class="sub">
-        <p class="status warn">
-          <TriangleAlert size={16} />
-          <span>{alike.length} question{alike.length === 1 ? ' has' : 's have'} answers that look alike. Rewrite or remove one of each pair:</span>
-        </p>
-        <ul class="list">
-          {#each alike as { q, pairs } (q.id)}
-            {@const Icon = TYPE_ICONS[q.type]}
-            <li>
-              <span class="num">{numberOf(q.id)}</span>
-              <span class="icon"><Icon size={14} /></span>
-              <span class="name">{questionTitle(q)}</span>
-              <span class="why">{pairs.map(pairText).join('; ')}</span>
-              <button class="btn btn-sm" onclick={() => openQuestion(q.id)}>Open <ArrowRight size={14} /></button>
-            </li>
-          {/each}
-        </ul>
-      </div>
+    {#if same.length}
+      {@render answerList(same, `${same.length} question${same.length === 1 ? ' has' : 's have'} two or more answers that are exactly the same. Rewrite or remove the extra ones:`)}
+    {/if}
+    {#if empty.length}
+      {@render answerList(empty, `${empty.length} question${empty.length === 1 ? ' has' : 's have'} an empty answer. Fill it in or remove it:`)}
     {/if}
   </section>
   {/if}

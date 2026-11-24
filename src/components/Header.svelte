@@ -6,6 +6,7 @@
   import { app, library, history, backup, REMIND_AFTER, undo, redo, toggleTheme, openModal, newQuiz, downloadBackup, isStartScreen } from '../lib/store.svelte.js';
   import { sync, editedSinceUpload, autoBlocked, uploadChanges } from '../lib/cloudsync.svelte.js';
   import { appUpdate, applyUpdate } from '../lib/pwa.svelte.js';
+  import { checkWarnings } from '../lib/checks.js';
 
   const entry = $derived(library.quizzes.find((q) => q.id === library.activeId));
   // A quiz in the cloud has a Save button. Its changes also upload by themselves a few seconds after editing stops.
@@ -47,6 +48,18 @@
     more = { x: r.right - 230, y: r.bottom + 4 };
   }
   const empty = $derived(!app.quiz.questions.length);
+
+  // How many things the Check dialog warns about, worked out a moment after editing stops so typing stays quick.
+  let warnings = $state([]);
+  $effect(() => {
+    const questions = $state.snapshot(app.quiz.questions);
+    const timer = setTimeout(() => (warnings = checkWarnings(questions)), 400);
+    return () => clearTimeout(timer);
+  });
+  const warningCount = $derived(warnings.reduce((n, w) => n + w.count, 0));
+  const checkTitle = $derived(
+    ['Check questions: review progress, answer key and repeated questions (Alt+C)', ...warnings.map((w) => `• ${w.text}`)].join('\n')
+  );
   // On the start screen no quiz is open yet, so there is nothing saved to report.
   const start = $derived(isStartScreen());
   const moreItems = $derived([
@@ -128,7 +141,19 @@
     <button class="btn btn-ghost" title="Preview the whole quiz (Alt+Q)" disabled={!app.quiz.questions.length} onclick={() => openModal('quiz-preview')}>
       <Presentation size={16} /><span class="btn-text">Preview</span>
     </button>
-    <button class="btn btn-ghost hide-xs" title="Check questions: review progress, answer key and repeated questions (Alt+C)" disabled={!app.quiz.questions.length} onclick={() => openModal('check')}><ListChecks size={16} /><span class="btn-text">Check</span></button>
+    <button
+      class="btn btn-ghost hide-xs"
+      title={checkTitle}
+      aria-label={warningCount ? `Check questions, ${warningCount} warning${warningCount === 1 ? '' : 's'}` : 'Check questions'}
+      disabled={empty}
+      onclick={() => openModal('check')}
+    >
+      <span class="check-icon">
+        <ListChecks size={16} />
+        {#if warningCount && !empty}<span class="count" aria-hidden="true">{warningCount > 99 ? '99+' : warningCount}</span>{/if}
+      </span>
+      <span class="btn-text">Check</span>
+    </button>
     <button class="btn btn-soft hide-xs" title="Generate questions with AI: write a prompt for an AI chatbot (Alt+G)" aria-label="Generate questions with AI" onclick={() => openModal('ai-prompt')}><Sparkles size={16} /><span class="btn-text">AI</span></button>
     <span class="divider"></span>
     <!-- Cloud, with the Save button of a quiz that is in the cloud after it -->
@@ -260,6 +285,28 @@
   .cloud-sync.warn {
     border-color: color-mix(in srgb, var(--warning) 50%, transparent);
     color: var(--warning);
+  }
+  /* The number of warnings, on the corner of the Check icon. */
+  .check-icon {
+    position: relative;
+    display: inline-flex;
+  }
+  .check-icon .count {
+    position: absolute;
+    top: -8px;
+    right: -6px;
+    min-width: 15px;
+    height: 15px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: var(--warning);
+    color: var(--surface);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 15px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    box-shadow: 0 0 0 2px var(--surface);
   }
   .divider {
     width: 1px;

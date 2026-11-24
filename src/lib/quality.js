@@ -125,31 +125,43 @@ export function fixPlace(q) {
   return true;
 }
 
-// ---------------------------------------------------------------- answers that look alike
+// ---------------------------------------------------------------- repeated and empty answers
 
-const normalized = (html) =>
-  stripHtml(html ?? '')
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/\p{M}/gu, '')
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
-    .trim();
+// Pictures, formulas and other markup without text still make an answer that isn't empty.
+const HAS_CONTENT = /<(img|svg|math|video|audio|iframe|object)\b/i;
 
-/** The lists in a question whose entries should all differ, as [what, [{ n, text }]] with n the 1-based number. */
+/**
+ * What a student sees of an answer: its text with the spaces evened out, or, when it holds a picture or other
+ * markup, the HTML itself. Formatting that doesn't show (a <p> around the text, extra spaces) doesn't count, but
+ * everything else does: "Paris" and "paris" or "Paris." are different answers.
+ */
+function answerKey(html) {
+  const s = String(html ?? '');
+  if (HAS_CONTENT.test(s)) return s.replace(/\s+/g, ' ').trim();
+  return stripHtml(s).replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * The lists in a question whose entries should all differ, as { what, rows: [{ n, text }], blank } with n the
+ * 1-based number; `blank` says which rows count as empty.
+ */
 function answerLists(q) {
-  const rows = (list) => (list ?? []).map((x, i) => ({ n: i + 1, text: x.text, group: x.group }));
+  const rows = (list) => (list ?? []).map((x, i) => ({ n: i + 1, text: x.text, group: x.group, answer: x.answer }));
+  const noText = (r) => !answerKey(r.text);
   switch (q.type) {
     case 'multichoice':
-      return [['answers', rows(q.answers)]];
+      return [{ what: 'answers', rows: rows(q.answers), blank: noText }];
     case 'ordering':
-      return [['items', rows(q.items)]];
+      return [{ what: 'items', rows: rows(q.items), blank: noText }];
     case 'matching':
-      return [['questions', rows(q.subquestions)]];
+      // A pair with an answer but no question is an extra wrong answer, so only pairs with neither are empty.
+      return [{ what: 'pairs', rows: rows(q.subquestions), blank: (r) => noText(r) && !String(r.answer ?? '').trim() }];
     case 'gapselect':
     case 'ddwtos': {
+      // The same word in two groups belongs to different gaps, so repeats only count within a group.
       const groups = new Map();
       for (const c of rows(q.choices)) groups.set(c.group, [...(groups.get(c.group) ?? []), c]);
-      return [...groups.values()].map((list) => ['choices', list]);
+      return [...groups.values()].map((list) => ({ what: 'choices', rows: list, blank: noText }));
     }
     default:
       return [];
@@ -157,24 +169,36 @@ function answerLists(q) {
 }
 
 /**
- * Pairs of answers in one question that students can't tell apart: the same text apart from capitals, spaces
- * and punctuation (`same`), or the same words in another order (`reordered`). Empty answers are left to the
- * other checks. Returns [{ what, a, b, kind }] with `a` and `b` the 1-based numbers in their list.
+ * Answers in one question that are exactly the same, or empty. Answers that are only alike ("increases" and
+ * "decreases", "1998" and "1989") are normal and not reported.
+ * Returns [{ what, kind: 'same' | 'empty', items }] with `items` the 1-based numbers in their list.
  */
-export function lookAlikeAnswers(q) {
+export function answerProblems(q) {
   const found = [];
-  for (const [what, list] of answerLists(q)) {
-    const keys = list.map((x) => normalized(x.text));
-    const sorted = keys.map((k) => k.split(' ').sort().join(' '));
-    for (let i = 0; i < list.length; i++) {
-      for (let j = i + 1; j < list.length; j++) {
-        if (!keys[i] || !keys[j]) continue;
-        const kind = keys[i] === keys[j] ? 'same' : sorted[i] === sorted[j] && keys[i].includes(' ') ? 'reordered' : null;
-        if (kind) found.push({ what, a: list[i].n, b: list[j].n, kind });
+  const empty = new Map();
+  for (const { what, rows, blank } of answerLists(q)) {
+    const seen = new Map();
+    for (const r of rows) {
+      if (blank(r)) {
+        empty.set(what, [...(empty.get(what) ?? []), r.n]);
+        continue;
       }
+      const key = answerKey(r.text);
+      if (!key) continue;
+      seen.set(key, [...(seen.get(key) ?? []), r.n]);
     }
+    for (const items of seen.values()) if (items.length > 1) found.push({ what, kind: 'same', items });
   }
+  for (const [what, items] of empty) found.push({ what, kind: 'empty', items: items.sort((a, b) => a - b) });
   return found;
+}
+
+/** "Answers 2 and 4 are the same", "Answer 3 is empty". */
+export function answerProblemText(p) {
+  const one = { answers: 'Answer', items: 'Item', pairs: 'Pair', choices: 'Choice' }[p.what] ?? p.what;
+  const list = p.items.length === 1 ? `${one} ${p.items[0]}` : `${one}s ${p.items.slice(0, -1).join(', ')} and ${p.items.at(-1)}`;
+  const verb = p.items.length === 1 ? 'is' : 'are';
+  return `${list} ${verb} ${p.kind === 'same' ? 'the same' : 'empty'}`;
 }
 
 // ---------------------------------------------------------------- images without alt text

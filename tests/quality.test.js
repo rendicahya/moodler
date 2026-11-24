@@ -123,7 +123,8 @@ test('material files go into the prompt as text, or are named as attachments', (
   assert.doesNotMatch(none, /attached|Source material/);
 });
 
-import { placeProblem, fixPlace, lookAlikeAnswers, imagesWithoutAlt, setImageAlt, altIsMissing, placeName } from '../src/lib/quality.js';
+import { placeProblem, fixPlace, answerProblems, answerProblemText, imagesWithoutAlt, setImageAlt, altIsMissing, placeName } from '../src/lib/quality.js';
+import { checkWarnings } from '../src/lib/checks.js';
 
 test('answers like "All of the above" are flagged when shuffled or not last, and fixed', () => {
   const q = { ...mc(['Red', 'All of the above', 'Blue', 'Green']), shuffleanswers: true };
@@ -141,15 +142,42 @@ test('answers like "All of the above" are flagged when shuffled or not last, and
   assert.equal(placeProblem({ ...mc(['Paris', 'Rome']), shuffleanswers: true }), null);
 });
 
-test('answers that look alike are found, but different ones are not', () => {
-  assert.deepEqual(lookAlikeAnswers(mc(['Photosynthesis', ' photosynthesis.', 'Respiration'])), [{ what: 'answers', a: 1, b: 2, kind: 'same' }]);
-  assert.deepEqual(lookAlikeAnswers(mc(['red and blue', 'Blue and red', 'green'])), [{ what: 'answers', a: 1, b: 2, kind: 'reordered' }]);
-  assert.deepEqual(lookAlikeAnswers(mc(['The pressure increases', 'The pressure decreases', '1998', '1989'])), []);
-  assert.deepEqual(lookAlikeAnswers(mc(['', '<p></p>', 'x'])), []);
-  const gaps = { type: 'gapselect', choices: [{ text: 'cat', group: 1 }, { text: 'Cat', group: 2 }, { text: 'cat', group: 1 }] };
-  assert.deepEqual(lookAlikeAnswers(gaps), [{ what: 'choices', a: 1, b: 3, kind: 'same' }]);
-  const match = { type: 'matching', subquestions: [{ text: '', answer: 'x' }, { text: 'Dog', answer: 'a' }, { text: 'dog', answer: 'b' }] };
-  assert.deepEqual(lookAlikeAnswers(match), [{ what: 'questions', a: 2, b: 3, kind: 'same' }]);
+test('answers that are exactly the same or empty are found, but answers that are only alike are not', () => {
+  // Invisible differences (spaces, a <p> around the text) don't count; capitals and punctuation do.
+  assert.deepEqual(answerProblems(mc(['Photosynthesis', '<p> Photosynthesis </p>', 'Respiration', 'Photosynthesis'])), [
+    { what: 'answers', kind: 'same', items: [1, 2, 4] },
+  ]);
+  assert.deepEqual(answerProblems(mc(['Photosynthesis', 'photosynthesis', 'Photosynthesis.'])), []);
+  assert.deepEqual(answerProblems(mc(['red and blue', 'blue and red', 'green'])), []);
+  assert.deepEqual(answerProblems(mc(['The pressure increases', 'The pressure decreases', '1998', '1989'])), []);
+  // Empty answers, but not pictures without text.
+  assert.deepEqual(answerProblems(mc(['', '<p>&nbsp;</p>', 'x', '<img src="a.png" alt="">'])), [{ what: 'answers', kind: 'empty', items: [1, 2] }]);
+  assert.deepEqual(answerProblems(mc(['<img src="a.png">', '<img src="b.png">', '<img src="a.png">'])), [{ what: 'answers', kind: 'same', items: [1, 3] }]);
+  // Gap choices repeat only within a group.
+  const gaps = { type: 'gapselect', choices: [{ text: 'cat', group: 1 }, { text: 'cat', group: 2 }, { text: 'cat', group: 1 }, { text: ' ', group: 2 }] };
+  assert.deepEqual(answerProblems(gaps), [
+    { what: 'choices', kind: 'same', items: [1, 3] },
+    { what: 'choices', kind: 'empty', items: [4] },
+  ]);
+  // A pair with only an answer is an extra wrong answer; one with neither is empty.
+  const match = { type: 'matching', subquestions: [{ text: '', answer: 'x' }, { text: 'Dog', answer: 'a' }, { text: 'Dog', answer: 'b' }, { text: '', answer: '' }] };
+  assert.deepEqual(answerProblems(match), [
+    { what: 'pairs', kind: 'same', items: [2, 3] },
+    { what: 'pairs', kind: 'empty', items: [4] },
+  ]);
+  assert.equal(answerProblemText({ what: 'answers', kind: 'same', items: [1, 2, 4] }), 'Answers 1, 2 and 4 are the same');
+  assert.equal(answerProblemText({ what: 'answers', kind: 'empty', items: [3] }), 'Answer 3 is empty');
+});
+
+test('the Check button counts what the Check dialog warns about', () => {
+  const qs = [
+    { id: 'a', ...mc(['x', 'x', 'y']), questiontext: 'One' },
+    { id: 'b', ...mc(['x', '', 'y']), questiontext: 'Two' },
+    { id: 'c', ...mc(['p', 'q', 'r']), questiontext: 'Three' },
+  ];
+  const w = checkWarnings(qs);
+  assert.deepEqual(w.filter((x) => ['same', 'empty'].includes(x.id)).map((x) => [x.id, x.count]), [['same', 1], ['empty', 1]]);
+  assert.deepEqual(checkWarnings([qs[2]]), []);
 });
 
 test('pictures without a useful description are found and can be described', () => {

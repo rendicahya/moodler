@@ -1,7 +1,6 @@
 <script>
   import { Download, Copy, TriangleAlert, Check, CircleCheck, ArrowRight, ListChecks, FileDown } from '@lucide/svelte';
-  import { answerKeyReport, findDuplicates, placeProblem, lookAlikeAnswers, imagesWithoutAlt } from '../../lib/quality.js';
-  import { htmlClutter } from '../../lib/cleanhtml.js';
+  import { checkWarnings } from '../../lib/checks.js';
   import Modal from '../ui/Modal.svelte';
   import Switch from '../ui/Switch.svelte';
   import Segmented from '../ui/Segmented.svelte';
@@ -74,19 +73,7 @@
     const list = [];
     const toReview = questions.filter((q) => q.unreviewed).length;
     if (toReview) list.push(`${toReview} question${toReview === 1 ? ' has' : 's have'} not been reviewed yet.`);
-    const key = answerKeyReport(questions);
-    if (key.skewed) list.push('The correct answers of the multiple-choice questions are not spread evenly over the positions.');
-    if (key.longSkew) list.push(`The correct answer is clearly the longest in ${key.longest.length} multiple-choice questions, which gives it away to students.`);
-    const placed = questions.filter(placeProblem).length;
-    if (placed) list.push(`${placed} question${placed === 1 ? ' has' : 's have'} an answer like “All of the above” that may not stay in its place.`);
-    const alike = questions.filter((q) => lookAlikeAnswers(q).length).length;
-    if (alike) list.push(`${alike} question${alike === 1 ? ' has' : 's have'} answers that look alike.`);
-    const pictures = questions.reduce((n, q) => n + imagesWithoutAlt(q).length, 0);
-    if (pictures) list.push(`${pictures} picture${pictures === 1 ? ' has' : 's have'} no description for screen readers.`);
-    const cluttered = questions.filter((q) => htmlClutter(q).length).length;
-    if (cluttered) list.push(`${cluttered} question${cluttered === 1 ? ' has' : 's have'} unnecessary HTML attributes or styles (from Word, Google Docs or AI chats).`);
-    const dupes = findDuplicates(questions.map((q) => ({ id: q.id, quizId: '', q })));
-    if (dupes.length) list.push(`${dupes.length} set${dupes.length === 1 ? '' : 's'} of questions repeat each other.`);
+    for (const w of checkWarnings(questions)) list.push(w.text);
     return list;
   });
 
