@@ -251,7 +251,7 @@
   </details>
 
   {#snippet footer()}
-    <button class="btn btn-ghost pdf-link" title="A paper version to print or download as PDF" onclick={() => openModal('print')}><FileDown size={16} /> PDF / print…</button>
+    <button class="btn btn-ghost pdf-link" title="A paper version to print or download as a Word (.docx) or PDF file" onclick={() => openModal('print')}><FileDown size={16} /> Word / PDF / print…</button>
     <button class="btn" onclick={copy} disabled={!questions.length || !output.text}>
       {#if copied}<Check size={16} /> Copied{:else}<Copy size={16} /> Copy{/if}
     </button>

@@ -1,12 +1,12 @@
 <script>
-  import { Printer, FileDown, LoaderCircle, ClipboardCheck } from '@lucide/svelte';
+  import { Printer, FileDown, FileText, LoaderCircle, ClipboardCheck } from '@lucide/svelte';
   import Modal from '../ui/Modal.svelte';
   import Switch from '../ui/Switch.svelte';
   import Segmented from '../ui/Segmented.svelte';
   import FieldLabel from '../ui/FieldLabel.svelte';
   import { buildPrintHtml, printHtml, PAPERS } from '../../lib/print.js';
   import { loadPrintPrefs, savePrintPrefs, examSetup, VERSION_LABELS } from '../../lib/exam.js';
-  import { slugify } from '../../lib/download.js';
+  import { downloadBlob, slugify } from '../../lib/download.js';
   import { app, checkedQuestions, closeModal, openModal, notify } from '../../lib/store.svelte.js';
 
   const prefs = loadPrintPrefs();
@@ -24,6 +24,7 @@
   let shown = $state('all');
   let scope = $state(app.checked.length ? 'checked' : 'all');
   let progress = $state(null);
+  let makingWord = $state(false);
 
   $effect(() => savePrintPrefs({ answers, marks, studentFields, feedback, paper, versions, shuffleQuestions, shuffleAnswers, sheet }));
   $effect(() => {
@@ -37,9 +38,13 @@
   const n = $derived(questions.length);
   const sheetCount = $derived(setup.items[0]?.length ?? 0);
 
-  async function pdf() {
+  function fileName(ext) {
     const suffix = [versions > 1 && shown !== 'all' ? `-version-${VERSION_LABELS[shown].toLowerCase()}` : '', sheet === 'only' ? '-answer-sheet' : '', answers === 'inline' ? '-answers' : answers === 'key' ? '-with-key' : ''].join('');
-    const filename = `${slugify(app.quiz.name)}${suffix}.pdf`;
+    return `${slugify(app.quiz.name)}${suffix}.${ext}`;
+  }
+
+  async function pdf() {
+    const filename = fileName('pdf');
     progress = { done: 0, total: 0 };
     try {
       const { downloadPdf } = await import('../../lib/pdf.js');
@@ -52,10 +57,28 @@
     }
   }
 
+  // Answer sheets are read by their exact layout, which Word would not keep, so a Word file only has the questions.
+  async function word() {
+    const filename = fileName('docx');
+    makingWord = true;
+    try {
+      const { makeDocx } = await import('../../lib/docx.js');
+      const html = buildPrintHtml($state.snapshot(app.quiz), [], { answers, marks, studentFields, feedback, paper, versions: printed });
+      const { blob, failed } = await makeDocx(html, { paper, title: app.quiz.name });
+      downloadBlob(blob, filename);
+      if (failed) notify(`Downloaded ${filename}, but ${failed} picture${failed === 1 ? '' : 's'} could not be added.`, 'error');
+      else notify(`Downloaded ${filename}.`, 'success');
+    } catch (e) {
+      notify(`Could not make the Word file: ${e.message}`, 'error');
+    } finally {
+      makingWord = false;
+    }
+  }
+
   const printLabel = $derived(sheet === 'only' ? 'Print answer sheets' : versions > 1 && shown === 'all' ? `Print ${versions} versions` : `Print ${n} question${n === 1 ? '' : 's'}`);
 </script>
 
-<Modal title="Print or PDF" subtitle="A paper version of the quiz, with blank lines and answer boxes. Print it, or download it as a PDF file." width="1000px" onclose={closeModal}>
+<Modal title="Print, PDF or Word" subtitle="A paper version of the quiz, with blank lines and answer boxes. Print it, or download it as a PDF or Word file." width="1000px" onclose={closeModal}>
   <div class="options">
     <div class="field">
       <FieldLabel text="Correct answers" />
@@ -136,6 +159,14 @@
   {#snippet footer()}
     <button class="btn mark" disabled={!sheetCount} title="Mark students' answer sheets: type in their answers or read photos of the sheets" onclick={() => openModal('marking')}><ClipboardCheck size={16} /> Mark answer sheets</button>
     <button class="btn" onclick={closeModal}>Cancel</button>
+    <button
+      class="btn"
+      disabled={!n || makingWord || sheet === 'only'}
+      title={sheet === 'none' ? 'A .docx file you can edit in Word' : sheet === 'only' ? 'Answer sheets can only be printed or downloaded as PDF' : 'A .docx file you can edit in Word. It has the questions; print answer sheets from here or the PDF'}
+      onclick={word}
+    >
+      {#if makingWord}<span class="spin"><LoaderCircle size={16} /></span> Preparing…{:else}<FileText size={16} /> Download Word{/if}
+    </button>
     <button class="btn" disabled={!n || !!progress} onclick={pdf}>
       {#if progress}
         <span class="spin"><LoaderCircle size={16} /></span> {progress.total ? `Page ${Math.min(progress.done + 1, progress.total)} of ${progress.total}…` : 'Preparing…'}

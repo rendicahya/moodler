@@ -8,7 +8,7 @@
     [[mod, 'Shift', 'Z'], 'Redo (also ' + mod + '+Y)'],
     [[mod, 'S'], 'Export, or upload the changes of a quiz from the cloud'],
     [[mod, 'O'], 'Import'],
-    [[mod, 'P'], 'Print or save as PDF'],
+    [[mod, 'P'], 'Print, or save as PDF or Word'],
     [[mod, 'H'], 'Find and replace'],
     [[mod, ','], 'Quiz settings'],
     [['Alt', 'N'], 'Add a question'],

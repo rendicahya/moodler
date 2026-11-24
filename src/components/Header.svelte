@@ -65,7 +65,7 @@
   const moreItems = $derived([
     { label: 'New quiz', icon: FilePlus, hint: 'Alt+Shift+N', run: newQuiz },
     { label: 'Quiz settings…', icon: Settings, hint: 'Ctrl+,', run: () => openModal('settings') },
-    { label: 'Print or save as PDF…', icon: Printer, hint: 'Ctrl+P', disabled: empty, run: () => openModal('print') },
+    { label: 'Print, PDF or Word…', icon: Printer, hint: 'Ctrl+P', disabled: empty, run: () => openModal('print') },
     { label: 'Download a backup', icon: HardDriveDownload, disabled: empty, run: downloadBackup },
     '-',
     { label: app.theme === 'dark' ? 'Light mode' : 'Dark mode', icon: app.theme === 'dark' ? Sun : Moon, run: toggleTheme },
