@@ -86,13 +86,14 @@ test('A calculated question is written with its first set of values', () => {
 });
 
 test('Characters that ExamView would turn into "?" are written with ones it has', () => {
-  assert.equal(examviewText('<p>a → b ⇔ c ≤ 5 &#8594; “q” é ½ … −3</p>'), 'a -&gt; b &lt;=&gt; c &lt;= 5 -&gt; &#x201c;q&#x201d; &#xe9; &#xbd; &#x2026; -3');
+  assert.equal(examviewText('<p>a → b ⇔ c ≤ 5 &#8594; “q” é ½ … −3</p>'), 'a &#x2014;&gt; b &lt;=&gt; c &lt;= 5 &#x2014;&gt; &#x201c;q&#x201d; &#xe9; &#xbd; &#x2026; -3');
+  assert.equal(examviewText('← ↔ ⟶'), '&lt;&#x2014; &lt;&#x2014;&gt; &#x2014;&gt;');
   assert.equal(examviewText('H₂SO₄ x² 10⁻⁶ y²⁴<sub>a₁</sub>'), 'H<sub>2</sub>SO<sub>4</sub> x&#xb2; 10<sup>-6</sup> y<sup>24</sup><sub>a1</sub>');
   assert.equal(examviewText('2πr, Δt, √2, 3µ 3μ, 1⅓, 𝑥 ∈ ℝ, ﬁx ā x\u200by ②'), '2 pi r, Delta t, sqrt 2, 3&#xb5; 3&#xb5;, 1 1/3, x in R, fix a xy (2)');
   const sa = make('shortanswer', { questiontext: 'A → 漢 λόγος', answers: [newAnswer({ text: 'x⁴ ≥ ₂', fraction: 100 })] });
   const { get, warnings } = run([sa]);
   assert.equal(get(0, 'answer'), 'x^4 >= 2');
-  assert.ok(warnings.some((w) => w.includes('→ as ->, ≥ as >=.')));
+  assert.ok(warnings.some((w) => w.includes('→ as —>, ≥ as >=.')));
   assert.ok(warnings.some((w) => w.endsWith('"?": 漢, λ, ό, γ, ο, ς')));
   assert.deepEqual(run([make('truefalse', { questiontext: 'Café — “x²” • ÷' })]).warnings, []);
 });

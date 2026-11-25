@@ -561,7 +561,7 @@
     white-space: pre;
     background: var(--surface-2);
   }
-  /* Otherwise the font draws -> as an arrow. */
+  /* Otherwise the font draws => and the like as one sign. */
   .signs {
     font-variant-ligatures: none;
   }
