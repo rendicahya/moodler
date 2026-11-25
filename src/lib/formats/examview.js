@@ -4,6 +4,7 @@
 
 import { escapeHtml, decodeEntities, questionTitle, scramble, stripHtml } from '../model.js';
 import { parseCloze, CLOZE_RE, isChoiceCloze, canonicalClozeType } from './cloze.js';
+import { ansiParts } from './ansi.js';
 import { substitute, itemValues, tryEvaluate, formatAnswer } from '../calc.js';
 
 const MAX_QUESTIONS = 250; // in one question bank or test
@@ -14,12 +15,20 @@ const NBSP = '\u00a0';
 const letter = (i) => String.fromCharCode(65 + i);
 const isFilled = (text) => stripHtml(text) !== '' || /<img/i.test(text || '');
 
-/** Text for XML, in ASCII only so that it does not depend on how the file's encoding is read. */
-function xmlText(s) {
-  return s
+const escapeXml = (s) =>
+  s
     .replace(/[^\t\n\u0020-\ud7ff\ue000-\ufffd\u{10000}-\u{10ffff}]/gu, '')
     .replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c])
     .replace(/[^\x00-\x7f]/gu, (c) => `&#x${c.codePointAt(0).toString(16)};`);
+
+/**
+ * Text for XML, in ASCII only so that it does not depend on how the file's encoding is read. ExamView turns characters
+ * outside Windows-1252 into "?", so those are written in the closest way. `shifts` is whether x⁴ may become x<sup>4</sup>.
+ */
+function xmlText(s, notes, shifts) {
+  return ansiParts(s, notes)
+    .map(({ text, shift }) => (!shift ? escapeXml(text) : shifts ? `<${shift}>${escapeXml(text)}</${shift}>` : (shift === 'sup' ? '^' : '') + escapeXml(text)))
+    .join('');
 }
 
 // decodeEntities knows the entities the editor writes; imported HTML can have any, which the browser knows.
@@ -39,9 +48,9 @@ const BLOCK_TAGS = /^(p|div|h[1-6]|ul|ol|li|table|tr|pre|blockquote|section|arti
 
 /**
  * Turns HTML into ExamView's text: bold, italic, subscript and superscript, with line breaks as they are. `lost` (a Set)
- * gets what could not be kept.
+ * gets what could not be kept, `notes` the characters that ansiParts could not keep.
  */
-export function examviewText(html, lost = new Set()) {
+export function examviewText(html, lost = new Set(), notes) {
   const lines = [[]];
   const open = [];
   const lists = [];
@@ -135,7 +144,7 @@ export function examviewText(html, lost = new Set()) {
 
   const out = lines.map((line) => {
     if (line.length) line.at(-1).text = line.at(-1).text.replace(/[ \t]+$/, '');
-    return line.map(({ text, tags }) => (text ? tags.map((t) => `<${t}>`).join('') + xmlText(text) + [...tags].reverse().map((t) => `</${t}>`).join('') : '')).join('');
+    return line.map(({ text, tags }) => (text ? tags.map((t) => `<${t}>`).join('') + xmlText(text, notes, !tags.includes('sup') && !tags.includes('sub')) + [...tags].reverse().map((t) => `</${t}>`).join('') : '')).join('');
   });
   while (out.length && !out[0]) out.shift();
   while (out.length && !out.at(-1)) out.pop();
@@ -154,6 +163,7 @@ function accepted(answers, lost) {
 export function exportExamview(quiz, questions = quiz.questions, { type = 'test' } = {}) {
   const warnings = [];
   const out = [];
+  const notes = { changed: new Map(), unknown: new Set() };
   let count = 0;
   let groups = 0;
 
@@ -171,9 +181,10 @@ export function exportExamview(quiz, questions = quiz.questions, { type = 'test'
     const skip = (why) => warnings.push(`"${title}" was skipped: ${why}`);
     const lost = new Set();
     const htmlOf = (text) => (q.questiontextformat && q.questiontextformat !== 'html' ? escapeHtml(text).replace(/\n/g, '<br>') : text);
-    const rich = (html) => examviewText(html, lost);
+    const rich = (html) => examviewText(html, lost, notes);
     // Answers that Moodle stores as plain text.
-    const plain = (s) => xmlText(String(s ?? '').trim());
+    const plain = (s) => xmlText(String(s ?? '').trim(), notes, false);
+    const shown = (s) => xmlText(String(s ?? '').trim(), notes, true);
     const text = (html = q.questiontext) => el('text', rich(htmlOf(html)));
     const rationale = isFilled(q.generalfeedback) ? el('rationale', rich(q.generalfeedback)) : '';
     const answer = (content) => el('answer', content);
@@ -249,7 +260,7 @@ export function exportExamview(quiz, questions = quiz.questions, { type = 'test'
           continue;
         }
         const name = `Matching ${++groups}`;
-        out.push(`    <matching-group group-id='${groups}' bank-id='0' name='${name}'>`, text(), ...choiceRows(options.map(plain)), '    </matching-group>');
+        out.push(`    <matching-group group-id='${groups}' bank-id='0' name='${name}'>`, text(), ...choiceRows(options.map(shown)), '    </matching-group>');
         if (rationale) lost.add('general feedback');
         for (const s of subs) write('ma', [el('text', rich(s.text)), answer(letter(options.indexOf(s.answer.trim())))], ` group='${name}'`);
         break;
@@ -280,7 +291,7 @@ export function exportExamview(quiz, questions = quiz.questions, { type = 'test'
         const body = String(q.questiontext ?? '').replace(/\[\[\d+\]\]/g, () => `${refs.length > 1 ? `(${++n}) ` : ''}${BLANK}`);
         const words = [...new Set(q.choices.map((c) => c.group))]
           .sort((a, b) => a - b)
-          .map((g) => `[${q.choices.filter((c) => c.group === g && c.text.trim()).map((c) => plain(stripHtml(c.text))).join(' / ')}]`);
+          .map((g) => `[${q.choices.filter((c) => c.group === g && c.text.trim()).map((c) => shown(stripHtml(c.text))).join(' / ')}]`);
         const key = refs.map((c, i) => `${refs.length > 1 ? `(${i + 1}) ` : ''}${plain(stripHtml(c?.text))}`).join('\n');
         write('co', [el('text', `${rich(htmlOf(body))}\n\n${words.join('\n')}`), rationale, answer(key), space]);
         break;
@@ -304,6 +315,9 @@ export function exportExamview(quiz, questions = quiz.questions, { type = 'test'
   }
 
   if (questions.some((q) => q.type !== 'cloze' && q.type !== 'description' && Number(q.defaultgrade) !== 1)) warnings.push('Marks are not written to the file, so set the points in ExamView.');
+  const some = (list) => list.slice(0, 12).join(', ') + (list.length > 12 ? ', …' : '');
+  if (notes.changed.size) warnings.push(`ExamView does not have some characters, so they are written another way: ${some([...notes.changed].map(([c, t]) => `${c} as ${t}`))}.`);
+  if (notes.unknown.size) warnings.push(`ExamView does not have these characters and will show each as "?": ${some([...notes.unknown])}`);
   if (count > MAX_QUESTIONS) warnings.push(`The file has ${count} questions, but ExamView allows up to ${MAX_QUESTIONS}. Export them in parts with "Selected".`);
 
   if (!count) return { text: '', warnings };
