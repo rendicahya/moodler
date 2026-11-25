@@ -18,7 +18,7 @@
   import OrderingEditor from './editors/OrderingEditor.svelte';
   import CalculatedEditor from './editors/CalculatedEditor.svelte';
   import { app, setView, goToQuestion, saveLayout, markReviewed, markUnreviewed, openModal } from '../lib/store.svelte.js';
-  import { showMenu, questionMenu, contextMenu, closeMenu } from '../lib/questionmenu.svelte.js';
+  import { showEditorMenu, questionMenu, contextMenu, closeMenu } from '../lib/questionmenu.svelte.js';
   import { TYPE_MAP, TEXT_FORMATS, PENALTIES, uid } from '../lib/model.js';
   import { issuesOf } from '../lib/questioncache.svelte.js';
   import { TYPE_ICONS } from '../lib/icons.js';
@@ -95,7 +95,7 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="editor" bind:clientWidth={width} oncontextmenu={(e) => showMenu(e, questionMenu(q.id, { inEditor: true }))}>
+<div class="editor" bind:clientWidth={width} oncontextmenu={(e) => showEditorMenu(e, q)}>
   <div class="toolbar">
     <div class="ident">
       <span class="icon"><Icon size={18} /></span>

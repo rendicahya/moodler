@@ -1,17 +1,75 @@
 // Right-click menus for questions, in the editor and in the question list. One menu is shown at a time, by App.
 
-import { Plus, Copy, Trash, CircleCheck, CircleDot, WandSparkles, ArrowUp, ArrowDown, ArrowUpToLine, ArrowDownToLine, ArrowUpDown, Upload, SquarePen, FolderInput, ChevronLeft, ChevronRight, Eye, EyeOff, Presentation, Eraser } from '@lucide/svelte';
+import { Plus, Copy, ImageDown, Images, Trash,CircleCheck, CircleDot, WandSparkles, ArrowUp, ArrowDown, ArrowUpToLine, ArrowDownToLine, ArrowUpDown, Upload, SquarePen, FolderInput, ChevronLeft, ChevronRight, Eye, EyeOff, Presentation, Eraser } from '@lucide/svelte';
 import { app, select, openModal, duplicateQuestion, deleteQuestion, moveQuestion, setReviewed, markReviewed, goToQuestion, deleteChecked, duplicateChecked, moveChecked, notify } from './store.svelte.js';
 import { htmlClutter, cleanQuestionsHtml } from './cleanhtml.js';
+import { questionImages, isReadable, exportImage, exportImages, copyImage } from './questionimages.js';
 
 const cleaned = (n) => notify(`Removed the extra HTML from ${n} question${n === 1 ? '' : 's'}. Undo with Ctrl+Z.`, 'success', 4000);
 
 /** The open menu: { x, y, items }, or null. */
 export const contextMenu = $state({ open: null });
 
+const inText = (e) => !!e.target.closest?.('input, select, textarea, [contenteditable="true"], .ProseMirror');
+
+// ---------------------------------------------------------------- images
+
+const isWeb = (src) => /^https?:/i.test(src);
+
+async function saveImage(q, src) {
+  try {
+    await exportImage(q, src);
+  } catch {
+    const open = { label: 'Open it', run: () => window.open(src, '_blank', 'noopener') };
+    notify(isWeb(src) ? 'This image is on a website that does not let Moodler read it. Open it to save it from there.' : 'Could not read this image.', 'error', 8000, isWeb(src) ? open : null);
+  }
+}
+
+async function saveImages(q) {
+  const images = questionImages(q);
+  if (images.length === 1) return saveImage(q, images[0].src);
+  const { saved, failed } = await exportImages(q);
+  if (!failed) return;
+  const result = saved ? `Exported ${saved} of ${saved + failed} images. The rest` : 'Could not export the images. They';
+  notify(`${result} could not be read, usually because the website they are on does not allow it.`, saved ? 'warning' : 'error', 8000);
+}
+
+async function copy(src) {
+  try {
+    await copyImage(src);
+    notify('Image copied.', 'success', 2500);
+  } catch {
+    notify('Could not copy this image.', 'error');
+  }
+}
+
+/** The actions for the images of a question; `src` is the one that was clicked, if any. */
+function imageItems(q, src) {
+  const n = questionImages(q).length;
+  return [
+    src && { label: 'Export this image', icon: ImageDown, run: () => saveImage(q, src) },
+    src && { label: 'Copy this image', icon: Copy, run: () => copy(src) },
+    n > (src ? 1 : 0) && { label: n === 1 ? 'Export the image' : `Export all ${n} images`, icon: n === 1 ? ImageDown : Images, run: () => saveImages(q) },
+  ].filter(Boolean);
+}
+
+/** The menu for a right-click in the editor or the live preview. An image has its own actions, also in the text editors. */
+export function showEditorMenu(e, q) {
+  const img = e.target.closest?.('img');
+  const src = img?.closest('.rendered') ? img.getAttribute('src')?.trim() : '';
+  const clicked = isReadable(src) ? src : '';
+  if (clicked && inText(e)) return openAt(e, imageItems(q, clicked));
+  showMenu(e, questionMenu(q.id, { inEditor: true, image: clicked }));
+}
+
+// ---------------------------------------------------------------- menus
+
 /** Opens a menu at the pointer. Text fields and the rich-text editor keep the browser's own menu. */
 export function showMenu(e, items) {
-  if (e.target.closest?.('input, select, textarea, [contenteditable="true"], .ProseMirror')) return;
+  if (!inText(e)) openAt(e, items);
+}
+
+function openAt(e, items) {
   if (!items?.length) return;
   e.preventDefault();
   e.stopPropagation();
@@ -29,15 +87,17 @@ export function closeMenu() {
   contextMenu.open = null;
 }
 
-/** The actions for one question. `inEditor` adds going to the previous and next question. */
-export function questionMenu(id, { inEditor = false } = {}) {
+/** The actions for one question. `inEditor` adds going to the previous and next question, `image` those for an image that was clicked. */
+export function questionMenu(id, { inEditor = false, image = '' } = {}) {
   const list = app.quiz.questions;
   const i = list.findIndex((q) => q.id === id);
   if (i < 0) return [];
   const q = list[i];
   const last = list.length - 1;
   const move = (to) => () => moveQuestion(i, to);
+  const images = imageItems(q, image);
   return [
+    ...(image ? [...images, '-'] : []),
     inEditor && { label: 'Previous question', icon: ChevronLeft, disabled: i === 0, run: () => goToQuestion(-1) },
     inEditor && { label: 'Next question', icon: ChevronRight, disabled: i === last, run: () => goToQuestion(1) },
     inEditor && '-',
@@ -50,6 +110,7 @@ export function questionMenu(id, { inEditor = false } = {}) {
     { label: q.hidden ? 'Show in the question bank' : 'Hide in the question bank', icon: q.hidden ? Eye : EyeOff, run: () => (q.hidden = !q.hidden) },
     { label: 'Improve with AI…', icon: WandSparkles, run: () => openModal('ai-question', { id }) },
     { label: 'Remove extra HTML', icon: Eraser, disabled: !htmlClutter(q).length, run: () => cleaned(cleanQuestionsHtml([q])) },
+    ...(image ? [] : images),
     inEditor && { label: 'Preview the whole quiz', icon: Presentation, run: () => openModal('quiz-preview') },
     '-',
     {
