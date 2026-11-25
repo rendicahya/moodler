@@ -255,7 +255,7 @@
       <div>
         <strong>{output.warnings.length} issue{output.warnings.length === 1 ? '' : 's'}</strong>
         <ul>
-          {#each output.warnings.slice(0, 15) as w}<li>{w}</li>{/each}
+          {#each output.warnings.slice(0, 15) as w}<li class="signs">{w}</li>{/each}
           {#if output.warnings.length > 15}<li>…and {output.warnings.length - 15} more</li>{/if}
         </ul>
       </div>
@@ -560,5 +560,9 @@
   textarea {
     white-space: pre;
     background: var(--surface-2);
+  }
+  /* Otherwise the font draws -> as an arrow. */
+  .signs {
+    font-variant-ligatures: none;
   }
 </style>

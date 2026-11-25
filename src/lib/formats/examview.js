@@ -316,8 +316,9 @@ export function exportExamview(quiz, questions = quiz.questions, { type = 'test'
 
   if (questions.some((q) => q.type !== 'cloze' && q.type !== 'description' && Number(q.defaultgrade) !== 1)) warnings.push('Marks are not written to the file, so set the points in ExamView.');
   const some = (list) => list.slice(0, 12).join(', ') + (list.length > 12 ? ', …' : '');
-  if (notes.changed.size) warnings.push(`ExamView does not have some characters, so they are written another way: ${some([...notes.changed].map(([c, t]) => `${c} as ${t}`))}.`);
-  if (notes.unknown.size) warnings.push(`ExamView does not have these characters and will show each as "?": ${some([...notes.unknown])}`);
+  // First, because the Export dialog only shows the first ones of a long list.
+  if (notes.changed.size) warnings.unshift(`ExamView does not have some characters, so they are written another way: ${some([...notes.changed].map(([c, t]) => `${c} as ${t}`))}.`);
+  if (notes.unknown.size) warnings.unshift(`ExamView does not have these characters and will show each as "?": ${some([...notes.unknown])}`);
   if (count > MAX_QUESTIONS) warnings.push(`The file has ${count} questions, but ExamView allows up to ${MAX_QUESTIONS}. Export them in parts with "Selected".`);
 
   if (!count) return { text: '', warnings };
