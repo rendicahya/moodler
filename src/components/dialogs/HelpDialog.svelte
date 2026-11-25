@@ -57,7 +57,7 @@
       <li><strong>ExamView XML</strong> is for ExamView Test Generator (File → Import → ExamView XML), as a test or as a question bank.</li>
       <li>Images pasted or inserted into the editor are embedded in Moodle XML exports. Large images are made smaller automatically; the notification has a button to keep the original.</li>
       <li>The <strong>question bank</strong> button next to <em>Add question</em> (Alt+B) copies questions from your other quizzes into this one.</li>
-      <li>Right-click a question in the list, or the editor outside a text field, for its actions. Right-click an image in the editor or the live preview to export it.</li>
+      <li>Right-click a question in the list, or the editor outside a text field, for its actions. Right-click an image in the editor or the live preview to export it, in its original format or as PNG, JPEG or WebP.</li>
       <li>Select text in the live preview to make it bold, italic, underlined, struck through or code, or to clear its formatting.</li>
       <li>The <strong>code block</strong> button in a text editor's toolbar inserts code with syntax highlighting for the chosen language. The colours are saved in the question, so students see them in Moodle too. Double-click a code block to edit it.</li>
       <li>In the question list, questions marked reviewed show a green check. For a quiz that doesn't need review, turn off <em>Questions need review</em> in <strong>Settings</strong>.</li>

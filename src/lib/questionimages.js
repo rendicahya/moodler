@@ -1,11 +1,24 @@
-// Saves the images in a question as files: one by itself, or all of them in a ZIP file.
+// Saves the images in a question as files, as they are or in another format: one by itself, or all of them in a ZIP file.
 
 import { decodeEntities, questionTitle } from './model.js';
 import { textFields } from './findreplace.js';
 import { downloadBlob } from './download.js';
 
-const EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/svg+xml': 'svg', 'image/webp': 'webp', 'image/bmp': 'bmp', 'image/avif': 'avif', 'image/x-icon': 'ico', 'image/tiff': 'tiff' };
+const EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/pjpeg': 'jpg', 'image/gif': 'gif', 'image/svg+xml': 'svg', 'image/webp': 'webp', 'image/bmp': 'bmp', 'image/avif': 'avif', 'image/x-icon': 'ico', 'image/tiff': 'tiff' };
 const FILE_EXT = /\.(png|jpe?g|jfif|gif|svg|webp|bmp|avif|ico|tiff?)$/i;
+
+/** The formats images can be converted to, by the file extension. */
+export const IMAGE_FORMATS = { png: 'PNG', jpg: 'JPEG', webp: 'WebP' };
+
+/** The file extension of an embedded image, or '' for one on a website, whose format is only known once it is loaded. */
+export const imageExt = (src) => EXT[/^\s*data:([^;,]+)/i.exec(src)?.[1].trim().toLowerCase()] ?? '';
+
+let webp;
+/** Whether the browser can write a format: Safari can't write WebP. */
+export function canWrite(format) {
+  if (format !== 'webp') return true;
+  return (webp ??= document.createElement('canvas').toDataURL('image/webp').startsWith('data:image/webp'));
+}
 
 /** Whether an image can be read: a file that is missing from the imported quiz is left as @@PLUGINFILE@@. */
 export const isReadable = (src) => /^\s*(data:image\/|https?:|blob:)/i.test(src ?? '');
@@ -55,19 +68,55 @@ async function load(src) {
   return { blob, ext: EXT[type] ?? 'img' };
 }
 
-/** Downloads one image of a question; throws when it can't be read. */
-export async function exportImage(q, src) {
+/** Draws an image again as PNG, JPEG or WebP. */
+async function convert(blob, format, scale = 1) {
+  const type = { png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp' }[format];
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = (img.naturalWidth || 300) * scale;
+    canvas.height = (img.naturalHeight || 150) * scale;
+    const ctx = canvas.getContext('2d');
+    // JPEG has no transparency; without this it would turn black.
+    if (format === 'jpg') {
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return await new Promise((done, fail) => canvas.toBlob((b) => (b?.type === type ? done(b) : fail(new Error('Not drawn'))), type, 0.92));
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/** Loads an image in one of IMAGE_FORMATS, or as it is without a format. An error of the conversion has `convert` set. */
+async function loadAs(src, format) {
+  const image = await load(src);
+  if (!format || image.ext === format) return image;
+  try {
+    // SVG images have no fixed size, so they are drawn larger to stay sharp.
+    return { blob: await convert(image.blob, format, image.ext === 'svg' ? 2 : 1), ext: format };
+  } catch (e) {
+    throw Object.assign(new Error('Could not convert the image', { cause: e }), { convert: true });
+  }
+}
+
+/** Downloads one image of a question, as it is or in one of IMAGE_FORMATS; throws when it can't be read or converted. */
+export async function exportImage(q, src, format = '') {
   const images = questionImages(q);
   const i = images.findIndex((x) => x.src === src);
-  const { blob, ext } = await load(src);
+  const { blob, ext } = await loadAs(src, format);
   downloadBlob(blob, `${imageNames(images, questionTitle(q))[i] ?? (fileStem(questionTitle(q)) || 'Image')}.${ext}`);
 }
 
-/** Downloads all images of a question as a ZIP file; resolves to how many it has and how many could not be read. */
-export async function exportImages(q) {
+/** Downloads all images of a question as a ZIP file; resolves to how many it has and how many could not be read or converted. */
+export async function exportImages(q, format = '') {
   const images = questionImages(q);
   const names = imageNames(images, questionTitle(q));
-  const loaded = await Promise.all(images.map((x) => load(x.src).catch(() => null)));
+  const loaded = await Promise.all(images.map((x) => loadAs(x.src, format).catch(() => null)));
   const files = {};
   for (const [i, x] of loaded.entries()) {
     // Images are compressed already.
@@ -85,20 +134,7 @@ export async function exportImages(q) {
 export async function copyImage(src) {
   const png = async () => {
     const { blob } = await load(src);
-    if (blob.type === 'image/png') return blob;
-    const url = URL.createObjectURL(blob);
-    try {
-      const img = new Image();
-      img.src = url;
-      await img.decode();
-      const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth || 300;
-      canvas.height = img.naturalHeight || 150;
-      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-      return await new Promise((done, fail) => canvas.toBlob((b) => (b ? done(b) : fail(new Error('Not drawn'))), 'image/png'));
-    } finally {
-      URL.revokeObjectURL(url);
-    }
+    return blob.type === 'image/png' ? blob : convert(blob, 'png');
   };
   // The promise is passed on as it is, because Safari only allows copying right after the click.
   await navigator.clipboard.write([new ClipboardItem({ 'image/png': png() })]);

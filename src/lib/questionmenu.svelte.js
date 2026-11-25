@@ -3,7 +3,7 @@
 import { Plus, Copy, ImageDown, Images, Trash,CircleCheck, CircleDot, WandSparkles, ArrowUp, ArrowDown, ArrowUpToLine, ArrowDownToLine, ArrowUpDown, Upload, SquarePen, FolderInput, ChevronLeft, ChevronRight, Eye, EyeOff, Presentation, Eraser } from '@lucide/svelte';
 import { app, select, openModal, duplicateQuestion, deleteQuestion, moveQuestion, setReviewed, markReviewed, goToQuestion, deleteChecked, duplicateChecked, moveChecked, notify } from './store.svelte.js';
 import { htmlClutter, cleanQuestionsHtml } from './cleanhtml.js';
-import { questionImages, isReadable, exportImage, exportImages, copyImage } from './questionimages.js';
+import { IMAGE_FORMATS, imageExt, canWrite, questionImages, isReadable, exportImage, exportImages, copyImage } from './questionimages.js';
 
 const cleaned = (n) => notify(`Removed the extra HTML from ${n} question${n === 1 ? '' : 's'}. Undo with Ctrl+Z.`, 'success', 4000);
 
@@ -16,22 +16,23 @@ const inText = (e) => !!e.target.closest?.('input, select, textarea, [contentedi
 
 const isWeb = (src) => /^https?:/i.test(src);
 
-async function saveImage(q, src) {
+async function saveImage(q, src, format) {
   try {
-    await exportImage(q, src);
-  } catch {
+    await exportImage(q, src, format);
+  } catch (e) {
+    if (e.convert) return notify(`Could not convert this image to ${IMAGE_FORMATS[format]}. Export it in its original format instead.`, 'error', 6000);
     const open = { label: 'Open it', run: () => window.open(src, '_blank', 'noopener') };
     notify(isWeb(src) ? 'This image is on a website that does not let Moodler read it. Open it to save it from there.' : 'Could not read this image.', 'error', 8000, isWeb(src) ? open : null);
   }
 }
 
-async function saveImages(q) {
+async function saveImages(q, format) {
   const images = questionImages(q);
-  if (images.length === 1) return saveImage(q, images[0].src);
-  const { saved, failed } = await exportImages(q);
+  if (images.length === 1) return saveImage(q, images[0].src, format);
+  const { saved, failed } = await exportImages(q, format);
   if (!failed) return;
   const result = saved ? `Exported ${saved} of ${saved + failed} images. The rest` : 'Could not export the images. They';
-  notify(`${result} could not be read, usually because the website they are on does not allow it.`, saved ? 'warning' : 'error', 8000);
+  notify(`${result} could not be read${format ? ' or converted' : ''}, usually because the website they are on does not allow it.`, saved ? 'warning' : 'error', 8000);
 }
 
 async function copy(src) {
@@ -43,13 +44,27 @@ async function copy(src) {
   }
 }
 
+/** The formats to export images in, as menu items: their own first, named when they all have the same one, then those to convert to. */
+function formatItems(srcs, save) {
+  const exts = [...new Set(srcs.map(imageExt))];
+  const own = exts.length === 1 ? exts[0] : '';
+  const name = own && (IMAGE_FORMATS[own] ?? own.toUpperCase());
+  return [
+    { label: name ? `${name} (original)` : srcs.length > 1 ? 'Original formats' : 'Original format', run: () => save('') },
+    ...Object.keys(IMAGE_FORMATS)
+      .filter((f) => f !== own && canWrite(f))
+      .map((f) => ({ label: IMAGE_FORMATS[f], run: () => save(f) })),
+  ];
+}
+
 /** The actions for the images of a question; `src` is the one that was clicked, if any. */
 function imageItems(q, src) {
-  const n = questionImages(q).length;
+  const images = questionImages(q);
+  const n = images.length;
   return [
-    src && { label: 'Export this image', icon: ImageDown, run: () => saveImage(q, src) },
+    src && { label: 'Export this image', icon: ImageDown, items: formatItems([src], (format) => saveImage(q, src, format)) },
     src && { label: 'Copy this image', icon: Copy, run: () => copy(src) },
-    n > (src ? 1 : 0) && { label: n === 1 ? 'Export the image' : `Export all ${n} images`, icon: n === 1 ? ImageDown : Images, run: () => saveImages(q) },
+    n > (src ? 1 : 0) && { label: n === 1 ? 'Export the image' : `Export all ${n} images`, icon: n === 1 ? ImageDown : Images, items: formatItems(images.map((x) => x.src), (format) => saveImages(q, format)) },
   ].filter(Boolean);
 }
 
