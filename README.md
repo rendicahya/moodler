@@ -19,7 +19,7 @@ Built with [Svelte 5](https://svelte.dev) and [Vite](https://vite.dev), and depl
 - **Right-click menus:** right-click a question in the list or anywhere in the editor outside a text field for its actions: add a question after it, duplicate, mark as reviewed, hide, improve with AI, move up, down, to the top or bottom, and delete. With several questions ticked, the list's menu acts on all of them.
 - **Navigation:** step through questions with the Previous / Next buttons in the question toolbar or Alt+Page Up / Page Down (Alt+Home / End for the first / last), without going back to the list.
 - **Guidance:** required fields are marked with *, optional ones are labelled, and tooltips explain Moodle terms such as default mark, penalty per wrong try and question bank category.
-- **Reordering:** drag and drop questions, answers, matching pairs, choices and ordering items, or shuffle multiple-choice answers with one click.
+- **Reordering:** drag and drop questions (by any part of their row in the list), answers, matching pairs, choices and ordering items, or shuffle multiple-choice answers with one click.
 - **Cloze builder:** insert or edit gaps through a form. You don't need to memorise the syntax.
 - **Preview:** a "show correct answers" toggle highlights the right responses. Preview the whole quiz in order with Alt+Q.
 - **Overview:** the question list shows how many questions of each type the quiz has.

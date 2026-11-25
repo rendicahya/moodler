@@ -4,7 +4,7 @@
 </script>
 
 <script>
-  import { Plus, Search, GripVertical, Copy, Trash, TriangleAlert, X, Upload, EyeOff, SquarePen, ArrowUpToLine, ArrowDownToLine, Replace, FolderInput, CircleDot, CircleCheck, Library } from '@lucide/svelte';
+  import { Plus, Search, Copy, Trash, TriangleAlert, X, Upload, EyeOff, SquarePen, ArrowUpToLine, ArrowDownToLine, Replace, FolderInput, CircleDot, CircleCheck, Library } from '@lucide/svelte';
   import {
     app,
     select,
@@ -32,8 +32,9 @@
 
   const sort = createSortable((from, to) => moveQuestion(from, to));
 
-  // Dragging a row also lets it be dropped on another quiz's tab: the ticked questions go along when it is one of them.
-  function handle(i, id) {
+  // Any part of a row drags it, except during a search, when the rows between are hidden. It can also be dropped on
+  // another quiz's tab: the ticked questions go along when it is one of them.
+  function rowDrag(i, id) {
     const h = sort.handle(i);
     return {
       ...h,
@@ -319,10 +320,8 @@
         onkeydown={(e) => onkeydown(e, i)}
         oncontextmenu={(e) => showMenu(e, ticked && app.checked.length > 1 ? checkedMenu() : questionMenu(q.id))}
         {...rowDrop(i)}
+        {...(query ? {} : rowDrag(i, q.id))}
       >
-        {#if !query}
-          <span class="drag-handle" title="Drag to reorder (or Alt+↑/↓), or onto another quiz's tab to move it there (hold Ctrl to copy)" {...handle(i, q.id)}><GripVertical size={15} /></span>
-        {/if}
         <!-- The number turns into a checkbox on hover, or for every row once any question is ticked. -->
         <span class="num-slot">
           <span class="num">{i + 1}</span>
