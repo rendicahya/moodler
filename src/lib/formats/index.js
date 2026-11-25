@@ -15,6 +15,16 @@ export const FORMATS = [
     export: exportMoodleXml,
   },
   {
+    id: 'examview',
+    label: 'ExamView XML',
+    suffix: '-examview',
+    ext: 'xml',
+    mime: 'application/xml',
+    description: 'For ExamView Test Generator: File → Import → ExamView XML. Keeps the text, answers, general feedback, bold, italic, sub- and superscript, but not pictures.',
+    import: null,
+    export: exportExamview,
+  },
+  {
     id: 'gift',
     label: 'GIFT',
     suffix: '-gift',
@@ -42,16 +52,6 @@ export const FORMATS = [
     description: 'Imports the whole text as one Cloze question.',
     import: importClozeText,
     export: null,
-  },
-  {
-    id: 'examview',
-    label: 'ExamView XML',
-    suffix: '-examview',
-    ext: 'xml',
-    mime: 'application/xml',
-    description: 'For ExamView Test Generator: File → Import → ExamView XML. Keeps the text, answers, general feedback, bold, italic, sub- and superscript, but not pictures.',
-    import: null,
-    export: exportExamview,
   },
   {
     id: 'json',
