@@ -54,6 +54,7 @@
       </li>
       <li>Export to <strong>Moodle XML</strong> for full fidelity. In Moodle, go to <em>Question bank → Import</em>, choose the same format and upload the file.</li>
       <li><strong>GIFT</strong> and <strong>Aiken</strong> are plain-text formats that only support some question types; unsupported questions are listed when exporting.</li>
+      <li><strong>ExamView XML</strong> is for ExamView Test Generator (File → Import → ExamView XML), as a test or as a question bank.</li>
       <li>Images pasted or inserted into the editor are embedded in Moodle XML exports. Large images are made smaller automatically; the notification has a button to keep the original.</li>
       <li>The <strong>question bank</strong> button next to <em>Add question</em> (Alt+B) copies questions from your other quizzes into this one.</li>
       <li>Right-click a question in the list, or the editor outside a text field, for its actions.</li>

@@ -1,7 +1,7 @@
 // Printable (paper) version of a quiz: answer circles and boxes instead of form controls, blank lines to write on,
 // and optionally the correct answers marked in place or listed in an answer key at the end.
 
-import { escapeHtml, round, stripHtml } from './model.js';
+import { escapeHtml, round, scramble, stripHtml } from './model.js';
 import { parseCloze, CLOZE_RE, isChoiceCloze, canonicalClozeType } from './formats/cloze.js';
 import { sanitizeHtml } from './sanitize.js';
 import { substitute, itemValues, tryEvaluate, formatAnswer, toleranceText } from './calc.js';
@@ -31,12 +31,6 @@ function label(i, style) {
 export const markOf = (q) => (q.type === 'cloze' ? parseCloze(q.questiontext).reduce((s, g) => s + g.weight, 0) : Number(q.defaultgrade) || 0);
 const best = (answers) => answers.reduce((b, a) => (Number(a.fraction) > Number(b?.fraction ?? -Infinity) ? a : b), null);
 const blank = (show, text, width = 10) => (show ? `<span class="fill">${text}</span>` : `<span class="blank" style="min-width:${width}em"></span>`);
-
-// Ordering items are printed in a fixed scrambled order (reversed, then every other item), never the answer order.
-function scramble(items) {
-  const r = [...items].reverse();
-  return [...r.filter((_, i) => i % 2 === 0), ...r.filter((_, i) => i % 2 === 1)];
-}
 
 function cloze(q, show) {
   let n = 0;

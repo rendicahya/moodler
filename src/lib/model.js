@@ -354,6 +354,12 @@ export function fractionLabel(f) {
   return `${round(n, 2)}%`;
 }
 
+/** Puts the items of an ordering question in a fixed scrambled order (reversed, then every other item), never the answer order. */
+export function scramble(items) {
+  const r = [...items].reverse();
+  return [...r.filter((_, i) => i % 2 === 0), ...r.filter((_, i) => i % 2 === 1)];
+}
+
 export function moveItem(arr, from, to) {
   if (from === to || from < 0 || to < 0 || from >= arr.length || to >= arr.length) return;
   const [item] = arr.splice(from, 1);

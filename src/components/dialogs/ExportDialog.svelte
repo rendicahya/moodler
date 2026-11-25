@@ -15,6 +15,15 @@
   // Questions ticked in the list are pre-selected; otherwise start with the question open in the editor.
   let scope = $state(app.checked.length ? 'picked' : 'all');
   let picked = $state(app.checked.length ? [...app.checked] : app.selectedId ? [app.selectedId] : []);
+  // ExamView imports a file either as a test or as a question bank, which the file itself has to say.
+  let examviewType = $state(localStorageGet('mqe.examviewType') === 'bank' ? 'bank' : 'test');
+  $effect(() => {
+    try {
+      localStorage.setItem('mqe.examviewType', examviewType);
+    } catch {
+      /* ignore */
+    }
+  });
   let copied = $state(false);
   // The file itself is hidden until asked for, and stays open for the next export once opened.
   let showFile = $state(localStorageGet('mqe.exportShowFile') === '1');
@@ -37,7 +46,7 @@
   const slug = $derived(slugify(app.quiz.name));
   let filename = $state('');
   const fmt = $derived(FORMAT_MAP[format]);
-  const defaultName = $derived(`${slug}${format === 'gift' ? '-gift' : format === 'aiken' ? '-aiken' : ''}.${fmt.ext}`);
+  const defaultName = $derived(`${slug}${fmt.suffix ?? ''}.${fmt.ext}`);
 
   // When the quiz is tracked for review, every question not left to review counts as reviewed (as in the sidebar).
   const reviewTracked = $derived(!app.quiz.noReview && app.quiz.questions.some((q) => q.unreviewed || q.reviewed));
@@ -56,7 +65,7 @@
   }
   const output = $derived.by(() => {
     try {
-      return fmt.export($state.snapshot(app.quiz), $state.snapshot(questions));
+      return fmt.export($state.snapshot(app.quiz), $state.snapshot(questions), { type: examviewType });
     } catch (e) {
       return { text: '', warnings: [`Export failed: ${e.message}`] };
     }
@@ -115,7 +124,7 @@
   const formatSize = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(2)} MB`);
 </script>
 
-<Modal title="Export questions" subtitle="Download a file you can import into Moodle’s question bank (Question bank → Import)." width="860px" onclose={closeModal}>
+<Modal title="Export questions" subtitle={format === 'examview' ? 'Download a file you can import into ExamView Test Generator.' : 'Download a file you can import into Moodle’s question bank (Question bank → Import).'} width="860px" onclose={closeModal}>
   <div class="format-pick">
     <div class="formats" role="radiogroup" aria-label="Format">
       {#each exportable as f}
@@ -143,7 +152,20 @@
         bind:value={scope}
       />
     </div>
-    {#if format !== 'aiken' && format !== 'json'}
+    {#if format === 'examview'}
+      <div class="field">
+        <span class="field-label">Import in ExamView as</span>
+        <Segmented
+          options={[
+            { value: 'test', label: 'Test', title: 'For File → Import in the Test Builder' },
+            { value: 'bank', label: 'Question bank', title: 'For File → Import in the Question Bank Editor' },
+          ]}
+          label="Import in ExamView as"
+          size="sm"
+          bind:value={examviewType}
+        />
+      </div>
+    {:else if format !== 'aiken' && format !== 'json'}
       <Switch bind:checked={app.quiz.includeCategory} label="Include category" />
     {/if}
   </div>
@@ -267,7 +289,7 @@
   }
   .formats {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 6px;
   }
   @media (max-width: 560px) {

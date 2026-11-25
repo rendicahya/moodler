@@ -390,7 +390,7 @@
       }
       const out = fmt.export(quiz, quiz.questions);
       if (!out.text.trim()) throw new Error(`None of the questions in “${meta.name}” can be written as ${fmt.label}.`);
-      const name = `${slugify(meta.name)}${fmt.id === 'gift' ? '-gift' : fmt.id === 'aiken' ? '-aiken' : ''}.${fmt.ext}`;
+      const name = `${slugify(meta.name)}${fmt.suffix ?? ''}.${fmt.ext}`;
       downloadText(out.text, name, fmt.mime);
       const skipped = out.warnings?.length;
       notify(`Downloaded ${name}.${skipped ? ` ${skipped} note${skipped === 1 ? '' : 's'}: ${out.warnings.slice(0, 3).join(' ')}${skipped > 3 ? ' …' : ''}` : ''}`, skipped ? 'warning' : 'success', skipped ? 10000 : 4000);
@@ -1171,7 +1171,7 @@
                   {#if statusOf(q) !== 'absent'}<span class="state {statusOf(q)}">{STATUS[statusOf(q)]}</span>{/if}
                 </div>
                 <button class="btn btn-sm" disabled={!!busy} onclick={() => download(q)}><CloudDownload size={15} /> Open</button>
-                <button class="btn btn-ghost btn-icon" title="Export: download as Moodle XML, GIFT, Aiken or project file" aria-label="Export {q.name}" aria-haspopup="menu" disabled={!!busy} onclick={(e) => openMenu(e, exportMenu(q))}><FileDown size={15} /></button>
+                <button class="btn btn-ghost btn-icon" title="Export: download as Moodle XML, GIFT, Aiken, ExamView XML or project file" aria-label="Export {q.name}" aria-haspopup="menu" disabled={!!busy} onclick={(e) => openMenu(e, exportMenu(q))}><FileDown size={15} /></button>
                 <button class="btn btn-ghost btn-icon" title="Rename" aria-label="Rename {q.name}" disabled={!!busy} onclick={() => startQuizNaming(q)}><Pencil size={15} /></button>
                 <button
                   class="btn btn-ghost btn-icon"

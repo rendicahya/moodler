@@ -2,6 +2,7 @@ import { importMoodleXml, exportMoodleXml } from './moodlexml.js';
 import { importGift, exportGift } from './gift.js';
 import { importAiken, exportAiken } from './aiken.js';
 import { importClozeText } from './cloze.js';
+import { exportExamview } from './examview.js';
 
 export const FORMATS = [
   {
@@ -16,6 +17,7 @@ export const FORMATS = [
   {
     id: 'gift',
     label: 'GIFT',
+    suffix: '-gift',
     ext: 'txt',
     mime: 'text/plain',
     description: 'Text format for multiple choice, true/false, short answer, numerical, matching, essay and description.',
@@ -25,6 +27,7 @@ export const FORMATS = [
   {
     id: 'aiken',
     label: 'Aiken',
+    suffix: '-aiken',
     ext: 'txt',
     mime: 'text/plain',
     description: 'Simple text format for single-answer multiple choice questions only.',
@@ -39,6 +42,16 @@ export const FORMATS = [
     description: 'Imports the whole text as one Cloze question.',
     import: importClozeText,
     export: null,
+  },
+  {
+    id: 'examview',
+    label: 'ExamView XML',
+    suffix: '-examview',
+    ext: 'xml',
+    mime: 'application/xml',
+    description: 'For ExamView Test Generator: File → Import → ExamView XML. Keeps the text, answers, general feedback, bold, italic, sub- and superscript, but not pictures.',
+    import: null,
+    export: exportExamview,
   },
   {
     id: 'json',
