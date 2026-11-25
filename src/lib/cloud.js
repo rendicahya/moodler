@@ -142,6 +142,16 @@ export function cloudView(allFolders, allQuizzes) {
   };
 }
 
+/** The name for a copy of a quiz: "Name (copy)", then "Name (copy 2)" and so on when those are among `taken`. */
+export function copyName(name, taken) {
+  const base = name.replace(/ \(copy(?: \d+)?\)$/, '') || name;
+  const used = new Set(taken);
+  for (let n = 1; ; n++) {
+    const copy = `${base} (copy${n > 1 ? ` ${n}` : ''})`;
+    if (!used.has(copy)) return copy;
+  }
+}
+
 /** Whole days until a trash entry is deleted for good; 0 or less means it is due. */
 export const daysLeft = (deleted, now = Date.now()) => Math.ceil((deleted + TRASH_DAYS * DAY - now) / DAY);
 

@@ -1,9 +1,9 @@
 <script>
   import { onMount, tick } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import { Cloud, CloudUpload, CloudDownload, LogIn, LogOut, Trash2, Folder, FolderPlus, FilePlus, Pencil, ChevronRight, Check, X, History, Undo2, FileText, FileDown, Search, CircleCheck, CircleDot } from '@lucide/svelte';
+  import { Cloud, CloudUpload, CloudDownload, Copy, LogIn, LogOut, Trash2, Folder, FolderPlus, FilePlus, Pencil, ChevronRight, Check, X, History, Undo2, FileText, FileDown, Search, CircleCheck, CircleDot } from '@lucide/svelte';
   import { FORMATS } from '../../lib/formats/index.js';
-  import { normalizeQuiz, setNeedsReview } from '../../lib/model.js';
+  import { normalizeQuiz, setNeedsReview, uid } from '../../lib/model.js';
   import { downloadText, slugify } from '../../lib/download.js';
   import Modal from '../ui/Modal.svelte';
   import { app, library, closeModal, notify, ask, prepareCloudUpload, markCloudSynced, applyCloudQuiz, quizFromXmlFile, renameCloudCopy, blankQuizForCloud, setStoredQuizReview } from '../../lib/store.svelte.js';
@@ -27,6 +27,7 @@
     trashCloudItem,
     restoreCloudItem,
     cloudView,
+    copyName,
     quizVersions,
     daysLeft,
     matchQuiz,
@@ -67,6 +68,7 @@
   let alive = true;
   const expanded = new SvelteSet();
   let tree = $state(null);
+  let list = $state(null);
   let error = $state('');
   // What is running: { label, done, total }, where total is 0 until the number of parts is known.
   let busy = $state(null);
@@ -394,6 +396,30 @@
       downloadText(out.text, name, fmt.mime);
       const skipped = out.warnings?.length;
       notify(`Downloaded ${name}.${skipped ? ` ${skipped} note${skipped === 1 ? '' : 's'}: ${out.warnings.slice(0, 3).join(' ')}${skipped > 3 ? ' …' : ''}` : ''}`, skipped ? 'warning' : 'success', skipped ? 10000 : 4000);
+    });
+  }
+
+  /** Copies a cloud quiz into a new one in the same folder, without opening it here. The copy starts with no earlier versions. */
+  function duplicate(q) {
+    return run('Duplicating', async () => {
+      const text = await downloadCloudQuiz(user.uid, q, progress);
+      await refresh();
+      const folder = folderOf(q);
+      const name = copyName(q.name, quizzes.filter((x) => folderOf(x) === folder).map((x) => x.name));
+      let quiz;
+      try {
+        quiz = { ...normalizeQuiz(JSON.parse(text)), name };
+      } catch {
+        throw new Error('This cloud copy could not be read.');
+      }
+      const id = uid();
+      const search = searchText(quiz);
+      await uploadCloudQuiz(user.uid, id, JSON.stringify(quiz), { name, count: quiz.questions.length, folder: isLive(folder) ? folder : null, search }, progress);
+      if (texts) texts = new Map(texts).set(id, search);
+      await refresh();
+      notify(`Created “${name}” in ${folder && isLive(folder) ? pathText(folder) : 'Cloud'}.`, 'success');
+      await tick();
+      list?.querySelector(`[data-quiz="${id}"]`)?.scrollIntoView({ block: 'nearest' });
     });
   }
 
@@ -780,6 +806,7 @@
       { label: historyOf === q.id && !fromSearch ? 'Hide version history' : 'Version history', icon: History, run: inFolder(() => (historyOf = historyOf === q.id && !fromSearch ? null : q.id)) },
       fromSearch && { label: 'Show in its folder', icon: Folder, run: () => open(folderOf(q)) },
       { label: 'Rename…', icon: Pencil, run: inFolder(() => startQuizNaming(q)) },
+      { label: 'Duplicate', icon: Copy, run: () => duplicate(q) },
       needsReview(q)
         ? { label: 'Mark as not needing review', icon: CircleCheck, run: () => setReview(q, false) }
         : { label: 'Mark as needing review', icon: CircleDot, run: () => setReview(q, true) },
@@ -1143,11 +1170,12 @@
             {/if}
           </div>
 
-          <ul class="list" oncontextmenu={(e) => openMenu(e, folderMenu())}>
+          <ul class="list" bind:this={list} oncontextmenu={(e) => openMenu(e, folderMenu())}>
             {#each shownQuizzes as q (q.id)}
               {@const versions = quizVersions(q)}
               <li
                 class="item"
+                data-quiz={q.id}
                 class:open={q.id === library.activeId}
                 class:dragged={dragging?.kind === 'quiz' && dragging.id === q.id}
                 draggable={!busy && quizNaming?.id !== q.id}
@@ -1173,6 +1201,7 @@
                 <button class="btn btn-sm" disabled={!!busy} onclick={() => download(q)}><CloudDownload size={15} /> Open</button>
                 <button class="btn btn-ghost btn-icon" title="Export: download as Moodle XML, GIFT, Aiken, ExamView XML or project file" aria-label="Export {q.name}" aria-haspopup="menu" disabled={!!busy} onclick={(e) => openMenu(e, exportMenu(q))}><FileDown size={15} /></button>
                 <button class="btn btn-ghost btn-icon" title="Rename" aria-label="Rename {q.name}" disabled={!!busy} onclick={() => startQuizNaming(q)}><Pencil size={15} /></button>
+                <button class="btn btn-ghost btn-icon" title="Duplicate: make a copy in this folder" aria-label="Duplicate {q.name}" disabled={!!busy} onclick={() => duplicate(q)}><Copy size={15} /></button>
                 <button
                   class="btn btn-ghost btn-icon"
                   class:on={historyOf === q.id}

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeQuiz } from '../src/lib/model.js';
-import { splitChunks, normalizeFolders, folderPath, childFolders, folderTreeIds, folderOptions, cloudView, daysLeft, quizVersions, searchText, matchQuiz, foldText, reviewCounts, needsReview, TRASH_DAYS } from '../src/lib/cloud.js';
+import { splitChunks, normalizeFolders, folderPath, childFolders, folderTreeIds, folderOptions, cloudView, copyName, daysLeft, quizVersions, searchText, matchQuiz, foldText, reviewCounts, needsReview, TRASH_DAYS } from '../src/lib/cloud.js';
 import { setNeedsReview } from '../src/lib/model.js';
 import { fitSize } from '../src/lib/images.js';
 
@@ -26,6 +26,14 @@ test('the trash holds what was deleted itself, and hides what is inside a delete
   const a = v.trash[1];
   assert.deepEqual(a.folderIds.sort(), ['a', 'b']);
   assert.deepEqual(a.quizzes.map((q) => q.id), ['q1']);
+});
+
+test('the copy of a quiz gets a name that no other quiz in its folder has', () => {
+  assert.equal(copyName('Quiz', ['Quiz']), 'Quiz (copy)');
+  assert.equal(copyName('Quiz', ['Quiz', 'Quiz (copy)']), 'Quiz (copy 2)');
+  assert.equal(copyName('Quiz (copy)', ['Quiz (copy)', 'Quiz (copy 2)']), 'Quiz (copy 3)');
+  assert.equal(copyName('Quiz (copy 2)', ['Quiz (copy 2)']), 'Quiz (copy)');
+  assert.equal(copyName('Quiz (copying)', []), 'Quiz (copying) (copy)');
 });
 
 test('trash entries count down to being deleted for good', () => {
