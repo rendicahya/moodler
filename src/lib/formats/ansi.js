@@ -8,8 +8,8 @@ const pairs = (s) => Object.fromEntries(s.trim().split(/\s+/).map((p) => [[...p]
 // Look the same, so nobody needs to know.
 const SAME = pairs("−- ‐- ‑- ‒– ―— ′' ″\" ‵' ʹ' ʼ’ ⁄/ ∕/ ∶: ∣| ∗* ∼~ ∙· ⋅· ‧· ⋯… ●• ∘° ▪• ‣• ◦• ⁃• ◆• ∖\\ ∅Ø ⌀Ø μµ");
 
-// Signs, as they are typed on a keyboard. Arrows have an em dash, which looks more like one.
-const SIGNS = pairs(`→—> ⟶—> ➔—> ➜—> ➝—> ➡—> ←<— ⟵<— ⬅<— ↔<—> ⟷<—> ⇒=> ⟹=> ⇐<== ⟸<== ⇔<=> ⟺<=> ⇌<=> ⇄<=> ↦|—> ↑(up) ↓(down) ⬆(up) ⬇(down)
+// Signs, as they are typed on a keyboard. Arrows have an en dash, which looks more like one.
+const SIGNS = pairs(`→–> ⟶–> ➔–> ➜–> ➝–> ➡–> ←<– ⟵<– ⬅<– ↔<–> ⟷<–> ⇒=> ⟹=> ⇐<== ⟸<== ⇔<=> ⟺<=> ⇌<=> ⇄<=> ↦|–> ↑(up) ↓(down) ⬆(up) ⬇(down)
   ≤<= ⩽<= ≥>= ⩾>= ≠!= ≈~= ≅~= ≃~= ≡== ≪<< ≫>> ∓-/+ ∥|| ⊥_|_ ⟨< ⟩> 〈< 〉> ✓[v] ✔[v] ☑[v] ✅[v] ✗[x] ✘[x] ☒[x] ❌[x] ★* ☆*
   ─- │| ┌+ ┐+ └+ ┘+ ├+ ┤+ ┬+ ┴+ ┼+ ═= ║| ╔+ ╗+ ╚+ ╝+ ╠+ ╣+ ╦+ ╩+ ╬+ ▼v ▲^ ►> ▶> ◄< ◀< đd ĐD łl ŁL ıi ħh`);
 SIGNS['☐'] = '[ ]';
